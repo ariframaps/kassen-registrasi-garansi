@@ -551,7 +551,7 @@ export default function ProductsPage() {
 						<Table>
 							<TableHead>
 								{warrantySelectMode && (
-									<TableHeader className="w-10">.</TableHeader>
+									<TableHeader className="w-10"></TableHeader>
 								)}
 								<TableHeader>Serial Number</TableHeader>
 								<TableHeader>Tipe Produk</TableHeader>
