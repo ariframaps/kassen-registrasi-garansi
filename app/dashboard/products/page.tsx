@@ -953,7 +953,9 @@ export default function ProductsPage() {
 											{cond?.warrantyConditionNote && (
 												<div className="flex-1">
 													<p className="text-[11px] text-zinc-500 italic">
-														"{cond.warrantyConditionNote}"
+														{'"'}
+														{cond.warrantyConditionNote}
+														{'"'}
 													</p>
 													<p className="text-[10px] text-zinc-400 mt-0.5">
 														Diupdate {cond.warrantyConditionUpdatedAt} oleh{" "}
