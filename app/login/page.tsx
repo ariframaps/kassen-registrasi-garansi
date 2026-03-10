@@ -1,53 +1,146 @@
 "use client";
-// app/login/page.tsx
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Zap, Shield, Package, Users } from "lucide-react";
-import { SITE_NAME } from "@/lib/constants";
+import {
+	Shield,
+	Package,
+	Users,
+	Wrench,
+	ArrowLeft,
+	RefreshCw,
+} from "lucide-react";
+
+type Step = "email" | "otp";
+
+const demos = [
+	{
+		email: "admin@kassengaransi.id",
+		label: "Admin",
+		tag: "Full access + manajemen user",
+		icon: Shield,
+		redirect: "/dashboard",
+	},
+	{
+		email: "sales@kassengaransi.id",
+		label: "Sales",
+		tag: "Upload, assign, registrasi",
+		icon: Package,
+		redirect: "/dashboard",
+	},
+	{
+		email: "dealer@kassengaransi.id",
+		label: "Dealer",
+		tag: "Registrasi & pembelian",
+		icon: Users,
+		redirect: "/dealer/dashboard",
+	},
+	{
+		email: "support@kassengaransi.id",
+		label: "Technical Support",
+		tag: "Validasi kondisi garansi",
+		icon: Wrench,
+		redirect: "/support/products",
+	},
+];
+
+function generateOTP() {
+	return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 export default function LoginPage() {
+	const [step, setStep] = useState<Step>("email");
 	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [show, setShow] = useState(false);
+	const [otp, setOtp] = useState("");
+	const [mockOtp, setMockOtp] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
+	const [resendCd, setResendCd] = useState(0);
 	const { login } = useAuth();
 	const router = useRouter();
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setLoading(true);
-		setError("");
-		try {
-			await login(email, password);
-			router.push(
-				email === "dealer@warranty.com" ? "/dealer/dashboard" : "/dashboard",
-			);
-		} catch {
-			setError("Email atau password tidak valid");
-		} finally {
-			setLoading(false);
-		}
+	const getRedirect = (email: string) => {
+		if (email.includes("dealer")) return "/dealer/dashboard";
+		if (email.includes("support")) return "/support/products";
+		return "/dashboard";
 	};
 
-	const demos = [
-		// { email: "admin@warranty.com",  label: "Superadmin", tag: "Full access" },
-		{ email: "sales@warranty.com", label: "Sales", tag: "Upload & assign" },
-		{
-			email: "dealer@warranty.com",
-			label: "Dealer",
-			tag: "Registrasi garansi",
-		},
-	];
+	// Step 1: send OTP
+	const handleSendOtp = async () => {
+		if (!email.trim() || !email.includes("@")) {
+			setError("Masukkan email yang valid");
+			return;
+		}
+		setLoading(true);
+		setError("");
+		await new Promise((r) => setTimeout(r, 900));
+		const code = generateOTP();
+		setMockOtp(code);
+		setStep("otp");
+		setLoading(false);
+		// Countdown 60s
+		setResendCd(60);
+		const t = setInterval(
+			() =>
+				setResendCd((p) => {
+					if (p <= 1) {
+						clearInterval(t);
+						return 0;
+					}
+					return p - 1;
+				}),
+			1000,
+		);
+	};
+
+	// Step 2: verify OTP
+	const handleVerify = async () => {
+		if (otp.length !== 6) {
+			setError("Masukkan 6 digit kode OTP");
+			return;
+		}
+		setLoading(true);
+		setError("");
+		await new Promise((r) => setTimeout(r, 700));
+		if (otp !== mockOtp) {
+			setError("Kode OTP tidak valid atau sudah kedaluwarsa");
+			setLoading(false);
+			return;
+		}
+		try {
+			await login(email, "otp");
+			router.push(getRedirect(email));
+		} catch {
+			setError("Akun tidak ditemukan atau tidak aktif");
+		}
+		setLoading(false);
+	};
+
+	const handleResend = () => {
+		if (resendCd > 0) return;
+		const code = generateOTP();
+		setMockOtp(code);
+		setOtp("");
+		setError("");
+		setResendCd(60);
+		const t = setInterval(
+			() =>
+				setResendCd((p) => {
+					if (p <= 1) {
+						clearInterval(t);
+						return 0;
+					}
+					return p - 1;
+				}),
+			1000,
+		);
+	};
 
 	return (
 		<div className="min-h-screen flex bg-zinc-50">
-			{/* Left */}
-			<div className="hidden lg:flex w-[420px] shrink-0 flex-col bg-zinc-900 relative overflow-hidden">
-				{/* subtle grid */}
+			{/* Left panel */}
+			<div className="hidden lg:flex w-[400px] shrink-0 flex-col bg-zinc-900 relative overflow-hidden">
 				<div
 					className="absolute inset-0 opacity-[0.04]"
 					style={{
@@ -56,39 +149,47 @@ export default function LoginPage() {
 						backgroundSize: "32px 32px",
 					}}
 				/>
-				{/* glow */}
 				<div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 opacity-20 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
-
 				<div className="relative p-8">
 					<div className="flex items-center gap-2.5 mb-16">
 						<div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center">
-							<Zap size={15} className="text-white" />
+							<Shield size={15} className="text-white" />
 						</div>
 						<span className="text-white font-semibold text-sm">
-							{SITE_NAME}
+							KassenGaransi
 						</span>
 					</div>
 					<h2 className="text-2xl font-semibold text-white mb-2">
-						Kassen - Sistem Manajemen
+						Sistem Manajemen
 						<br />
 						Garansi Produk
 					</h2>
-					{/* <p className="text-zinc-400 text-sm leading-relaxed">Platform terpadu untuk distribusi, aktivasi garansi, dan pelacakan status produk.</p> */}
+					<p className="text-zinc-400 text-sm leading-relaxed">
+						Platform registrasi garansi.
+					</p>
 				</div>
-
-				<div className="relative mt-auto p-8 space-y-3">
+				<div className="relative mt-auto p-8 space-y-2.5">
 					{[
 						{
-							icon: <Package size={14} />,
-							t: "Manajemen Produk",
-							d: "Upload & assign serial number ke dealer",
+							icon: <Shield size={13} />,
+							t: "Admin",
+							d: "Kelola semua data + manajemen user",
 						},
 						{
-							icon: <Shield size={14} />,
-							t: "Garansi Terstruktur",
-							d: "Aktivasi garansi berbasis tanggal jual",
+							icon: <Package size={13} />,
+							t: "Sales",
+							d: "Upload, assign, registrasi garansi",
 						},
-						// { icon: <Users   size={14} />, t: "Multi-Role Access",  d: "Superadmin, Sales, Dealer" },
+						{
+							icon: <Users size={13} />,
+							t: "Dealer",
+							d: "Registrasi garansi & pembelian",
+						},
+						{
+							icon: <Wrench size={13} />,
+							t: "Technical Support",
+							d: "Validasi kondisi garansi per produk",
+						},
 					].map((f, i) => (
 						<div
 							key={i}
@@ -105,93 +206,208 @@ export default function LoginPage() {
 				</div>
 			</div>
 
-			{/* Right */}
+			{/* Right: form */}
 			<div className="flex-1 flex items-center justify-center p-8">
-				<div className="w-full max-w-[360px] animate-fade-up">
-					{/* mobile logo */}
+				<div className="w-full max-w-[380px]">
 					<div className="flex items-center gap-2 mb-8 lg:hidden">
 						<div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-							<Zap size={13} className="text-white" />
+							<Shield size={13} className="text-white" />
 						</div>
 						<span className="font-semibold text-zinc-900 text-sm">
-							{SITE_NAME}
+							KassenGaransi
 						</span>
 					</div>
 
-					<h1 className="text-xl font-semibold text-zinc-900 mb-0.5">Masuk</h1>
-					<p className="text-sm text-zinc-400 mb-7">
-						Akses dashboard menggunakan email dan password Anda
-					</p>
+					{step === "email" ? (
+						<div className="animate-fade-up">
+							<h1 className="text-xl font-semibold text-zinc-900 mb-0.5">
+								Masuk
+							</h1>
+							<p className="text-sm text-zinc-400 mb-7">
+								Kode OTP akan dikirim ke email Anda
+							</p>
 
-					<form onSubmit={handleSubmit} className="space-y-4">
-						<Input
-							label="Email"
-							type="email"
-							placeholder="email@contoh.com"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							required
-							autoComplete="email"
-						/>
-						<Input
-							label="Password"
-							type={show ? "text" : "password"}
-							placeholder="••••••••"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							required
-							rightIcon={
-								<button
-									type="button"
-									onClick={() => setShow(!show)}
-									className="hover:text-zinc-600">
-									{show ? <EyeOff size={14} /> : <Eye size={14} />}
-								</button>
-							}
-						/>
-						{error && (
-							<div className="px-3 py-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
-								{error}
+							<div className="space-y-3">
+								<div>
+									<label className="block text-xs font-medium text-zinc-700 mb-1.5">
+										Alamat Email
+									</label>
+									<input
+										type="email"
+										placeholder="email@kassengaransi.id"
+										value={email}
+										onChange={(e) => {
+											setEmail(e.target.value);
+											setError("");
+										}}
+										onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+										autoFocus
+										className="w-full h-9 px-3 text-sm border border-zinc-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 transition-all"
+									/>
+								</div>
+								{error && <p className="text-xs text-red-600 px-1">{error}</p>}
+								<Button
+									fullWidth
+									size="lg"
+									loading={loading}
+									onClick={handleSendOtp}>
+									Kirim Kode OTP
+								</Button>
 							</div>
-						)}
-						<Button
-							type="submit"
-							fullWidth
-							size="lg"
-							loading={loading}
-							className="mt-1">
-							Masuk ke Dashboard
-						</Button>
-					</form>
 
-					{/* Demo */}
-					<div className="mt-8">
-						<p className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider text-center mb-3">
-							Demo — klik untuk isi otomatis
-						</p>
-						<div className="grid gap-2">
-							{demos.map((d) => (
-								<button
-									key={d.email}
-									type="button"
-									onClick={() => {
-										setEmail(d.email);
-										setPassword("demo");
-									}}
-									className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-zinc-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 transition-all group">
-									<div className="text-left">
-										<p className="text-xs font-medium text-zinc-800 group-hover:text-blue-700">
-											{d.label}
-										</p>
-										<p className="text-[11px] text-zinc-400">{d.tag}</p>
-									</div>
-									<span className="text-[10px] font-mono text-zinc-400 group-hover:text-blue-500 shrink-0">
-										{d.email.split("@")[0]}
-									</span>
-								</button>
-							))}
+							{/* Demo quick-fill */}
+							<div className="mt-8">
+								<p className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider text-center mb-3">
+									Demo — klik untuk isi otomatis
+								</p>
+								<div className="grid gap-2">
+									{demos.map((d) => {
+										const Icon = d.icon;
+										return (
+											<button
+												key={d.email}
+												type="button"
+												onClick={() => {
+													setEmail(d.email);
+													setError("");
+												}}
+												className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all group ${
+													email === d.email
+														? "border-blue-400 bg-blue-50"
+														: "border-zinc-200 bg-white hover:border-blue-300 hover:bg-blue-50/50"
+												}`}>
+												<div
+													className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors ${email === d.email ? "bg-blue-100" : "bg-zinc-100 group-hover:bg-blue-100"}`}>
+													<Icon
+														size={13}
+														className={
+															email === d.email
+																? "text-blue-500"
+																: "text-zinc-400 group-hover:text-blue-500"
+														}
+													/>
+												</div>
+												<div className="text-left flex-1">
+													<p
+														className={`text-xs font-semibold ${email === d.email ? "text-blue-700" : "text-zinc-800"}`}>
+														{d.label}
+													</p>
+													<p className="text-[11px] text-zinc-400">{d.tag}</p>
+												</div>
+												<span className="text-[10px] font-mono text-zinc-300 group-hover:text-blue-400 shrink-0">
+													{d.email.split("@")[0]}
+												</span>
+											</button>
+										);
+									})}
+								</div>
+							</div>
 						</div>
-					</div>
+					) : (
+						<div className="animate-fade-up">
+							<button
+								onClick={() => {
+									setStep("email");
+									setOtp("");
+									setError("");
+									setMockOtp("");
+								}}
+								className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-700 mb-6 transition-colors">
+								<ArrowLeft size={13} /> Ganti email
+							</button>
+
+							<h1 className="text-xl font-semibold text-zinc-900 mb-0.5">
+								Cek Email Anda
+							</h1>
+							<p className="text-sm text-zinc-400 mb-1">Kode OTP dikirim ke</p>
+							<p className="text-sm font-semibold text-zinc-800 mb-7">
+								{email}
+							</p>
+
+							{/* Mock OTP display */}
+							<div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+								<p className="text-[11px] text-amber-700 font-medium mb-1">
+									🔧 Mode Demo
+								</p>
+								<p className="text-[11px] text-amber-600">
+									Kode OTP Anda (tidak dikirim email sungguhan):
+								</p>
+								<p className="font-mono text-2xl font-bold text-amber-800 tracking-[0.3em] mt-1">
+									{mockOtp}
+								</p>
+							</div>
+
+							{/* OTP input: 6 boxes */}
+							<div className="mb-4">
+								<label className="block text-xs font-medium text-zinc-700 mb-2">
+									Masukkan 6 digit kode
+								</label>
+								<div className="flex gap-2">
+									{Array.from({ length: 6 }).map((_, i) => (
+										<input
+											key={i}
+											id={`otp-${i}`}
+											type="text"
+											inputMode="numeric"
+											maxLength={1}
+											value={otp[i] ?? ""}
+											onChange={(e) => {
+												const val = e.target.value.replace(/\D/g, "").slice(-1);
+												const newOtp = otp.split("");
+												newOtp[i] = val;
+												const filled = newOtp.join("").slice(0, 6);
+												setOtp(filled);
+												setError("");
+												if (val && i < 5)
+													document.getElementById(`otp-${i + 1}`)?.focus();
+											}}
+											onKeyDown={(e) => {
+												if (e.key === "Backspace" && !otp[i] && i > 0) {
+													document.getElementById(`otp-${i - 1}`)?.focus();
+													setOtp((p) => p.slice(0, i - 1));
+												}
+											}}
+											className={`w-full aspect-square text-center text-lg font-semibold border rounded-xl outline-none transition-all ${
+												otp[i]
+													? "border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/15"
+													: "border-zinc-200 hover:border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+											}`}
+										/>
+									))}
+								</div>
+							</div>
+
+							{error && (
+								<p className="text-xs text-red-600 mb-3 px-1">{error}</p>
+							)}
+
+							<Button
+								fullWidth
+								size="lg"
+								loading={loading}
+								disabled={otp.length < 6}
+								onClick={handleVerify}>
+								Verifikasi & Masuk
+							</Button>
+
+							<div className="mt-4 text-center">
+								{resendCd > 0 ? (
+									<p className="text-xs text-zinc-400">
+										Kirim ulang dalam{" "}
+										<span className="font-mono font-semibold text-zinc-600">
+											{resendCd}s
+										</span>
+									</p>
+								) : (
+									<button
+										onClick={handleResend}
+										className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mx-auto transition-colors">
+										<RefreshCw size={12} /> Kirim ulang kode
+									</button>
+								)}
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

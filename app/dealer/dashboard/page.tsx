@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from "@/components/ui/table";
+import { conditionsStore } from "@/lib/warranty-conditions-store";
 import { dealerProducts, mockDealerNotifications } from "@/lib/mock-data";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
 import { Package, ShieldCheck, ShieldOff, AlertCircle, Bell, Shield, ArrowRight, Search, X } from "lucide-react";

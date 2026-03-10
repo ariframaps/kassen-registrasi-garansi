@@ -1,148 +1,276 @@
 "use client";
-// app/dashboard/waiting-list/page.tsx
-// Revision: 
-// - column "end user / dealer"
-// - when sending notification: check if SN exists in system first
-//   - if not found: warn "SN mungkin typo, suruh cek ulang"
-//   - if found: send warranty detail to email
-
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal, ConfirmModal } from "@/components/ui/modal";
-import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell } from "@/components/ui/table";
+import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell, EmptyState } from "@/components/ui/table";
 import { mockWaitingList, mockProducts } from "@/lib/mock-data";
-import { normalizeSerialNumber, formatDateShort } from "@/lib/utils";
-import { Search, Bell, Trash2, Clock, AlertTriangle, CheckCircle, Users, User } from "lucide-react";
+import { formatDateShort } from "@/lib/utils";
+import { Search, Bell, CheckCircle2, Clock, User, Building2, Mail, MessageSquare, AlertTriangle, Send } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import type { WaitingListEntry } from "@/types";
 
-export default function WaitingListPage() {
-  const [search, setSearch] = useState("");
-  const [notifTarget, setNotifTarget] = useState<WaitingListEntry | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [notifLoading, setNotifLoading] = useState(false);
-  const { success, warning } = useToast();
+type NotifOption =
+  | "check_sn"       // end_user: "cek ulang SN, mungkin typo"
+  | "warranty_detail" // end_user: "SN ditemukan, ini detail garansinya"
+  | "dealer_ready";  // dealer: "SN sudah ditambahkan, silahkan daftarkan"
 
-  const filtered = mockWaitingList.filter(w =>
-    w.serialNumber.toLowerCase().includes(search.toLowerCase()) ||
-    w.name.toLowerCase().includes(search.toLowerCase()) ||
-    w.email.toLowerCase().includes(search.toLowerCase())
+function getProductBySN(sn: string) {
+  return mockProducts.find(p => p.serialNumber === sn);
+}
+
+// ── Notification Modal ──
+function NotifModal({
+  entry,
+  onClose,
+}: { entry: WaitingListEntry; onClose: () => void }) {
+  const [selected, setSelected] = useState<NotifOption | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { success }           = useToast();
+
+  const product = getProductBySN(entry.serialNumber);
+  const isDealer = entry.requestorType === "dealer";
+  const snExists = !!product;
+
+  // Options depend on requestor type
+  const options: { key: NotifOption; icon: React.ReactNode; title: string; desc: string; preview: string }[] =
+    isDealer ? [
+      {
+        key: "dealer_ready",
+        icon: <CheckCircle2 size={16} className="text-emerald-500" />,
+        title: "Produk siap didaftarkan",
+        desc: "Beri tahu dealer bahwa produk sudah ditambahkan ke sistem",
+        preview: `Kepada ${entry.name},\n\nProduk dengan SN ${entry.serialNumber} telah ditambahkan ke sistem KassenGaransi. Silahkan login ke dashboard dealer Anda dan daftarkan garansi produk tersebut segera.\n\nTerima kasih.`,
+      },
+    ] : [
+      {
+        key: "check_sn",
+        icon: <AlertTriangle size={16} className="text-amber-500" />,
+        title: "Minta cek ulang serial number",
+        desc: "SN tidak ditemukan di sistem — mungkin ada typo",
+        preview: `Kepada ${entry.name},\n\nTerima kasih telah menghubungi kami. Serial number yang Anda masukkan (${entry.serialNumber}) tidak ditemukan dalam sistem kami.\n\nMohon periksa kembali serial number di produk Anda (biasanya tertera di stiker bagian bawah atau dalam kemasan). Jika Anda yakin SN sudah benar, hubungi dealer tempat Anda membeli produk.\n\nTerima kasih.`,
+      },
+      {
+        key: "warranty_detail",
+        icon: <CheckCircle2 size={16} className="text-emerald-500" />,
+        title: "Kirim detail status garansi",
+        desc: snExists ? `SN ditemukan — garansi ${product?.warrantyStatus === "active" ? "aktif" : "sudah berakhir"}` : "SN tidak ditemukan di sistem",
+        preview: snExists
+          ? `Kepada ${entry.name},\n\nBerikut informasi garansi produk Anda:\n\n• Serial Number: ${entry.serialNumber}\n• Tipe Produk: ${product?.productType}\n• Status Garansi: ${product?.warrantyStatus === "active" ? "Aktif ✓" : "Berakhir ✗"}\n• Masa Garansi: ${product?.warrantyStartDate ?? "-"} s/d ${product?.warrantyEndDate ?? "-"}\n\nJika ada pertanyaan, silahkan hubungi kami.\n\nTerima kasih.`
+          : "⚠ SN tidak ditemukan — gunakan opsi 'Cek ulang SN' sebagai gantinya.",
+        disabled: !snExists,
+      },
+    ];
+
+  const handleSend = async () => {
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    setLoading(false);
+    setConfirmOpen(false);
+    onClose();
+    const optLabel = options.find(o => o.key === selected)?.title;
+    success("Notifikasi terkirim", `${entry.name} — ${optLabel}`);
+  };
+
+  const selectedOption = options.find(o => o.key === selected);
+
+  return (
+    <>
+      <Modal open onClose={onClose} title="Kirim Notifikasi" description={`ke ${entry.name}`} size="lg">
+        <div className="space-y-4">
+          {/* Requestor info */}
+          <div className="flex items-center gap-3 p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
+            <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
+              {isDealer ? <Building2 size={14} className="text-zinc-500" /> : <User size={14} className="text-zinc-500" />}
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-zinc-900">{entry.name}</p>
+              <p className="text-[11px] text-zinc-400">{entry.email} · {entry.phone}</p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <Badge variant={isDealer ? "blue" : "neutral"}>{isDealer ? "Dealer" : "End User"}</Badge>
+              <span className="text-[11px] font-mono text-zinc-400">SN: {entry.serialNumber}</span>
+            </div>
+          </div>
+
+          {/* SN status */}
+          {snExists ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <CheckCircle2 size={13} className="text-emerald-600" />
+              <p className="text-xs text-emerald-700">SN ditemukan dalam sistem — <span className="font-medium">{product?.productType}</span>, garansi <span className="font-medium">{product?.warrantyStatus === "active" ? "aktif" : "berakhir"}</span></p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertTriangle size={13} className="text-amber-600" />
+              <p className="text-xs text-amber-700">SN <span className="font-mono font-medium">{entry.serialNumber}</span> tidak ditemukan dalam sistem</p>
+            </div>
+          )}
+
+          {/* Choose notification type */}
+          <div>
+            <p className="text-xs font-semibold text-zinc-700 mb-2">Pilih jenis notifikasi</p>
+            <div className="space-y-2">
+              {options.map(opt => (
+                <button
+                  key={opt.key}
+                  disabled={(opt as any).disabled}
+                  onClick={() => setSelected(opt.key)}
+                  className={`w-full flex items-start gap-3 p-3.5 rounded-xl border-2 text-left transition-all ${
+                    (opt as any).disabled ? "opacity-40 cursor-not-allowed border-zinc-100 bg-zinc-50"
+                    : selected === opt.key ? "border-blue-400 bg-blue-50"
+                    : "border-zinc-200 hover:border-zinc-300 bg-white"
+                  }`}
+                >
+                  <div className="mt-0.5 shrink-0">{opt.icon}</div>
+                  <div>
+                    <p className={`text-xs font-semibold ${selected === opt.key ? "text-blue-800" : "text-zinc-800"}`}>{opt.title}</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">{opt.desc}</p>
+                  </div>
+                  {selected === opt.key && <CheckCircle2 size={14} className="text-blue-500 ml-auto shrink-0 mt-0.5" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview */}
+          {selectedOption && (
+            <div>
+              <p className="text-xs font-semibold text-zinc-700 mb-2 flex items-center gap-1.5">
+                <Mail size={12} />
+                Preview Email + Notifikasi Dashboard
+              </p>
+              <pre className="text-[11px] text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-xl px-4 py-3 whitespace-pre-wrap font-sans leading-relaxed max-h-44 overflow-y-auto">
+                {selectedOption.preview}
+              </pre>
+              <p className="text-[11px] text-zinc-400 mt-1.5 flex items-center gap-1">
+                <Send size={10} />
+                Akan dikirim ke <span className="font-medium">{entry.email}</span> &amp; notifikasi dashboard
+                {isDealer && <span className="text-blue-600 ml-1">(dealer)</span>}
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" fullWidth onClick={onClose}>Batal</Button>
+            <Button fullWidth disabled={!selected} icon={<Send size={13} />} onClick={() => setConfirmOpen(true)}>
+              Kirim Notifikasi
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleSend}
+        title="Kirim Notifikasi?"
+        description={`Notifikasi "${selectedOption?.title}" akan dikirim ke email ${entry.email}${isDealer ? " dan dashboard dealer mereka" : ""}.`}
+        confirmLabel="Kirim Sekarang"
+        loading={loading}
+      />
+    </>
   );
+}
 
-  // Check if SN actually exists in the system now
-  const snExistsInSystem = (sn: string) => {
-    const normalized = normalizeSerialNumber(sn);
-    return mockProducts.find(p => normalizeSerialNumber(p.serialNumber) === normalized && p.warrantyStatus !== "none");
-  };
+// ── Main Page ──
+export default function WaitingListPage() {
+  const [entries, setEntries] = useState(mockWaitingList);
+  const [search, setSearch]   = useState("");
+  const [notifTarget, setNotif] = useState<WaitingListEntry | null>(null);
 
-  const handleSendNotif = async () => {
-    if (!notifTarget) return;
-    setNotifLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    setNotifLoading(false);
-    const exists = snExistsInSystem(notifTarget.serialNumber);
-    if (exists) {
-      setNotifTarget(null);
-      success("Notifikasi terkirim", `Detail garansi dikirim ke ${notifTarget.email}`);
-    } else {
-      setNotifTarget(null);
-      warning("SN belum tersedia", "Notifikasi untuk cek ulang serial number telah dikirim ke customer.");
-    }
-  };
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return entries.filter(e =>
+      e.name.toLowerCase().includes(q) ||
+      e.serialNumber.toLowerCase().includes(q) ||
+      e.email.toLowerCase().includes(q)
+    );
+  }, [entries, search]);
+
+  const unnotified = entries.filter(e => !e.notified).length;
 
   return (
     <div>
-      <Topbar title="Waiting List" description="Serial number yang belum ditemukan di sistem" />
-      <div className="p-6 animate-fade-up space-y-5">
-        {/* Info */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-3">
-          <Clock size={15} className="text-amber-600 shrink-0 mt-0.5"/>
-          <div>
-            <p className="text-xs font-semibold text-amber-800">Cara kerja waiting list</p>
-            <p className="text-xs text-amber-700 mt-0.5">End customer atau dealer yang mencari SN yang belum ada di sistem masuk ke sini. Setelah sales upload produk yang cocok, kirim notifikasi manual atau sistem otomatis mengirimkan.</p>
-          </div>
+      <Topbar title="Waiting List" description="Request produk dari end user dan dealer" />
+      <div className="p-6 animate-fade-up space-y-4">
+
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { l: "Total Request",    v: entries.length,   c: "text-zinc-900" },
+            { l: "Belum Dinotifikasi", v: unnotified,     c: "text-amber-600" },
+            { l: "Sudah Dinotifikasi", v: entries.length - unnotified, c: "text-emerald-600" },
+          ].map(s => (
+            <div key={s.l} className="bg-white border border-zinc-200 rounded-xl px-4 py-3.5 shadow-sm">
+              <p className="text-xs text-zinc-400 mb-1">{s.l}</p>
+              <p className={`text-2xl font-semibold font-mono ${s.c}`}>{s.v}</p>
+            </div>
+          ))}
         </div>
 
         <Card>
-          <div className="px-5 py-3.5 border-b border-zinc-100 flex gap-3 items-center">
-            <div className="flex-1 max-w-72">
-              <Input placeholder="Cari SN, nama, atau email…" value={search} onChange={e => setSearch(e.target.value)} leftIcon={<Search size={14}/>} />
+          <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center gap-3">
+            <div className="flex-1 max-w-64">
+              <Input placeholder="Cari nama, SN, atau email…" value={search} onChange={e => setSearch(e.target.value)} leftIcon={<Search size={13} />} />
             </div>
-            <div className="ml-auto flex items-center gap-2">
-              <Badge variant="warning">{mockWaitingList.filter(w => !w.notified).length} belum notif</Badge>
-            </div>
+            <p className="text-xs text-zinc-400 ml-auto">{filtered.length} request</p>
           </div>
-
           <CardContent className="p-0">
             <Table>
               <TableHead>
-                <TableHeader>Serial Number</TableHeader>
                 <TableHeader>Pemohon</TableHeader>
                 <TableHeader>Tipe</TableHeader>
-                <TableHeader>Kontak</TableHeader>
+                <TableHeader>Serial Number</TableHeader>
+                <TableHeader>Produk di Sistem</TableHeader>
                 <TableHeader>Tgl Request</TableHeader>
                 <TableHeader>Status</TableHeader>
                 <TableHeader className="text-right pr-5">Aksi</TableHeader>
               </TableHead>
               <TableBody>
-                {filtered.map(w => {
-                  const snReady = !!snExistsInSystem(w.serialNumber);
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={7}><EmptyState icon={<Clock size={18} />} title="Tidak ada request" /></td></tr>
+                ) : filtered.map(e => {
+                  const product = getProductBySN(e.serialNumber);
                   return (
-                    <TableRow key={w.id}>
+                    <TableRow key={e.id}>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md">{w.serialNumber}</span>
-                          {snReady && (
-                            <span title="SN sudah ada di sistem">
-                              <CheckCircle size={13} className="text-emerald-500"/>
-                            </span>
-                          )}
-                        </div>
+                        <p className="text-xs font-medium text-zinc-900">{e.name}</p>
+                        <p className="text-[11px] text-zinc-400">{e.email}</p>
                       </TableCell>
                       <TableCell>
-                        <span className="text-xs font-medium text-zinc-800">{w.name}</span>
+                        <Badge variant={e.requestorType === "dealer" ? "blue" : "neutral"}>
+                          {e.requestorType === "dealer" ? "Dealer" : "End User"}
+                        </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          {w.requestorType === "dealer" ? (
-                            <><Users size={12} className="text-blue-500 shrink-0"/><Badge variant="blue">Dealer</Badge></>
-                          ) : (
-                            <><User size={12} className="text-zinc-400 shrink-0"/><Badge variant="neutral">End User</Badge></>
-                          )}
-                        </div>
+                        <span className="font-mono text-xs bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md">{e.serialNumber}</span>
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <p className="text-xs text-zinc-700">{w.email}</p>
-                          <p className="text-[11px] text-zinc-400 font-mono">{w.phone}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell><span className="text-xs text-zinc-400">{formatDateShort(w.requestDate)}</span></TableCell>
-                      <TableCell>
-                        {w.notified ? (
-                          <Badge variant="success" dot>Sudah Dinotifikasi</Badge>
-                        ) : snReady ? (
-                          <Badge variant="blue" dot>SN Tersedia — Siap Notif</Badge>
+                        {product ? (
+                          <div>
+                            <p className="text-xs text-zinc-700">{product.productType}</p>
+                            <Badge variant={product.warrantyStatus === "active" ? "success" : product.warrantyStatus === "expired" ? "danger" : "neutral"} dot className="mt-0.5 text-[10px]">
+                              {product.warrantyStatus === "active" ? "Garansi Aktif" : product.warrantyStatus === "expired" ? "Berakhir" : "Belum Terdaftar"}
+                            </Badge>
+                          </div>
                         ) : (
-                          <Badge variant="warning" dot>Menunggu</Badge>
+                          <span className="text-xs text-zinc-300">Tidak ditemukan</span>
                         )}
                       </TableCell>
+                      <TableCell><span className="text-xs text-zinc-400">{formatDateShort(e.requestDate)}</span></TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => setNotifTarget(w)}
-                            className="p-1.5 rounded-md hover:bg-blue-50 text-zinc-400 hover:text-blue-600 transition-colors"
-                            title="Kirim notifikasi"
-                          >
-                            <Bell size={13}/>
-                          </button>
-                          <button onClick={() => setDeleteTarget(w.id)} className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors">
-                            <Trash2 size={13}/>
-                          </button>
+                        <Badge variant={e.notified ? "success" : "warning"} dot>
+                          {e.notified ? "Sudah Dinotifikasi" : "Belum"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end">
+                          <Button size="xs" variant={e.notified ? "outline" : "primary"} icon={<Bell size={11} />} onClick={() => setNotif(e)}>
+                            {e.notified ? "Kirim Lagi" : "Notifikasi"}
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -154,58 +282,9 @@ export default function WaitingListPage() {
         </Card>
       </div>
 
-      {/* Smart Notification Modal */}
       {notifTarget && (
-        <Modal open={!!notifTarget} onClose={() => setNotifTarget(null)} title="Kirim Notifikasi" size="sm">
-          {(() => {
-            const exists = snExistsInSystem(notifTarget.serialNumber);
-            return (
-              <div className="space-y-4">
-                <div className={`flex items-start gap-3 p-3.5 rounded-xl border ${exists ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
-                  {exists ? (
-                    <CheckCircle size={16} className="text-emerald-600 shrink-0 mt-0.5"/>
-                  ) : (
-                    <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5"/>
-                  )}
-                  <div>
-                    <p className={`text-xs font-semibold ${exists ? "text-emerald-800" : "text-amber-800"}`}>
-                      {exists ? "Serial number ditemukan di sistem" : "Serial number TIDAK ditemukan di sistem"}
-                    </p>
-                    <p className={`text-xs mt-0.5 ${exists ? "text-emerald-700" : "text-amber-700"}`}>
-                      {exists
-                        ? `Detail garansi produk akan dikirim ke ${notifTarget.email}`
-                        : `SN "${notifTarget.serialNumber}" mungkin typo. Notifikasi akan meminta ${notifTarget.name} untuk mengecek kembali serial number produknya.`
-                      }
-                    </p>
-                  </div>
-                </div>
-                <div className="text-xs text-zinc-500 space-y-1">
-                  <div className="flex justify-between"><span className="text-zinc-400">Penerima</span><span className="font-medium text-zinc-700">{notifTarget.name}</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-400">Email</span><span className="font-medium text-zinc-700">{notifTarget.email}</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-400">SN dicari</span><span className="font-mono font-medium text-zinc-700">{notifTarget.serialNumber}</span></div>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <Button variant="outline" fullWidth onClick={() => setNotifTarget(null)}>Batal</Button>
-                  <Button fullWidth loading={notifLoading} onClick={handleSendNotif}
-                    icon={<Bell size={13}/>}
-                    variant={exists ? "primary" : "secondary"}
-                  >
-                    {exists ? "Kirim Detail Garansi" : "Kirim Notifikasi Cek Ulang"}
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
-        </Modal>
+        <NotifModal entry={notifTarget} onClose={() => setNotif(null)} />
       )}
-
-      <ConfirmModal
-        open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { setDeleteTarget(null); success("Data dihapus dari waiting list"); }}
-        title="Hapus dari Waiting List?" variant="danger"
-        description="Data ini akan dihapus permanen dari waiting list."
-        confirmLabel="Hapus"
-      />
     </div>
   );
 }

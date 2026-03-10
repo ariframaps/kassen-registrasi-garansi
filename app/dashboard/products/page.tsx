@@ -1,5 +1,4 @@
 "use client";
-// app/dashboard/products/page.tsx
 import { useState, useMemo } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,10 +17,13 @@ import {
 	EmptyState,
 } from "@/components/ui/table";
 import { mockProducts, mockDealers, PRODUCT_CATEGORIES } from "@/lib/mock-data";
+import { conditionsStore, setCondition } from "@/lib/warranty-conditions-store";
+import type { ConditionEntry } from "@/lib/warranty-conditions-store";
 import {
 	getProductStatusLabel,
 	getProductStatusBadgeVariant,
 	formatDateShort,
+	getDaysRemaining,
 } from "@/lib/utils";
 import {
 	Search,
@@ -31,21 +33,196 @@ import {
 	X,
 	Check,
 	Link2,
-	ChevronDown,
+	AlertTriangle,
+	CheckCircle2,
+	XCircle,
+	RotateCcw,
+	Wrench,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/lib/auth-context";
 import type { Product } from "@/types";
 
-// ── Sales Warranty Registration Modal (multi-product, same as dealer flow) ──
-function SalesWarrantyModal({
-	open,
+// ── Warranty Condition Badge ──
+function ConditionBadge({ sn }: { sn: string }) {
+	const c = conditionsStore[sn];
+	if (!c || c.warrantyCondition === "valid")
+		return (
+			<Badge variant="success" dot>
+				Valid
+			</Badge>
+		);
+	return (
+		<Badge variant="danger" dot>
+			Rejected
+		</Badge>
+	);
+}
+
+// ── Condition Update Modal (admin) ──
+function AdminConditionModal({
+	product,
+	onClose,
+	onSave,
+}: {
+	product: Product;
+	onClose: () => void;
+	onSave: (d: ConditionEntry) => void;
+}) {
+	const current = conditionsStore[product.serialNumber];
+	const [status, setStatus] = useState<"valid" | "rejected">(
+		current?.warrantyCondition === "rejected" ? "rejected" : "valid",
+	);
+	const [note, setNote] = useState(current?.warrantyConditionNote ?? "");
+	const [confirmOpen, setConfirm] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const { success } = useToast();
+
+	const handleSave = async () => {
+		setLoading(true);
+		await new Promise((r) => setTimeout(r, 700));
+		setLoading(false);
+		onSave({
+			warrantyCondition: status,
+			warrantyConditionNote: note.trim(),
+			warrantyConditionUpdatedAt: new Date().toISOString().slice(0, 10),
+			warrantyConditionUpdatedBy: "Admin",
+		});
+		setConfirm(false);
+		onClose();
+		success(
+			status === "valid" ? "Kondisi: Valid" : "Kondisi: Rejected",
+			`SN ${product.serialNumber}`,
+		);
+	};
+
+	return (
+		<>
+			<Modal
+				open
+				onClose={onClose}
+				title="Update Kondisi Garansi"
+				description={product.serialNumber}
+				size="md">
+				<div className="space-y-4">
+					<div className="grid grid-cols-2 gap-3">
+						{(["valid", "rejected"] as const).map((s) => (
+							<button
+								key={s}
+								onClick={() => setStatus(s)}
+								className={`flex items-center gap-2.5 p-3.5 rounded-xl border-2 transition-all text-left ${
+									status === s
+										? s === "valid"
+											? "border-emerald-400 bg-emerald-50"
+											: "border-red-400 bg-red-50"
+										: "border-zinc-200 hover:border-zinc-300"
+								}`}>
+								{s === "valid" ? (
+									<CheckCircle2
+										size={17}
+										className={
+											status === "valid" ? "text-emerald-500" : "text-zinc-300"
+										}
+									/>
+								) : (
+									<XCircle
+										size={17}
+										className={
+											status === "rejected" ? "text-red-500" : "text-zinc-300"
+										}
+									/>
+								)}
+								<div>
+									<p
+										className={`text-xs font-semibold ${status === s ? (s === "valid" ? "text-emerald-700" : "text-red-700") : "text-zinc-600"}`}>
+										{s === "valid" ? "Valid" : "Rejected"}
+									</p>
+									<p className="text-[11px] text-zinc-400">
+										{s === "valid"
+											? "Garansi berlaku"
+											: "Tidak memenuhi syarat"}
+									</p>
+								</div>
+							</button>
+						))}
+					</div>
+					<div>
+						<label className="block text-xs font-medium text-zinc-700 mb-1.5">
+							{status === "rejected" ? (
+								<>
+									Alasan <span className="text-red-500">*</span>
+								</>
+							) : (
+								"Catatan (opsional)"
+							)}
+						</label>
+						<textarea
+							value={note}
+							onChange={(e) => setNote(e.target.value)}
+							rows={3}
+							className={`w-full px-3 py-2 text-sm bg-white border rounded-lg outline-none transition-all resize-none ${status === "rejected" && !note.trim() ? "border-red-300" : "border-zinc-200 focus:border-blue-500"}`}
+							placeholder={
+								status === "rejected"
+									? "Alasan tidak memenuhi syarat…"
+									: "Catatan kondisi…"
+							}
+						/>
+						{status === "rejected" && !note.trim() && (
+							<p className="text-xs text-red-600 mt-1">Alasan wajib diisi</p>
+						)}
+					</div>
+					{status === "rejected" && (
+						<div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+							<AlertTriangle
+								size={13}
+								className="text-amber-600 shrink-0 mt-0.5"
+							/>
+							<p className="text-[11px] text-amber-700">
+								Status Rejected = garansi tidak bisa diklaim meski masih aktif.
+							</p>
+						</div>
+					)}
+					<div className="flex gap-2 pt-1">
+						<Button variant="outline" fullWidth onClick={onClose}>
+							Batal
+						</Button>
+						<Button
+							fullWidth
+							disabled={status === "rejected" && !note.trim()}
+							variant={status === "rejected" ? "danger" : "primary"}
+							onClick={() => setConfirm(true)}>
+							Simpan Kondisi
+						</Button>
+					</div>
+				</div>
+			</Modal>
+			<ConfirmModal
+				open={confirmOpen}
+				onClose={() => setConfirm(false)}
+				onConfirm={handleSave}
+				title={`Ubah kondisi ke ${status === "valid" ? "Valid" : "Rejected"}?`}
+				description={
+					status === "rejected"
+						? `SN ${product.serialNumber} akan ditandai Rejected. Alasan: "${note}"`
+						: `SN ${product.serialNumber} dikembalikan ke Valid.`
+				}
+				confirmLabel={status === "rejected" ? "Ya, Reject" : "Ya, Valid"}
+				variant={status === "rejected" ? "danger" : "primary"}
+				loading={loading}
+			/>
+		</>
+	);
+}
+
+// ── Warranty Registration Modal ──
+function WarrantyModal({
 	products,
 	onClose,
+	isOpen = false,
 }: {
-	open: boolean;
 	products: Product[];
 	onClose: () => void;
+	isOpen: boolean;
 }) {
 	const [form, setForm] = useState({
 		customerName: "",
@@ -54,8 +231,9 @@ function SalesWarrantyModal({
 		warrantyStart: "",
 		invoiceFile: null as File | null,
 	});
-	const [loading, setLoading] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
+	const [confirmOpen, setConfirm] = useState(false);
+	const [loading, setLoading] = useState(false);
 	const { success } = useToast();
 
 	const validate = () => {
@@ -69,143 +247,155 @@ function SalesWarrantyModal({
 		return Object.keys(e).length === 0;
 	};
 
-	const handleSubmit = async () => {
-		if (!validate()) return;
-		setLoading(true);
-		await new Promise((r) => setTimeout(r, 900));
-		setLoading(false);
-		onClose();
-		success(
-			"Garansi berhasil diregistrasikan",
-			`${products.length} produk terdaftar`,
-		);
-	};
-
 	const groupId =
 		form.customerName && form.warrantyStart
 			? `GRP-${form.customerName.slice(0, 3).toUpperCase()}-${form.warrantyStart.replace(/-/g, "").slice(2)}`
 			: null;
 
+	const handleSubmit = async () => {
+		setLoading(true);
+		await new Promise((r) => setTimeout(r, 900));
+		setLoading(false);
+		setConfirm(false);
+		onClose();
+		success(
+			"Garansi berhasil diregistrasikan",
+			`${products.length} produk · Grup ${groupId}`,
+		);
+	};
+
 	return (
-		<Modal
-			open={open}
-			onClose={onClose}
-			title="Registrasi Garansi — Sales"
-			description={`${products.length} produk dipilih`}
-			size="md">
-			{/* Selected SNs */}
-			<div className="p-3 bg-zinc-50 border border-zinc-100 rounded-xl mb-4">
-				<div className="flex flex-wrap gap-1.5 mb-2">
-					{products.map((p) => (
-						<span
-							key={p.id}
-							className="font-mono text-[11px] bg-white border border-zinc-200 px-2 py-0.5 rounded-md text-zinc-600">
-							{p.serialNumber}
-						</span>
-					))}
-				</div>
-				<p className="text-[11px] text-amber-600">
-					⚠ Semua produk menggunakan 1 data customer & 1 invoice
-				</p>
-				{groupId && (
-					<p className="text-[11px] text-zinc-400 mt-1">
-						Grup: <span className="font-mono text-blue-600">{groupId}</span>
-					</p>
-				)}
-			</div>
-			<div className="space-y-3">
-				<Input
-					label="Nama Customer"
-					placeholder="Nama lengkap"
-					required
-					value={form.customerName}
-					onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-					error={errors.customerName}
-				/>
-				<div className="grid grid-cols-2 gap-3">
-					<Input
-						label="No. HP"
-						type="tel"
-						placeholder="08xx-xxxx-xxxx"
-						required
-						value={form.phone}
-						onChange={(e) => setForm({ ...form, phone: e.target.value })}
-						error={errors.phone}
-					/>
-					<Input
-						label="Email"
-						type="email"
-						placeholder="email@contoh.com"
-						required
-						value={form.email}
-						onChange={(e) => setForm({ ...form, email: e.target.value })}
-						error={errors.email}
-					/>
-				</div>
-				<Input
-					label="Tanggal Terjual (= Mulai Garansi)"
-					type="date"
-					required
-					value={form.warrantyStart}
-					onChange={(e) => setForm({ ...form, warrantyStart: e.target.value })}
-					error={errors.warrantyStart}
-					hint="Tanggal ini menjadi tanggal mulai garansi"
-				/>
-				<div>
-					<label className="block text-xs font-medium text-zinc-700 mb-1.5">
-						Invoice <span className="text-red-500">*</span>
-					</label>
-					<label
-						className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${form.invoiceFile ? "border-emerald-400 bg-emerald-50" : "border-zinc-200 hover:border-zinc-300 bg-zinc-50"}`}>
-						{form.invoiceFile ? (
-							<div className="flex items-center gap-2 text-emerald-700">
-								<Check size={14} />
-								<span className="text-xs font-medium">
-									{form.invoiceFile.name}
+		<>
+			<Modal
+				open={isOpen}
+				onClose={onClose}
+				title="Registrasi Garansi"
+				description={`${products.length} produk dipilih`}
+				size="md">
+				<div className="space-y-3">
+					<div className="p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
+						<div className="flex flex-wrap gap-1.5 mb-2">
+							{products.map((p) => (
+								<span
+									key={p.id}
+									className="font-mono text-[11px] bg-white border border-zinc-200 px-2 py-0.5 rounded-md text-zinc-600">
+									{p.serialNumber}
 								</span>
-								<button
-									type="button"
-									onClick={(e) => {
-										e.preventDefault();
-										setForm({ ...form, invoiceFile: null });
-									}}
-									className="text-zinc-400 hover:text-zinc-600 ml-1">
-									<X size={11} />
-								</button>
-							</div>
-						) : (
-							<p className="text-xs text-zinc-400">
-								Klik untuk upload — PNG, JPG, PDF · Maks 4MB
+							))}
+						</div>
+						<p className="text-[11px] text-amber-600">
+							⚠ Semua produk menggunakan 1 data customer &amp; 1 invoice
+						</p>
+						{groupId && (
+							<p className="text-[11px] text-zinc-400 mt-1">
+								Grup: <span className="font-mono text-blue-600">{groupId}</span>
 							</p>
 						)}
-						<input
-							type="file"
-							accept=".png,.jpg,.jpeg,.pdf"
-							className="sr-only"
-							onChange={(e) => {
-								const f = e.target.files?.[0];
-								if (f) setForm({ ...form, invoiceFile: f });
-							}}
+					</div>
+					<Input
+						label="Nama Customer"
+						placeholder="Nama lengkap"
+						required
+						value={form.customerName}
+						onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+						error={errors.customerName}
+					/>
+					<div className="grid grid-cols-2 gap-3">
+						<Input
+							label="No. HP"
+							type="tel"
+							placeholder="08xx-xxxx-xxxx"
+							required
+							value={form.phone}
+							onChange={(e) => setForm({ ...form, phone: e.target.value })}
+							error={errors.phone}
 						/>
-					</label>
-					{errors.invoiceFile && (
-						<p className="mt-1 text-xs text-red-600">{errors.invoiceFile}</p>
-					)}
+						<Input
+							label="Email"
+							type="email"
+							placeholder="email@contoh.com"
+							required
+							value={form.email}
+							onChange={(e) => setForm({ ...form, email: e.target.value })}
+							error={errors.email}
+						/>
+					</div>
+					<Input
+						label="Tanggal Terjual (= Mulai Garansi)"
+						type="date"
+						required
+						value={form.warrantyStart}
+						onChange={(e) =>
+							setForm({ ...form, warrantyStart: e.target.value })
+						}
+						error={errors.warrantyStart}
+						hint="Tanggal ini menjadi tanggal mulai garansi"
+					/>
+					<div>
+						<label className="block text-xs font-medium text-zinc-700 mb-1.5">
+							Invoice <span className="text-red-500">*</span>
+						</label>
+						<label
+							className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${form.invoiceFile ? "border-emerald-400 bg-emerald-50" : "border-zinc-200 hover:border-zinc-300 bg-zinc-50"}`}>
+							{form.invoiceFile ? (
+								<div className="flex items-center gap-2 text-emerald-700">
+									<Check size={14} />
+									<span className="text-xs font-medium">
+										{form.invoiceFile.name}
+									</span>
+									<button
+										type="button"
+										onClick={(e) => {
+											e.preventDefault();
+											setForm({ ...form, invoiceFile: null });
+										}}>
+										<X size={11} />
+									</button>
+								</div>
+							) : (
+								<p className="text-xs text-zinc-400">
+									Klik untuk upload — PNG, JPG, PDF
+								</p>
+							)}
+							<input
+								type="file"
+								accept=".png,.jpg,.jpeg,.pdf"
+								className="sr-only"
+								onChange={(e) => {
+									const f = e.target.files?.[0];
+									if (f) setForm({ ...form, invoiceFile: f });
+								}}
+							/>
+						</label>
+						{errors.invoiceFile && (
+							<p className="mt-1 text-xs text-red-600">{errors.invoiceFile}</p>
+						)}
+					</div>
+					<div className="flex gap-2 pt-1">
+						<Button variant="outline" fullWidth onClick={onClose}>
+							Batal
+						</Button>
+						<Button
+							fullWidth
+							icon={<Shield size={13} />}
+							onClick={() => {
+								if (validate()) setConfirm(true);
+							}}>
+							Registrasikan
+						</Button>
+					</div>
 				</div>
-				<div className="flex gap-2 pt-1">
-					<Button variant="outline" fullWidth onClick={onClose}>
-						Batal
-					</Button>
-					<Button
-						fullWidth
-						loading={loading}
-						icon={<Shield size={13} />}
-						onClick={handleSubmit}>
-						Registrasikan Garansi
-					</Button>
-				</div>
-			</div>
-		</Modal>
+			</Modal>
+			<ConfirmModal
+				open={confirmOpen}
+				onClose={() => setConfirm(false)}
+				onConfirm={handleSubmit}
+				title="Konfirmasi Registrasi Garansi"
+				description={`${products.length} produk akan didaftarkan garansinya atas nama ${form.customerName}. Grup: ${groupId}`}
+				confirmLabel="Ya, Registrasikan"
+				loading={loading}
+			/>
+		</>
 	);
 }
 
@@ -218,9 +408,9 @@ function BulkAssignModal({
 	onClose: () => void;
 }) {
 	const [search, setSearch] = useState("");
-	const [selectedSNs, setSelectedSNs] = useState<string[]>([]);
-	const [dealerId, setDealerId] = useState("");
-	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [selectedSNs, setSelected] = useState<string[]>([]);
+	const [dealerId, setDealer] = useState("");
+	const [confirmOpen, setConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const { success } = useToast();
 
@@ -232,24 +422,22 @@ function BulkAssignModal({
 				p.productCategory.toLowerCase().includes(search.toLowerCase())),
 	);
 
-	const toggleSN = (sn: string) =>
-		setSelectedSNs((prev) =>
+	const toggle = (sn: string) =>
+		setSelected((prev) =>
 			prev.includes(sn) ? prev.filter((s) => s !== sn) : [...prev, sn],
 		);
-
-	const selectAll = () => setSelectedSNs(assignable.map((p) => p.serialNumber));
 
 	const handleAssign = async () => {
 		setLoading(true);
 		await new Promise((r) => setTimeout(r, 800));
 		setLoading(false);
-		setConfirmOpen(false);
+		setConfirm(false);
 		onClose();
-		setSelectedSNs([]);
-		setDealerId("");
+		setSelected([]);
+		setDealer("");
 		setSearch("");
 		success(
-			`${selectedSNs.length} produk berhasil di-assign`,
+			`${selectedSNs.length} produk di-assign`,
 			`ke ${mockDealers.find((d) => d.id === dealerId)?.name}`,
 		);
 	};
@@ -260,10 +448,8 @@ function BulkAssignModal({
 				open={open}
 				onClose={onClose}
 				title="Assign Produk ke Dealer"
-				description="Pilih produk dan dealer tujuan"
 				size="xl">
 				<div className="space-y-4">
-					{/* Dealer selector */}
 					<Select
 						label="Dealer Tujuan"
 						required
@@ -272,77 +458,66 @@ function BulkAssignModal({
 							.map((d) => ({ value: d.id, label: d.name }))}
 						placeholder="Pilih dealer..."
 						value={dealerId}
-						onChange={(e) => setDealerId(e.target.value)}
+						onChange={(e) => setDealer(e.target.value)}
 					/>
-
-					{/* Search + select all */}
 					<div className="flex gap-2 items-center">
 						<div className="flex-1">
 							<Input
-								placeholder="Cari serial number, tipe, atau kategori…"
+								placeholder="Cari SN, tipe, atau kategori…"
 								value={search}
 								onChange={(e) => setSearch(e.target.value)}
 								leftIcon={<Search size={13} />}
 							/>
 						</div>
 						<button
-							onClick={selectAll}
+							onClick={() => setSelected(assignable.map((p) => p.serialNumber))}
 							className="text-xs text-blue-600 hover:underline whitespace-nowrap px-1">
-							Pilih Semua ({assignable.length})
+							Pilih Semua
 						</button>
 						{selectedSNs.length > 0 && (
 							<button
-								onClick={() => setSelectedSNs([])}
-								className="text-xs text-zinc-400 hover:text-zinc-600 whitespace-nowrap px-1">
+								onClick={() => setSelected([])}
+								className="text-xs text-zinc-400 hover:text-zinc-600 whitespace-nowrap">
 								Batal Semua
 							</button>
 						)}
 					</div>
-
-					{/* Product list */}
-					<div className="border border-zinc-100 rounded-xl overflow-hidden">
-						<div className="max-h-64 overflow-y-auto divide-y divide-zinc-50">
-							{assignable.length === 0 ? (
-								<div className="py-8 text-center text-xs text-zinc-400">
-									Tidak ada produk yang belum di-assign
-								</div>
-							) : (
-								assignable.map((p) => {
-									const sel = selectedSNs.includes(p.serialNumber);
-									return (
-										<button
-											key={p.id}
-											onClick={() => toggleSN(p.serialNumber)}
-											className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${sel ? "bg-blue-50" : "hover:bg-zinc-50"}`}>
-											<div
-												className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${sel ? "bg-blue-600 border-blue-600" : "border-zinc-300"}`}>
-												{sel && (
-													<Check
-														size={9}
-														className="text-white"
-														strokeWidth={3}
-													/>
-												)}
-											</div>
-											<div className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center shrink-0">
-												<Package size={12} className="text-zinc-400" />
-											</div>
-											<div className="flex-1 min-w-0">
-												<p className="font-mono text-xs font-semibold text-zinc-800">
-													{p.serialNumber}
-												</p>
-												<p className="text-[11px] text-zinc-400 truncate">
-													{p.productType} · {p.productCategory}
-												</p>
-											</div>
-										</button>
-									);
-								})
-							)}
-						</div>
+					<div className="border border-zinc-100 rounded-xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-zinc-50">
+						{assignable.length === 0 ? (
+							<div className="py-8 text-center text-xs text-zinc-400">
+								Tidak ada produk yang bisa di-assign
+							</div>
+						) : (
+							assignable.map((p) => {
+								const sel = selectedSNs.includes(p.serialNumber);
+								return (
+									<button
+										key={p.id}
+										onClick={() => toggle(p.serialNumber)}
+										className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${sel ? "bg-blue-50" : "hover:bg-zinc-50"}`}>
+										<div
+											className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${sel ? "bg-blue-600 border-blue-600" : "border-zinc-300"}`}>
+											{sel && (
+												<Check
+													size={9}
+													className="text-white"
+													strokeWidth={3}
+												/>
+											)}
+										</div>
+										<div className="flex-1 min-w-0">
+											<p className="font-mono text-xs font-semibold text-zinc-800">
+												{p.serialNumber}
+											</p>
+											<p className="text-[11px] text-zinc-400">
+												{p.productType} · {p.productCategory}
+											</p>
+										</div>
+									</button>
+								);
+							})
+						)}
 					</div>
-
-					{/* Selected chips */}
 					{selectedSNs.length > 0 && (
 						<div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
 							<p className="text-xs font-medium text-blue-700 mb-2">
@@ -354,7 +529,7 @@ function BulkAssignModal({
 										key={sn}
 										className="inline-flex items-center gap-1 bg-white border border-blue-200 px-2 py-0.5 rounded-md text-[11px] font-mono text-blue-700">
 										{sn}
-										<button onClick={() => toggleSN(sn)}>
+										<button onClick={() => toggle(sn)}>
 											<X size={9} />
 										</button>
 									</span>
@@ -362,7 +537,6 @@ function BulkAssignModal({
 							</div>
 						</div>
 					)}
-
 					<div className="flex gap-2 pt-1">
 						<Button variant="outline" fullWidth onClick={onClose}>
 							Batal
@@ -371,19 +545,18 @@ function BulkAssignModal({
 							fullWidth
 							disabled={selectedSNs.length === 0 || !dealerId}
 							icon={<Link2 size={13} />}
-							onClick={() => setConfirmOpen(true)}>
-							Assign {selectedSNs.length > 0 ? `(${selectedSNs.length})` : ""}
+							onClick={() => setConfirm(true)}>
+							Assign ({selectedSNs.length})
 						</Button>
 					</div>
 				</div>
 			</Modal>
-
 			<ConfirmModal
 				open={confirmOpen}
-				onClose={() => setConfirmOpen(false)}
+				onClose={() => setConfirm(false)}
 				onConfirm={handleAssign}
 				title="Konfirmasi Assign"
-				description={`${selectedSNs.length} produk akan di-assign ke ${mockDealers.find((d) => d.id === dealerId)?.name ?? "dealer"}. Tindakan ini tidak bisa dibatalkan.`}
+				description={`${selectedSNs.length} produk akan di-assign ke ${mockDealers.find((d) => d.id === dealerId)?.name ?? "dealer"}. Tidak bisa dibatalkan.`}
 				confirmLabel="Ya, Assign"
 				loading={loading}
 			/>
@@ -394,20 +567,21 @@ function BulkAssignModal({
 // ── Main Page ──
 export default function ProductsPage() {
 	const [search, setSearch] = useState("");
-	const [statusFilter, setStatusFilter] = useState("all");
-	const [dealerFilter, setDealerFilter] = useState("all");
-	const [categoryFilter, setCategoryFilter] = useState("all");
-	const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+	const [statusFilter, setStatus] = useState("all");
+	const [dealerFilter, setDealer] = useState("all");
+	const [categoryFilter, setCategory] = useState("all");
+	const [selectedProduct, setSelected] = useState<Product | null>(null);
+	const [conditionTarget, setConditionTarget] = useState<Product | null>(null);
 	const [detailOpen, setDetailOpen] = useState(false);
-	const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
-
-	// For sales warranty: multi-select then open modal
-	const [warrantySelectMode, setWarrantySelectMode] = useState(false);
+	const [bulkAssignOpen, setBulkAssign] = useState(false);
+	const [warrantySelectMode, setWarrantyMode] = useState(false);
 	const [warrantySelected, setWarrantySelected] = useState<string[]>([]);
-	const [warrantyModalOpen, setWarrantyModalOpen] = useState(false);
+	const [warrantyModalOpen, setWarrantyModal] = useState(false);
+	const [, forceUpdate] = useState(0);
 
 	const { user } = useAuth();
-	const canEdit = user?.role === "sales" || user?.role === "superadmin";
+	const canEdit = user?.role === "sales" || user?.role === "admin";
+	const isAdmin = user?.role === "admin";
 
 	const filtered = useMemo(() => {
 		const q = search.toLowerCase();
@@ -432,19 +606,24 @@ export default function ProductsPage() {
 		setWarrantySelected((prev) =>
 			prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
 		);
-
-	const canSalesRegister = (p: Product) =>
+	const canRegister = (p: Product) =>
 		!p.assignedDealerId && p.warrantyStatus === "none";
-	const warrantySelectedProducts = mockProducts.filter((p) =>
+	const warrantyProducts = mockProducts.filter((p) =>
 		warrantySelected.includes(p.id),
 	);
+
+	// Auto-filter when entering warranty select mode
+	const enterWarrantyMode = () => {
+		setWarrantyMode(true);
+		setStatus("uploaded_by_sales");
+		setDealer("none");
+	};
 
 	return (
 		<div>
 			<Topbar title="Produk" description="Kelola semua serial number produk" />
 			<div className="p-6 animate-fade-up">
 				<Card>
-					{/* Filters row */}
 					<div className="px-5 py-3.5 border-b border-zinc-100 flex flex-wrap items-center gap-2.5">
 						<div className="flex-1 min-w-48 max-w-64">
 							<Input
@@ -454,7 +633,6 @@ export default function ProductsPage() {
 								leftIcon={<Search size={13} />}
 							/>
 						</div>
-						{/* Status */}
 						<Select
 							options={[
 								{ value: "all", label: "Semua Status" },
@@ -464,10 +642,9 @@ export default function ProductsPage() {
 								{ value: "warranty_expired", label: "Garansi Berakhir" },
 							]}
 							value={statusFilter}
-							onChange={(e) => setStatusFilter(e.target.value)}
+							onChange={(e) => setStatus(e.target.value)}
 							className="w-48"
 						/>
-						{/* Dealer */}
 						<Select
 							options={[
 								{ value: "all", label: "Semua Dealer" },
@@ -475,64 +652,61 @@ export default function ProductsPage() {
 								...mockDealers.map((d) => ({ value: d.id, label: d.name })),
 							]}
 							value={dealerFilter}
-							onChange={(e) => setDealerFilter(e.target.value)}
+							onChange={(e) => setDealer(e.target.value)}
 							className="w-48"
 						/>
-						{/* Category */}
 						<Select
 							options={[
 								{ value: "all", label: "Semua Kategori" },
 								...PRODUCT_CATEGORIES.map((c) => ({ value: c, label: c })),
 							]}
 							value={categoryFilter}
-							onChange={(e) => setCategoryFilter(e.target.value)}
+							onChange={(e) => setCategory(e.target.value)}
 							className="w-44"
 						/>
-
 						<div className="ml-auto flex items-center gap-2">
 							<span className="text-xs text-zinc-400">
 								{filtered.length} produk
 							</span>
-							{canEdit && (
-								<>
-									{warrantySelectMode ? (
-										<>
-											<Button
-												size="sm"
-												variant="outline"
-												onClick={() => {
-													setWarrantySelectMode(false);
-													setWarrantySelected([]);
-												}}>
-												Batal
-											</Button>
-											<Button
-												size="sm"
-												disabled={warrantySelected.length === 0}
-												icon={<Shield size={13} />}
-												onClick={() => setWarrantyModalOpen(true)}>
-												Registrasi ({warrantySelected.length})
-											</Button>
-										</>
-									) : (
-										<>
-											<Button
-												size="sm"
-												variant="outline"
-												icon={<Link2 size={13} />}
-												onClick={() => setBulkAssignOpen(true)}>
-												Assign ke Dealer
-											</Button>
-											<Button
-												size="sm"
-												icon={<Shield size={13} />}
-												onClick={() => setWarrantySelectMode(true)}>
-												Registrasi Garansi
-											</Button>
-										</>
-									)}
-								</>
-							)}
+							{canEdit &&
+								(warrantySelectMode ? (
+									<>
+										<Button
+											size="sm"
+											variant="outline"
+											onClick={() => {
+												setWarrantyMode(false);
+												setWarrantySelected([]);
+												setStatus("all");
+												setDealer("all");
+											}}>
+											Batal
+										</Button>
+										<Button
+											size="sm"
+											disabled={warrantySelected.length === 0}
+											icon={<Shield size={13} />}
+											onClick={() => setWarrantyModal(true)}>
+											Registrasi ({warrantySelected.length})
+										</Button>
+									</>
+								) : (
+									<>
+										<Button
+											size="sm"
+											variant="outline"
+											icon={<Link2 size={13} />}
+											onClick={() => setBulkAssign(true)}>
+											Assign ke Dealer
+										</Button>
+										<Button
+											size="sm"
+											icon={<Shield size={13} />}
+											onClick={enterWarrantyMode}>
+											Registrasi Garansi
+										</Button>
+									</>
+								))}
 						</div>
 					</div>
 
@@ -540,9 +714,8 @@ export default function ProductsPage() {
 						<div className="px-5 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
 							<Shield size={13} className="text-blue-600" />
 							<p className="text-xs text-blue-700">
-								Mode registrasi — pilih produk yang{" "}
-								<strong>belum di-assign ke dealer</strong> dan belum punya
-								garansi aktif
+								Mode registrasi — sudah difilter ke produk belum terdaftar.
+								Pilih yang ingin diregistrasikan.
 							</p>
 						</div>
 					)}
@@ -550,16 +723,14 @@ export default function ProductsPage() {
 					<CardContent className="p-0">
 						<Table>
 							<TableHead>
-								{warrantySelectMode && (
-									<TableHeader className="w-10"></TableHeader>
-								)}
+								{warrantySelectMode && <TableHeader className="w-10" />}
 								<TableHeader>Serial Number</TableHeader>
 								<TableHeader>Tipe Produk</TableHeader>
 								<TableHeader>Kategori</TableHeader>
 								<TableHeader>Status</TableHeader>
 								<TableHeader>Dealer</TableHeader>
 								<TableHeader>Mulai Garansi</TableHeader>
-								<TableHeader>Berakhir</TableHeader>
+								<TableHeader>Kondisi</TableHeader>
 								<TableHeader className="text-right pr-5">Aksi</TableHeader>
 							</TableHead>
 							<TableBody>
@@ -569,15 +740,17 @@ export default function ProductsPage() {
 											<EmptyState
 												icon={<Package size={18} />}
 												title="Tidak ada produk"
-												description="Ubah filter atau kata kunci pencarian"
+												description="Ubah filter"
 											/>
 										</td>
 									</tr>
 								) : (
 									filtered.map((p) => {
-										const selectable =
-											warrantySelectMode && canSalesRegister(p);
+										const selectable = warrantySelectMode && canRegister(p);
 										const sel = warrantySelected.includes(p.id);
+										const hasWarranty =
+											p.warrantyStatus === "active" ||
+											p.warrantyStatus === "expired";
 										return (
 											<TableRow
 												key={p.id}
@@ -595,7 +768,7 @@ export default function ProductsPage() {
 													<TableCell>
 														{selectable ? (
 															<div
-																className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${sel ? "bg-blue-600 border-blue-600" : "border-zinc-300"}`}>
+																className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${sel ? "bg-blue-600 border-blue-600" : "border-zinc-300"}`}>
 																{sel && (
 																	<Check
 																		size={9}
@@ -605,10 +778,7 @@ export default function ProductsPage() {
 																)}
 															</div>
 														) : (
-															<div
-																className="w-4 h-4 rounded border-2 border-zinc-100 bg-zinc-50"
-																title="Produk sudah di dealer atau sudah punya garansi"
-															/>
+															<div className="w-4 h-4 rounded border-2 border-zinc-100 bg-zinc-50" />
 														)}
 													</TableCell>
 												)}
@@ -651,21 +821,27 @@ export default function ProductsPage() {
 													</span>
 												</TableCell>
 												<TableCell>
-													<span className="text-xs text-zinc-400">
-														{p.warrantyEndDate ? (
-															formatDateShort(p.warrantyEndDate)
-														) : (
-															<span className="text-zinc-300">—</span>
-														)}
-													</span>
+													{hasWarranty ? (
+														<ConditionBadge sn={p.serialNumber} />
+													) : (
+														<span className="text-zinc-300 text-xs">—</span>
+													)}
 												</TableCell>
 												<TableCell>
 													<div
 														className="flex items-center justify-end gap-1"
 														onClick={(e) => e.stopPropagation()}>
+														{isAdmin && hasWarranty && (
+															<button
+																onClick={() => setConditionTarget(p)}
+																className="p-1.5 rounded-md hover:bg-violet-50 text-zinc-400 hover:text-violet-600 transition-colors"
+																title="Update kondisi garansi">
+																<Wrench size={12} />
+															</button>
+														)}
 														<button
 															onClick={() => {
-																setSelectedProduct(p);
+																setSelected(p);
 																setDetailOpen(true);
 															}}
 															className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
@@ -680,7 +856,7 @@ export default function ProductsPage() {
 								)}
 							</TableBody>
 						</Table>
-						<div className="px-5 py-3 border-t border-zinc-50 flex items-center justify-between">
+						<div className="px-5 py-3 border-t border-zinc-50">
 							<p className="text-xs text-zinc-400">
 								Menampilkan {filtered.length} dari {mockProducts.length} produk
 							</p>
@@ -695,82 +871,153 @@ export default function ProductsPage() {
 				onClose={() => setDetailOpen(false)}
 				title="Detail Produk"
 				size="md">
-				{selectedProduct && (
-					<div className="space-y-4">
-						<div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-							<div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
-								<Package size={16} className="text-zinc-400" />
-							</div>
-							<div className="flex-1 min-w-0">
-								<p className="font-mono text-sm font-semibold text-zinc-900">
-									{selectedProduct.serialNumber}
-								</p>
-								<p className="text-xs text-zinc-500">
-									{selectedProduct.productType} ·{" "}
-									{selectedProduct.productCategory}
-								</p>
-							</div>
-							<Badge
-								variant={getProductStatusBadgeVariant(selectedProduct.status)}
-								dot>
-								{getProductStatusLabel(selectedProduct.status)}
-							</Badge>
-						</div>
-						<div className="grid grid-cols-2 gap-x-6 gap-y-3">
-							{[
-								{ l: "Dealer", v: selectedProduct.assignedDealerName ?? "—" },
-								{ l: "Customer", v: selectedProduct.customerName ?? "—" },
-								{ l: "No. HP", v: selectedProduct.customerPhone ?? "—" },
-								{ l: "Email", v: selectedProduct.customerEmail ?? "—" },
-								{
-									l: "Mulai Garansi",
-									v: selectedProduct.warrantyStartDate
-										? formatDateShort(selectedProduct.warrantyStartDate)
-										: "—",
-								},
-								{
-									l: "Berakhir Garansi",
-									v: selectedProduct.warrantyEndDate
-										? formatDateShort(selectedProduct.warrantyEndDate)
-										: "—",
-								},
-							].map((item) => (
-								<div key={item.l}>
-									<p className="text-[11px] text-zinc-400">{item.l}</p>
-									<p className="text-xs font-medium text-zinc-800 mt-0.5">
-										{item.v}
-									</p>
+				{selectedProduct &&
+					(() => {
+						const cond = conditionsStore[selectedProduct.serialNumber];
+						const hasWarranty =
+							selectedProduct.warrantyStatus === "active" ||
+							selectedProduct.warrantyStatus === "expired";
+						const days = selectedProduct.warrantyEndDate
+							? getDaysRemaining(selectedProduct.warrantyEndDate)
+							: 0;
+						return (
+							<div className="space-y-4">
+								<div className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+									<div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
+										<Package size={16} className="text-zinc-400" />
+									</div>
+									<div className="flex-1">
+										<p className="font-mono text-sm font-semibold text-zinc-900">
+											{selectedProduct.serialNumber}
+										</p>
+										<p className="text-xs text-zinc-500">
+											{selectedProduct.productType} ·{" "}
+											{selectedProduct.productCategory}
+										</p>
+									</div>
+									<Badge
+										variant={getProductStatusBadgeVariant(
+											selectedProduct.status,
+										)}
+										dot>
+										{getProductStatusLabel(selectedProduct.status)}
+									</Badge>
 								</div>
-							))}
-						</div>
-						<div className="flex justify-end pt-1">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setDetailOpen(false)}>
-								Tutup
-							</Button>
-						</div>
-					</div>
-				)}
+								<div className="grid grid-cols-2 gap-x-6 gap-y-3">
+									{[
+										{
+											l: "Dealer",
+											v: selectedProduct.assignedDealerName ?? "—",
+										},
+										{ l: "Customer", v: selectedProduct.customerName ?? "—" },
+										{ l: "No. HP", v: selectedProduct.customerPhone ?? "—" },
+										{ l: "Email", v: selectedProduct.customerEmail ?? "—" },
+										{
+											l: "Mulai Garansi",
+											v: selectedProduct.warrantyStartDate
+												? formatDateShort(selectedProduct.warrantyStartDate)
+												: "—",
+										},
+										{
+											l: "Berakhir Garansi",
+											v: selectedProduct.warrantyEndDate
+												? `${formatDateShort(selectedProduct.warrantyEndDate)}${days > 0 ? ` (${days} hari)` : " (berakhir)"}`
+												: "—",
+										},
+									].map((item) => (
+										<div key={item.l}>
+											<p className="text-[11px] text-zinc-400">{item.l}</p>
+											<p className="text-xs font-medium text-zinc-800 mt-0.5">
+												{item.v}
+											</p>
+										</div>
+									))}
+								</div>
+								{/* Warranty condition section */}
+								{hasWarranty && (
+									<div className="p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
+										<p className="text-[11px] font-semibold text-zinc-600 mb-2 flex items-center gap-1.5">
+											<Wrench size={11} />
+											Kondisi Garansi
+										</p>
+										<div className="flex items-start gap-3">
+											{!cond || cond.warrantyCondition === "valid" ? (
+												<Badge variant="success" dot>
+													Valid
+												</Badge>
+											) : (
+												<Badge variant="danger" dot>
+													Rejected
+												</Badge>
+											)}
+											{cond?.warrantyConditionNote && (
+												<div className="flex-1">
+													<p className="text-[11px] text-zinc-500 italic">
+														"{cond.warrantyConditionNote}"
+													</p>
+													<p className="text-[10px] text-zinc-400 mt-0.5">
+														Diupdate {cond.warrantyConditionUpdatedAt} oleh{" "}
+														{cond.warrantyConditionUpdatedBy}
+													</p>
+												</div>
+											)}
+										</div>
+									</div>
+								)}
+								<div className="flex justify-end gap-2 pt-1">
+									{isAdmin && hasWarranty && (
+										<Button
+											variant="secondary"
+											size="sm"
+											icon={<Wrench size={12} />}
+											onClick={() => {
+												setDetailOpen(false);
+												setConditionTarget(selectedProduct);
+											}}>
+											Update Kondisi
+										</Button>
+									)}
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setDetailOpen(false)}>
+										Tutup
+									</Button>
+								</div>
+							</div>
+						);
+					})()}
 			</Modal>
 
-			{/* Bulk Assign */}
 			<BulkAssignModal
 				open={bulkAssignOpen}
-				onClose={() => setBulkAssignOpen(false)}
+				onClose={() => setBulkAssign(false)}
 			/>
 
-			{/* Sales Warranty Registration */}
-			<SalesWarrantyModal
-				open={warrantyModalOpen}
-				products={warrantySelectedProducts}
+			<WarrantyModal
+				products={warrantyProducts}
+				isOpen={warrantyModalOpen}
 				onClose={() => {
-					setWarrantyModalOpen(false);
-					setWarrantySelectMode(false);
+					setWarrantyModal(false);
+					setWarrantyMode(false);
 					setWarrantySelected([]);
+					setStatus("all");
+					setDealer("all");
 				}}
 			/>
+			{warrantyModalOpen && warrantyProducts.length === 0 && null}
+
+			{conditionTarget && (
+				<AdminConditionModal
+					product={conditionTarget}
+					onClose={() => setConditionTarget(null)}
+					onSave={(data) => {
+						setCondition(conditionTarget.serialNumber, data);
+						forceUpdate((n) => n + 1);
+						setConditionTarget(null);
+					}}
+				/>
+			)}
 		</div>
 	);
 }
