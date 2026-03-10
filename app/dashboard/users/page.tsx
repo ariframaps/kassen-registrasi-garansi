@@ -536,12 +536,12 @@ export default function UsersPage() {
 														<Pencil size={12} />
 													</button>
 													{/* Password */}
-													<button
+													{/* <button
 														onClick={() => setPwTarget(u)}
 														className="p-1.5 rounded-md hover:bg-amber-50 text-zinc-400 hover:text-amber-600 transition-colors"
 														title="Ubah password">
 														<KeyRound size={12} />
-													</button>
+													</button> */}
 													{/* Activate / Deactivate */}
 													<button
 														onClick={() => setToggle(u)}
