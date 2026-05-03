@@ -16,7 +16,11 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { mockProducts, mockDealers, PRODUCT_CATEGORIES } from "@/lib/mock-data";
+import {
+	mockProducts,
+	mockDealers,
+	PRODUCT_CATEGORIES,
+} from "@/mock/mock-data";
 import { conditionsStore, setCondition } from "@/lib/warranty-conditions-store";
 import type { ConditionEntry } from "@/lib/warranty-conditions-store";
 import {

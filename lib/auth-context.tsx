@@ -2,7 +2,7 @@
 // lib/auth-context.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { User, UserRole } from "@/types";
-import { mockUsers, loginMap } from "./mock-users";
+import { mockUsers, loginMap } from "../mock/mock-users";
 import { usePathname, useRouter } from "next/navigation";
 import { Loader2Icon } from "lucide-react";
 

@@ -15,7 +15,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { mockWaitingList, mockProducts } from "@/lib/mock-data";
+import { mockWaitingList, mockProducts } from "@/mock/mock-data";
 import { formatDateShort } from "@/lib/utils";
 import {
 	Search,

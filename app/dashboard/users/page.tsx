@@ -18,7 +18,7 @@ import {
 	EmptyState,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { mockUsers } from "@/lib/mock-users";
+import { mockUsers } from "@/mock/mock-users";
 import { formatDateShort } from "@/lib/utils";
 import {
 	Search,
@@ -166,12 +166,12 @@ function UserFormModal({
 					</span>
 					{ROLE_SCOPE[form.role]}
 				</div>
-				{!editUser && (
+				{/* {!editUser && (
 					<div className="px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">
 						Password sementara akan di-generate otomatis dan ditampilkan setelah
 						user dibuat.
 					</div>
-				)}
+				)} */}
 				<div className="flex gap-2 pt-1">
 					<Button variant="outline" fullWidth onClick={onClose}>
 						Batal

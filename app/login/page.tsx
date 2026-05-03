@@ -12,6 +12,8 @@ import {
 	RefreshCw,
 } from "lucide-react";
 
+// TODO: logging login for users
+
 type Step = "email" | "otp";
 
 const demos = [
@@ -63,7 +65,7 @@ export default function LoginPage() {
 	const getRedirect = (email: string) => {
 		if (email.includes("dealer")) return "/dealer/dashboard";
 		if (email.includes("support")) return "/support/products";
-		return "/dashboard";
+		return "/dashboard"; // fix NEED TO FIX THIS = use better method to redirect, not just like this
 	};
 
 	// Step 1: send OTP
@@ -71,14 +73,15 @@ export default function LoginPage() {
 		if (!email.trim() || !email.includes("@")) {
 			setError("Masukkan email yang valid");
 			return;
-		}
+		} // fix NEED TO FIX THIS = need to validate on server side too
 		setLoading(true);
 		setError("");
-		await new Promise((r) => setTimeout(r, 900));
-		const code = generateOTP();
-		setMockOtp(code);
+		await new Promise((r) => setTimeout(r, 900)); // fix NEED TO CONNECT TO API = to generate OTP
+		const code = generateOTP(); // fix : NEED TO CHECK IS THIS A GOOD METHOD
+		setMockOtp(code); // fix NEED TO FIX THIS = no need to mock otp anymore
 		setStep("otp");
 		setLoading(false);
+
 		// Countdown 60s
 		setResendCd(60);
 		const t = setInterval(
@@ -99,7 +102,7 @@ export default function LoginPage() {
 		if (otp.length !== 6) {
 			setError("Masukkan 6 digit kode OTP");
 			return;
-		}
+		} // fix NEED TO FIX THIS = need to validate this on server side too
 		setLoading(true);
 		setError("");
 		await new Promise((r) => setTimeout(r, 700));
@@ -112,7 +115,7 @@ export default function LoginPage() {
 			await login(email, "otp");
 			router.push(getRedirect(email));
 		} catch {
-			setError("Akun tidak ditemukan atau tidak aktif");
+			setError("Akun tidak ditemukan atau tidak aktif"); // fix  NEED TO FIX THIS = is this better error?
 		}
 		setLoading(false);
 	};
@@ -120,7 +123,7 @@ export default function LoginPage() {
 	const handleResend = () => {
 		if (resendCd > 0) return;
 		const code = generateOTP();
-		setMockOtp(code);
+		setMockOtp(code); // fix NEED TO FIX THIS = no need to mock otp anymore
 		setOtp("");
 		setError("");
 		setResendCd(60);

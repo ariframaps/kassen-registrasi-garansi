@@ -148,7 +148,7 @@ export function Sidebar() {
 				</div>
 				<div>
 					<p className="text-sm font-semibold text-white leading-none">
-						KassenGaransi
+						Garansi
 					</p>
 					<p className="text-[10px] text-zinc-500 mt-0.5">
 						{roleLabelMap[user?.role ?? ""] ?? user?.role}

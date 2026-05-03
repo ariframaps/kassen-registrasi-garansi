@@ -17,7 +17,11 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { mockPurchaseGroups, mockProducts, mockDealers } from "@/lib/mock-data";
+import {
+	mockPurchaseGroups,
+	mockProducts,
+	mockDealers,
+} from "@/mock/mock-data";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
 import {
 	Search,
