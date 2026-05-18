@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -11,134 +11,255 @@ import {
 	ArrowLeft,
 	RefreshCw,
 } from "lucide-react";
+import { clientEnv } from "@/lib/env-client";
+import {
+	checkEmailIsExist,
+	checkSession,
+	resendOtp,
+	sendOtp,
+	signIn,
+	verifyOtp,
+} from "./_actions";
+import { formattTimeToMnS } from "@/lib/utils";
+import { isEmail } from "validator";
+import { UserRole } from "@/types";
 
 // TODO: logging login for users
 
-type Step = "email" | "otp";
+// const demos = [
+// 	{
+// 		email: "admin@kassengaransi.id",
+// 		label: "Admin",
+// 		tag: "Full access + manajemen user",
+// 		icon: Shield,
+// 		redirect: "/dashboard",
+// 	},
+// 	{
+// 		email: "sales@kassengaransi.id",
+// 		label: "Sales",
+// 		tag: "Upload, assign, registrasi",
+// 		icon: Package,
+// 		redirect: "/dashboard",
+// 	},
+// 	{
+// 		email: "dealer@kassengaransi.id",
+// 		label: "Dealer",
+// 		tag: "Registrasi & pembelian",
+// 		icon: Users,
+// 		redirect: "/dealer/dashboard",
+// 	},
+// 	{
+// 		email: "support@kassengaransi.id",
+// 		label: "Technical Support",
+// 		tag: "Validasi kondisi garansi",
+// 		icon: Wrench,
+// 		redirect: "/support/products",
+// 	},
+// ];
 
-const demos = [
-	{
-		email: "admin@kassengaransi.id",
-		label: "Admin",
-		tag: "Full access + manajemen user",
-		icon: Shield,
-		redirect: "/dashboard",
-	},
-	{
-		email: "sales@kassengaransi.id",
-		label: "Sales",
-		tag: "Upload, assign, registrasi",
-		icon: Package,
-		redirect: "/dashboard",
-	},
-	{
-		email: "dealer@kassengaransi.id",
-		label: "Dealer",
-		tag: "Registrasi & pembelian",
-		icon: Users,
-		redirect: "/dealer/dashboard",
-	},
-	{
-		email: "support@kassengaransi.id",
-		label: "Technical Support",
-		tag: "Validasi kondisi garansi",
-		icon: Wrench,
-		redirect: "/support/products",
-	},
-];
+// function generateOTP() {
+// 	return Math.floor(100000 + Math.random() * 900000).toString();
+// }
 
-function generateOTP() {
-	return Math.floor(100000 + Math.random() * 900000).toString();
-}
+const getLoginRedirect = (role: UserRole): string => {
+	switch (role) {
+		case "admin":
+		case "sales":
+			return "/dashboard";
+		case "dealer":
+			return "/dealer/dashboard";
+		case "technical_support":
+			return "/support/products";
+		default:
+			return ""; // todo: handle the default value error state
+	}
+};
 
 export default function LoginPage() {
-	const [step, setStep] = useState<Step>("email");
+	const otpTimeout = Number(clientEnv.NEXT_PUBLIC_RESEND_OTP_TIMEOUT);
+	const [step, setStep] = useState<"email" | "otp">("email");
 	const [email, setEmail] = useState("");
 	const [otp, setOtp] = useState("");
-	const [mockOtp, setMockOtp] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [resendCd, setResendCd] = useState(0);
+
 	const { login } = useAuth();
 	const router = useRouter();
 
-	const getRedirect = (email: string) => {
-		if (email.includes("dealer")) return "/dealer/dashboard";
-		if (email.includes("support")) return "/support/products";
-		return "/dashboard"; // fix NEED TO FIX THIS = use better method to redirect, not just like this
+	const startResendCountdown = () => {
+		setResendCd(otpTimeout);
+
+		const timer = setInterval(() => {
+			setResendCd((prev) => {
+				if (prev <= 1) {
+					clearInterval(timer);
+					return 0;
+				}
+
+				return prev - 1;
+			});
+		}, 1000);
 	};
 
-	// Step 1: send OTP
 	const handleSendOtp = async () => {
-		if (!email.trim() || !email.includes("@")) {
-			setError("Masukkan email yang valid");
-			return;
-		} // fix NEED TO FIX THIS = need to validate on server side too
 		setLoading(true);
 		setError("");
-		await new Promise((r) => setTimeout(r, 900)); // fix NEED TO CONNECT TO API = to generate OTP
-		const code = generateOTP(); // fix : NEED TO CHECK IS THIS A GOOD METHOD
-		setMockOtp(code); // fix NEED TO FIX THIS = no need to mock otp anymore
-		setStep("otp");
-		setLoading(false);
 
-		// Countdown 60s
-		setResendCd(60);
-		const t = setInterval(
-			() =>
-				setResendCd((p) => {
-					if (p <= 1) {
-						clearInterval(t);
-						return 0;
-					}
-					return p - 1;
-				}),
-			1000,
-		);
-	};
+		try {
+			const emailValidation = isEmail(email);
 
-	// Step 2: verify OTP
-	const handleVerify = async () => {
-		if (otp.length !== 6) {
-			setError("Masukkan 6 digit kode OTP");
-			return;
-		} // fix NEED TO FIX THIS = need to validate this on server side too
-		setLoading(true);
-		setError("");
-		await new Promise((r) => setTimeout(r, 700));
-		if (otp !== mockOtp) {
-			setError("Kode OTP tidak valid atau sudah kedaluwarsa");
+			if (!emailValidation) {
+				throw new Error("Gunakan format email yang valid!");
+			}
+
+			await checkEmailIsExist(email);
+			await sendOtp(email);
+
+			startResendCountdown();
+			setStep("otp");
+		} catch (error) {
+			if (error instanceof Error) {
+				setError(error.message);
+			} else {
+				setError("Something went wrong");
+			}
+		} finally {
 			setLoading(false);
 			return;
 		}
-		try {
-			await login(email, "otp");
-			router.push(getRedirect(email));
-		} catch {
-			setError("Akun tidak ditemukan atau tidak aktif"); // fix  NEED TO FIX THIS = is this better error?
-		}
-		setLoading(false);
 	};
 
-	const handleResend = () => {
-		if (resendCd > 0) return;
-		const code = generateOTP();
-		setMockOtp(code); // fix NEED TO FIX THIS = no need to mock otp anymore
-		setOtp("");
+	const handleVerifyOtp = async () => {
+		setLoading(true);
 		setError("");
-		setResendCd(60);
-		const t = setInterval(
-			() =>
-				setResendCd((p) => {
-					if (p <= 1) {
-						clearInterval(t);
-						return 0;
-					}
-					return p - 1;
-				}),
-			1000,
-		);
+
+		try {
+			if (otp.length !== 6) {
+				throw new Error("Masukkan 6 digit kode OTP");
+			}
+
+			await verifyOtp(otp);
+
+			const user = await signIn(email);
+
+			if (!user) {
+				setError("Login failed");
+				return;
+			}
+
+			router.push(getLoginRedirect(user.role));
+		} catch (error) {
+			if (error instanceof Error) {
+				setError(error.message);
+			} else {
+				setError("Something went wrong");
+			}
+		} finally {
+			setLoading(false);
+			return;
+		}
 	};
+
+	const handleResend = async () => {
+		if (resendCd > 0) return;
+
+		setLoading(true);
+		setError("");
+		setOtp("");
+
+		try {
+			await resendOtp(email);
+
+			startResendCountdown();
+		} catch (error) {
+			if (error instanceof Error) {
+				setError(error.message);
+			} else {
+				setError("Something went wrong");
+			}
+
+			setResendCd(0);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		checkSession();
+	}, []);
+
+	// Step 1: send OTP
+	// const handleSendOtp = async () => {
+	// 	if (!email.trim() || !email.includes("@")) {
+	// 		setError("Masukkan email yang valid");
+	// 		return;
+	// 	} // fix NEED TO FIX THIS = need to validate on server side too
+	// 	setLoading(true);
+	// 	setError("");
+	// 	await new Promise((r) => setTimeout(r, 900)); // fix NEED TO CONNECT TO API = to generate OTP
+	// 	const code = generateOTP(); // fix : NEED TO CHECK IS THIS A GOOD METHOD
+	// 	setMockOtp(code); // fix NEED TO FIX THIS = no need to mock otp anymore
+	// 	setStep("otp");
+	// 	setLoading(false);
+
+	// 	// Countdown 60s
+	// 	setResendCd(60);
+	// 	const t = setInterval(
+	// 		() =>
+	// 			setResendCd((p) => {
+	// 				if (p <= 1) {
+	// 					clearInterval(t);
+	// 					return 0;
+	// 				}
+	// 				return p - 1;
+	// 			}),
+	// 		1000,
+	// 	);
+	// };
+
+	// Step 2: verify OTP
+	// const handleVerifyOtp = async () => {
+	// 	if (otp.length !== 6) {
+	// 		setError("Masukkan 6 digit kode OTP");
+	// 		return;
+	// 	} // fix NEED TO FIX THIS = need to validate this on server side too
+	// 	setLoading(true);
+	// 	setError("");
+	// 	await new Promise((r) => setTimeout(r, 700));
+	// 	if (otp !== mockOtp) {
+	// 		setError("Kode OTP tidak valid atau sudah kedaluwarsa");
+	// 		setLoading(false);
+	// 		return;
+	// 	}
+	// 	try {
+	// 		await login(email, "otp");
+	// 		router.push(getRedirect(email));
+	// 	} catch {
+	// 		setError("Akun tidak ditemukan atau tidak aktif"); // fix  NEED TO FIX THIS = is this better error?
+	// 	}
+	// 	setLoading(false);
+	// };
+
+	// const handleResend = () => {
+	// 	if (resendCd > 0) return;
+	// 	const code = generateOTP();
+	// 	setMockOtp(code); // fix NEED TO FIX THIS = no need to mock otp anymore
+	// 	setOtp("");
+	// 	setError("");
+	// 	setResendCd(60);
+	// 	const t = setInterval(
+	// 		() =>
+	// 			setResendCd((p) => {
+	// 				if (p <= 1) {
+	// 					clearInterval(t);
+	// 					return 0;
+	// 				}
+	// 				return p - 1;
+	// 			}),
+	// 		1000,
+	// 	);
+	// };
 
 	return (
 		<div className="min-h-screen flex bg-zinc-50">
@@ -158,9 +279,7 @@ export default function LoginPage() {
 						<div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center">
 							<Shield size={15} className="text-white" />
 						</div>
-						<span className="text-white font-semibold text-sm">
-							KassenGaransi
-						</span>
+						<span className="text-white font-semibold text-sm">Garansi</span>
 					</div>
 					<h2 className="text-2xl font-semibold text-white mb-2">
 						Sistem Manajemen
@@ -171,7 +290,7 @@ export default function LoginPage() {
 						Platform registrasi garansi.
 					</p>
 				</div>
-				<div className="relative mt-auto p-8 space-y-2.5">
+				{/* <div className="relative mt-auto p-8 space-y-2.5">
 					{[
 						{
 							icon: <Shield size={13} />,
@@ -206,7 +325,7 @@ export default function LoginPage() {
 							</div>
 						</div>
 					))}
-				</div>
+				</div> */}
 			</div>
 
 			{/* Right: form */}
@@ -259,7 +378,7 @@ export default function LoginPage() {
 							</div>
 
 							{/* Demo quick-fill */}
-							<div className="mt-8">
+							{/* <div className="mt-8">
 								<p className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider text-center mb-3">
 									Demo — klik untuk isi otomatis
 								</p>
@@ -304,7 +423,7 @@ export default function LoginPage() {
 										);
 									})}
 								</div>
-							</div>
+							</div> */}
 						</div>
 					) : (
 						<div className="animate-fade-up">
@@ -313,7 +432,7 @@ export default function LoginPage() {
 									setStep("email");
 									setOtp("");
 									setError("");
-									setMockOtp("");
+									// setMockOtp("");
 								}}
 								className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-700 mb-6 transition-colors">
 								<ArrowLeft size={13} /> Ganti email
@@ -328,7 +447,7 @@ export default function LoginPage() {
 							</p>
 
 							{/* Mock OTP display */}
-							<div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+							{/* <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
 								<p className="text-[11px] text-amber-700 font-medium mb-1">
 									🔧 Mode Demo
 								</p>
@@ -338,7 +457,7 @@ export default function LoginPage() {
 								<p className="font-mono text-2xl font-bold text-amber-800 tracking-[0.3em] mt-1">
 									{mockOtp}
 								</p>
-							</div>
+							</div> */}
 
 							{/* OTP input: 6 boxes */}
 							<div className="mb-4">
@@ -389,7 +508,7 @@ export default function LoginPage() {
 								size="lg"
 								loading={loading}
 								disabled={otp.length < 6}
-								onClick={handleVerify}>
+								onClick={handleVerifyOtp}>
 								Verifikasi & Masuk
 							</Button>
 
@@ -398,7 +517,7 @@ export default function LoginPage() {
 									<p className="text-xs text-zinc-400">
 										Kirim ulang dalam{" "}
 										<span className="font-mono font-semibold text-zinc-600">
-											{resendCd}s
+											{formattTimeToMnS(resendCd)}
 										</span>
 									</p>
 								) : (

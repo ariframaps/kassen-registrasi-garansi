@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ConfirmModal } from "@/components/ui/modal";
+// import { Pagination } from "@/components/ui/pagination";
+import { ReassignModal } from "@/components/ui/reassign-modal";
 import {
 	Table,
 	TableHead,
@@ -16,6 +18,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
+// import { productAdapter, dealerAdapter, PRODUCT_CATEGORIES } from "@/lib/adapters";
 import {
 	mockProducts,
 	mockDealers,
@@ -586,6 +589,9 @@ export default function ProductsPage() {
 	const { user } = useAuth();
 	const canEdit = user?.role === "sales" || user?.role === "admin";
 	const isAdmin = user?.role === "admin";
+	const [productPage, setProductPage] = useState(1);
+	const [productPageSize, setProductPageSize] = useState(20);
+	const [reassignTarget, setReassignTarget] = useState<Product | null>(null);
 
 	const filtered = useMemo(() => {
 		const q = search.toLowerCase();
@@ -860,11 +866,13 @@ export default function ProductsPage() {
 								)}
 							</TableBody>
 						</Table>
-						<div className="px-5 py-3 border-t border-zinc-50">
-							<p className="text-xs text-zinc-400">
-								Menampilkan {filtered.length} dari {mockProducts.length} produk
-							</p>
-						</div>
+						{/* <Pagination
+							page={productPage}
+							pageSize={productPageSize}
+							total={filtered.length}
+							onPageChange={setProductPage}
+							onPageSizeChange={(s) => { setProductPageSize(s); setProductPage(1); }}
+						/> */}
 					</CardContent>
 				</Card>
 			</div>
@@ -971,6 +979,17 @@ export default function ProductsPage() {
 									</div>
 								)}
 								<div className="flex justify-end gap-2 pt-1">
+									{isAdmin && !hasWarranty && (
+										<Button
+											variant="secondary"
+											size="sm"
+											onClick={() => {
+												setDetailOpen(false);
+												setReassignTarget(selectedProduct);
+											}}>
+											Re-assign Dealer
+										</Button>
+									)}
 									{isAdmin && hasWarranty && (
 										<Button
 											variant="secondary"
@@ -999,6 +1018,18 @@ export default function ProductsPage() {
 				open={bulkAssignOpen}
 				onClose={() => setBulkAssign(false)}
 			/>
+
+			{isAdmin && (
+				<ReassignModal
+					product={reassignTarget}
+					onClose={() => setReassignTarget(null)}
+					onSuccess={(productId, newDealerId, newDealerName) => {
+						// In real app: update product list via adapter
+						console.log("[reassign]", productId, newDealerId, newDealerName);
+						setReassignTarget(null);
+					}}
+				/>
+			)}
 
 			<WarrantyModal
 				products={warrantyProducts}

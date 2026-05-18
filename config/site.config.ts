@@ -1,1 +1,1 @@
-export const SITE_NAME = "KassenWarranty"
+export const SITE_NAME = "Kassen Warranty";

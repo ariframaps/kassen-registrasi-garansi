@@ -15,6 +15,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { mockDealers } from "@/mock/mock-data";
 import { formatDateShort } from "@/lib/utils";
 import {
@@ -33,9 +34,13 @@ import { useToast } from "@/components/ui/toast";
 import type { Dealer } from "@/types";
 
 // todo: belum ada tambah dealer
+// todo: getDealers, addDealer, editDealer, editDealerStatus
 
 export default function DealersPage() {
-	const [dealers, setDealers] = useState(mockDealers); // fix : fetch real dealers from backend
+	const [dealers, setDealers] = useState<Dealer[]>(mockDealers);
+	const [dealersPage, setDealersPage] = useState(1);
+	const [dealersPageSize, setDealersPageSize] = useState(20);
+	mockDealers; // fix : fetch real dealers from backend
 	const [search, setSearch] = useState("");
 	const [selected, setSelected] = useState<Dealer | null>(null);
 	const [toggleTarget, setToggle] = useState<Dealer | null>(null);
@@ -52,7 +57,7 @@ export default function DealersPage() {
 		setDealers((prev) =>
 			prev.map((d) =>
 				d.id === toggleTarget.id
-					? { ...d, status: d.status === "active" ? "disabled" : "active" }
+					? { ...d, status: d.status === "active" ? "inactive" : "active" }
 					: d,
 			),
 		);
@@ -63,6 +68,10 @@ export default function DealersPage() {
 			toggleTarget.name,
 		);
 		setToggle(null);
+	};
+
+	const handleEdit = (dealer: Dealer) => {
+		return;
 	};
 
 	return (
@@ -92,7 +101,7 @@ export default function DealersPage() {
 								<TableHeader>Dealer</TableHeader>
 								<TableHeader>Kontak</TableHeader>
 								<TableHeader>Alamat</TableHeader>
-								<TableHeader>Total Produk</TableHeader>
+								{/* <TableHeader>Total Produk</TableHeader> */}
 								<TableHeader>Bergabung</TableHeader>
 								<TableHeader>Status</TableHeader>
 								<TableHeader className="text-right pr-5">Aksi</TableHeader>
@@ -125,7 +134,7 @@ export default function DealersPage() {
 											<TableCell>
 												<p className="text-xs text-zinc-600">{d.email}</p>
 												<p className="text-[11px] text-zinc-400 font-mono">
-													{d.phone}
+													{d.phone ?? "—"}
 												</p>
 											</TableCell>
 											<TableCell>
@@ -133,14 +142,14 @@ export default function DealersPage() {
 													{d.address ?? "—"}
 												</p>
 											</TableCell>
-											<TableCell>
+											{/* <TableCell>
 												<span className="text-xs font-semibold font-mono text-zinc-700">
-													{d.totalProducts}
+													{d}
 												</span>
-											</TableCell>
+											</TableCell> */}
 											<TableCell>
 												<span className="text-xs text-zinc-400">
-													{formatDateShort(d.createdAt)}
+													{formatDateShort(d.created_at)}
 												</span>
 											</TableCell>
 											<TableCell>
@@ -177,6 +186,16 @@ export default function DealersPage() {
 								)}
 							</TableBody>
 						</Table>
+						<Pagination
+							page={dealersPage}
+							pageSize={dealersPageSize}
+							total={filtered.length}
+							onPageChange={setDealersPage}
+							onPageSizeChange={(s) => {
+								setDealersPageSize(s);
+								setDealersPage(1);
+							}}
+						/>
 					</CardContent>
 				</Card>
 			</div>
@@ -186,7 +205,7 @@ export default function DealersPage() {
 				open={!!selected}
 				onClose={() => setSelected(null)}
 				title="Detail Dealer"
-				size="md">
+				size="lg">
 				{selected && (
 					<div className="space-y-4">
 						<div className="flex items-center gap-3 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
@@ -224,15 +243,15 @@ export default function DealersPage() {
 									label: "Alamat",
 									value: selected.address ?? "Belum diisi",
 								},
-								{
-									icon: <Package size={13} />,
-									label: "Total Produk",
-									value: `${selected.totalProducts} produk`,
-								},
+								// {
+								// 	icon: <Package size={13} />,
+								// 	label: "Total Produk",
+								// 	value: `${selected.totalProducts} produk`,
+								// },
 								{
 									icon: <Calendar size={13} />,
 									label: "Bergabung",
-									value: formatDateShort(selected.createdAt),
+									value: formatDateShort(selected.created_at),
 								},
 							].map((item) => (
 								<div
@@ -260,6 +279,13 @@ export default function DealersPage() {
 							<Button
 								variant="secondary"
 								fullWidth
+								onClick={() => handleEdit(selected)}>
+								Edit
+							</Button>
+							<Button
+								variant={selected.status === "active" ? "danger" : "outline"}
+								fullWidth
+								className="text-nowrap"
 								onClick={() => {
 									setSelected(null);
 									setToggle(selected);

@@ -17,6 +17,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
+// import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { mockUsers } from "@/mock/mock-users";
 import { formatDateShort } from "@/lib/utils";
@@ -37,6 +38,9 @@ import {
 	Wrench,
 } from "lucide-react";
 import type { User, UserRole } from "@/types";
+
+// todo: fetch real users from backend, addUser, editUser, deleteUser
+// todo: belum bisa edit email
 
 const ROLE_LABELS: Record<UserRole, string> = {
 	admin: "Admin",
@@ -63,21 +67,21 @@ const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
 	technical_support: <Wrench size={13} className="text-amber-500" />,
 };
 
-const ROLE_BADGE: Record<UserRole, "blue" | "success" | "neutral" | "warning"> =
-	{
-		admin: "blue",
-		sales: "info" as "blue",
-		dealer: "success",
-		technical_support: "warning",
-	};
+// const ROLE_BADGE: Record<UserRole, "blue" | "success" | "neutral" | "warning"> =
+// 	{
+// 		admin: "blue",
+// 		sales: "info" as "blue",
+// 		dealer: "success",
+// 		technical_support: "warning",
+// 	};
 
-function generatePassword(): string {
-	const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#";
-	return Array.from(
-		{ length: 12 },
-		() => chars[Math.floor(Math.random() * chars.length)],
-	).join("");
-}
+// function generatePassword(): string {
+// 	const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#";
+// 	return Array.from(
+// 		{ length: 12 },
+// 		() => chars[Math.floor(Math.random() * chars.length)],
+// 	).join("");
+// }
 
 // ── Add / Edit User Modal ──
 function UserFormModal({
@@ -89,6 +93,8 @@ function UserFormModal({
 	onClose: () => void;
 	editUser?: User | null;
 }) {
+	// const [usersPage, setUsersPage] = useState(1);
+	// const [usersPageSize, setUsersPageSize] = useState(20);
 	const [form, setForm] = useState({
 		name: editUser?.name ?? "",
 		email: editUser?.email ?? "",
@@ -186,150 +192,150 @@ function UserFormModal({
 }
 
 // ── Change / Generate Password Modal ──
-function PasswordModal({
-	open,
-	user,
-	onClose,
-}: {
-	open: boolean;
-	user: User | null;
-	onClose: () => void;
-}) {
-	const [mode, setMode] = useState<"manual" | "generate">("generate");
-	const [newPw, setNewPw] = useState("");
-	const [genPw, setGenPw] = useState(() => generatePassword());
-	const [loading, setLoading] = useState(false);
-	const [done, setDone] = useState(false);
-	const { success } = useToast();
+// function PasswordModal({
+// 	open,
+// 	user,
+// 	onClose,
+// }: {
+// 	open: boolean;
+// 	user: User | null;
+// 	onClose: () => void;
+// }) {
+// 	const [mode, setMode] = useState<"manual" | "generate">("generate");
+// 	// const [newPw, setNewPw] = useState("");
+// 	// const [genPw, setGenPw] = useState(() => generatePassword());
+// 	const [loading, setLoading] = useState(false);
+// 	const [done, setDone] = useState(false);
+// 	const { success } = useToast();
 
-	const finalPw = mode === "generate" ? genPw : newPw;
+// 	// const finalPw = mode === "generate" ? genPw : newPw;
 
-	const handleSave = async () => {
-		if (mode === "manual" && newPw.length < 8) return;
-		setLoading(true);
-		await new Promise((r) => setTimeout(r, 600));
-		setLoading(false);
-		setDone(true);
-	};
+// 	const handleSave = async () => {
+// 		// if (mode === "manual" && newPw.length < 8) return;
+// 		setLoading(true);
+// 		await new Promise((r) => setTimeout(r, 600));
+// 		setLoading(false);
+// 		setDone(true);
+// 	};
 
-	const handleCopy = () => {
-		navigator.clipboard.writeText(finalPw);
-		success("Password disalin ke clipboard");
-	};
+// 	const handleCopy = () => {
+// 		// navigator.clipboard.writeText(finalPw);
+// 		success("Password disalin ke clipboard");
+// 	};
 
-	const handleClose = () => {
-		setDone(false);
-		setMode("generate");
-		setNewPw("");
-		setGenPw(generatePassword());
-		onClose();
-	};
+// 	const handleClose = () => {
+// 		setDone(false);
+// 		setMode("generate");
+// 		// setNewPw("");
+// 		// setGenPw(generatePassword());
+// 		onClose();
+// 	};
 
-	return (
-		<Modal
-			open={open}
-			onClose={handleClose}
-			title="Ubah Password"
-			description={user?.email}
-			size="sm">
-			{done ? (
-				<div className="space-y-4">
-					<div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
-						<p className="text-xs text-emerald-700 mb-2">
-							Password berhasil diperbarui
-						</p>
-						<div className="flex items-center gap-2 justify-center">
-							<span className="font-mono text-sm font-semibold text-emerald-800 bg-white border border-emerald-200 px-3 py-1.5 rounded-lg">
-								{finalPw}
-							</span>
-							<button
-								onClick={handleCopy}
-								className="p-1.5 rounded-md hover:bg-emerald-100 text-emerald-600 transition-colors"
-								title="Salin">
-								<Copy size={13} />
-							</button>
-						</div>
-						<p className="text-[11px] text-emerald-600 mt-2">
-							Sampaikan password ini kepada user dengan aman
-						</p>
-					</div>
-					<Button fullWidth variant="outline" onClick={handleClose}>
-						Selesai
-					</Button>
-				</div>
-			) : (
-				<div className="space-y-4">
-					{/* Mode selector */}
-					<div className="grid grid-cols-2 gap-2">
-						{(["generate", "manual"] as const).map((m) => (
-							<button
-								key={m}
-								onClick={() => setMode(m)}
-								className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all ${
-									mode === m
-										? "border-blue-400 bg-blue-50 text-blue-700"
-										: "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-								}`}>
-								{m === "generate" ? (
-									<RefreshCw size={12} />
-								) : (
-									<KeyRound size={12} />
-								)}
-								{m === "generate" ? "Generate otomatis" : "Set manual"}
-							</button>
-						))}
-					</div>
+// 	return (
+// 		<Modal
+// 			open={open}
+// 			onClose={handleClose}
+// 			title="Ubah Password"
+// 			description={user?.email}
+// 			size="sm">
+// 			{done ? (
+// 				<div className="space-y-4">
+// 					<div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+// 						<p className="text-xs text-emerald-700 mb-2">
+// 							Password berhasil diperbarui
+// 						</p>
+// 						<div className="flex items-center gap-2 justify-center">
+// 							<span className="font-mono text-sm font-semibold text-emerald-800 bg-white border border-emerald-200 px-3 py-1.5 rounded-lg">
+// 								{finalPw}
+// 							</span>
+// 							<button
+// 								onClick={handleCopy}
+// 								className="p-1.5 rounded-md hover:bg-emerald-100 text-emerald-600 transition-colors"
+// 								title="Salin">
+// 								<Copy size={13} />
+// 							</button>
+// 						</div>
+// 						<p className="text-[11px] text-emerald-600 mt-2">
+// 							Sampaikan password ini kepada user dengan aman
+// 						</p>
+// 					</div>
+// 					<Button fullWidth variant="outline" onClick={handleClose}>
+// 						Selesai
+// 					</Button>
+// 				</div>
+// 			) : (
+// 				<div className="space-y-4">
+// 					{/* Mode selector */}
+// 					<div className="grid grid-cols-2 gap-2">
+// 						{(["generate", "manual"] as const).map((m) => (
+// 							<button
+// 								key={m}
+// 								onClick={() => setMode(m)}
+// 								className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all ${
+// 									mode === m
+// 										? "border-blue-400 bg-blue-50 text-blue-700"
+// 										: "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+// 								}`}>
+// 								{m === "generate" ? (
+// 									<RefreshCw size={12} />
+// 								) : (
+// 									<KeyRound size={12} />
+// 								)}
+// 								{m === "generate" ? "Generate otomatis" : "Set manual"}
+// 							</button>
+// 						))}
+// 					</div>
 
-					{mode === "generate" ? (
-						<div className="space-y-2">
-							<div className="flex items-center gap-2 p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
-								<span className="font-mono text-sm flex-1 text-zinc-800">
-									{genPw}
-								</span>
-								<button
-									onClick={() => setGenPw(generatePassword())}
-									className="p-1.5 rounded-md hover:bg-zinc-200 text-zinc-400 transition-colors"
-									title="Generate ulang">
-									<RefreshCw size={13} />
-								</button>
-							</div>
-							<p className="text-[11px] text-zinc-400">
-								Klik ↺ untuk generate password baru
-							</p>
-						</div>
-					) : (
-						<Input
-							label="Password Baru"
-							type="text"
-							placeholder="Minimal 8 karakter"
-							value={newPw}
-							onChange={(e) => setNewPw(e.target.value)}
-							error={
-								newPw.length > 0 && newPw.length < 8
-									? "Minimal 8 karakter"
-									: undefined
-							}
-						/>
-					)}
+// 					{mode === "generate" ? (
+// 						<div className="space-y-2">
+// 							<div className="flex items-center gap-2 p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
+// 								<span className="font-mono text-sm flex-1 text-zinc-800">
+// 									{genPw}
+// 								</span>
+// 								<button
+// 									onClick={() => setGenPw(generatePassword())}
+// 									className="p-1.5 rounded-md hover:bg-zinc-200 text-zinc-400 transition-colors"
+// 									title="Generate ulang">
+// 									<RefreshCw size={13} />
+// 								</button>
+// 							</div>
+// 							<p className="text-[11px] text-zinc-400">
+// 								Klik ↺ untuk generate password baru
+// 							</p>
+// 						</div>
+// 					) : (
+// 						<Input
+// 							label="Password Baru"
+// 							type="text"
+// 							placeholder="Minimal 8 karakter"
+// 							value={newPw}
+// 							onChange={(e) => setNewPw(e.target.value)}
+// 							error={
+// 								newPw.length > 0 && newPw.length < 8
+// 									? "Minimal 8 karakter"
+// 									: undefined
+// 							}
+// 						/>
+// 					)}
 
-					<div className="flex gap-2 pt-1">
-						<Button variant="outline" fullWidth onClick={handleClose}>
-							Batal
-						</Button>
-						<Button
-							fullWidth
-							loading={loading}
-							disabled={mode === "manual" && newPw.length < 8}
-							icon={<KeyRound size={13} />}
-							onClick={handleSave}>
-							Simpan Password
-						</Button>
-					</div>
-				</div>
-			)}
-		</Modal>
-	);
-}
+// 					<div className="flex gap-2 pt-1">
+// 						<Button variant="outline" fullWidth onClick={handleClose}>
+// 							Batal
+// 						</Button>
+// 						<Button
+// 							fullWidth
+// 							loading={loading}
+// 							disabled={mode === "manual" && newPw.length < 8}
+// 							icon={<KeyRound size={13} />}
+// 							onClick={handleSave}>
+// 							Simpan Password
+// 						</Button>
+// 					</div>
+// 				</div>
+// 			)}
+// 		</Modal>
+// 	);
+// }
 
 // ── Main Page ──
 export default function UsersPage() {
@@ -339,7 +345,7 @@ export default function UsersPage() {
 	const [statusFilter, setStatus] = useState("all");
 	const [addOpen, setAddOpen] = useState(false);
 	const [editTarget, setEditTarget] = useState<User | null>(null);
-	const [pwTarget, setPwTarget] = useState<User | null>(null);
+	// const [pwTarget, setPwTarget] = useState<User | null>(null);
 	const [toggleTarget, setToggle] = useState<User | null>(null);
 	const [deleteTarget, setDelete] = useState<User | null>(null);
 	const { success } = useToast();
@@ -573,11 +579,13 @@ export default function UsersPage() {
 								)}
 							</TableBody>
 						</Table>
-						<div className="px-5 py-3 border-t border-zinc-50">
-							<p className="text-xs text-zinc-400">
-								{filtered.length} dari {users.length} user
-							</p>
-						</div>
+						{/* <Pagination
+						page={usersPage}
+						pageSize={usersPageSize}
+						total={filtered.length}
+						onPageChange={setUsersPage}
+						onPageSizeChange={(s) => { setUsersPageSize(s); setUsersPage(1); }}
+					/> */}
 					</CardContent>
 				</Card>
 			</div>
@@ -589,11 +597,11 @@ export default function UsersPage() {
 				onClose={() => setEditTarget(null)}
 				editUser={editTarget}
 			/>
-			<PasswordModal
+			{/* <PasswordModal
 				open={!!pwTarget}
 				user={pwTarget}
 				onClose={() => setPwTarget(null)}
-			/>
+			/> */}
 
 			<ConfirmModal
 				open={!!toggleTarget}

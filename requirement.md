@@ -262,3 +262,26 @@ pertanyaan2ku karna bingung mengenai tabel
 - tabel products: pada atribut "item_code" dan "item description" dari DO itu sebenarnya merupakan kategori produk dan nama tipe produk. jadi misal kategori POS system dan nama produknya HK-300 gitu. nah kategori dan nama produk ini sudah pasti sama. dan maka dengan itu harusnya ini ada baru lagi yaitu tabel kategori produk dan tipe produk gitu? maka kalau iya, aku ingin bisa tambahkan fitur baru yaitu manage kategori dan tipe. lebih detail adalah karna kata klienku untuk "item description" atau "item code" pada DO itu bisa sjaa tidak sesuai dengan keinginan namanya, misal kategori pos system itu di file DO bisa saja item codenya adalah POS-3453MFH gitu. nah jadi fitur manage kategori dan manage tipe produk itu bisa kayak convert gitu si harusnya
 
 nah ini tanggapanku dari file yang sudah kamu buat, kalau misal ada plot hole baru lagi (wkwkwkw) tolong tanyakan lagi yaa untuk memastikan, sebelum kamu buatkan struktur atau detail requirement yang baru...
+
+1. dealers
+2. users
+3. customers
+4. delivery_orders
+5. product_categories
+6. product_types
+7. item_code_mappings
+8. products
+9. invoices
+10. purchases
+11. purchase_items
+12. warranty_conditions
+13. otp_codes
+14. waiting_list
+15. notifications
+16. audit_logs
+
+
+repositories -> services -> api route -> frontend request
+
+
+

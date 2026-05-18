@@ -17,6 +17,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
+// import { Pagination } from "@/components/ui/pagination";
 import {
 	mockPurchaseGroups,
 	mockProducts,
@@ -50,6 +51,8 @@ function AdminSnEditor({
 	serialNumbers: string[];
 	onClose: () => void;
 }) {
+	const [pPage, setPPage] = useState(1);
+	const [pPageSize, setPPageSize] = useState(20);
 	const [editing, setEditing] = useState(false);
 	const [sns, setSns] = useState([...serialNumbers]);
 	const [newSn, setNewSn] = useState("");
@@ -467,6 +470,13 @@ export default function AdminPurchasesPage() {
 								)}
 							</TableBody>
 						</Table>
+						{/* <Pagination
+							page={pPage}
+							pageSize={pPageSize}
+							total={filtered.length}
+							onPageChange={setPPage}
+							onPageSizeChange={(s) => { setPPageSize(s); setPPage(1); }}
+						/> */}
 					</CardContent>
 				</Card>
 			</div>

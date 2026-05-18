@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const pathName = usePathname();
 	const [user, setUser] = useState<User | null>(null);
 
-	const login = async (email: string, _password: string) => {
+	const login = async (email: string) => {
 		await new Promise((r) => setTimeout(r, 700));
 		const uid = loginMap[email];
 		const found = uid ? mockUsers.find((u) => u.id === uid) : undefined;

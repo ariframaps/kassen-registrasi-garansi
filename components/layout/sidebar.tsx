@@ -15,6 +15,9 @@ import {
 	ShoppingBag,
 	Wrench,
 	UserCog,
+	Layers,
+	UserRound,
+	ScrollText,
 } from "lucide-react";
 
 interface NavItem {
@@ -38,6 +41,16 @@ const adminNav: NavItem[] = [
 	},
 	{ href: "/dashboard/dealers", label: "Dealer", icon: <Users size={15} /> },
 	{
+		href: "/dashboard/customers",
+		label: "Customer",
+		icon: <UserRound size={15} />,
+	},
+	{
+		href: "/dashboard/product-types",
+		label: "Tipe Produk",
+		icon: <Layers size={15} />,
+	},
+	{
 		href: "/dashboard/waiting-list",
 		label: "Waiting List",
 		icon: <Clock size={15} />,
@@ -52,6 +65,11 @@ const adminNav: NavItem[] = [
 		href: "/dashboard/users",
 		label: "Manajemen User",
 		icon: <UserCog size={15} />,
+	},
+	{
+		href: "/dashboard/logs",
+		label: "Audit Log",
+		icon: <ScrollText size={15} />,
 	},
 ];
 
@@ -68,6 +86,16 @@ const salesNav: NavItem[] = [
 		icon: <ShoppingBag size={15} />,
 	},
 	{ href: "/dashboard/dealers", label: "Dealer", icon: <Users size={15} /> },
+	{
+		href: "/dashboard/customers",
+		label: "Customer",
+		icon: <UserRound size={15} />,
+	},
+	{
+		href: "/dashboard/product-types",
+		label: "Tipe Produk",
+		icon: <Layers size={15} />,
+	},
 	{
 		href: "/dashboard/waiting-list",
 		label: "Waiting List",

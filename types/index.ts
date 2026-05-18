@@ -19,19 +19,32 @@ export interface User {
 	role: UserRole;
 	dealerId?: string;
 	status: "active" | "inactive";
-	createdAt: string;
-	lastLogin?: string;
+	dealer_id: string;
+	created_at: string;
+	updated_at: string;
+	deleted_at: string;
+	last_login?: string;
 }
 
 export interface Dealer {
 	id: string;
 	name: string;
 	email: string;
-	phone: string;
+	phone?: string;
 	address?: string;
-	totalProducts: number;
-	status: "active" | "disabled";
-	createdAt: string;
+	status: "active" | "inactive";
+	created_at: string;
+	updated_at?: string;
+}
+
+export interface Customer {
+	id: string;
+	name: string;
+	email: string;
+	phone: string;
+	address: string;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface Product {

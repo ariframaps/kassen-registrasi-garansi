@@ -20,14 +20,16 @@ import {
 	Clock,
 } from "lucide-react";
 import { SITE_NAME } from "@/config/site.config";
-
-type State = "idle" | "found" | "notfound" | "submitted";
+import { Product } from "@/types";
+import { publicCheckWarranty } from "./_actions";
 
 export default function CheckPage() {
 	const [sn, setSn] = useState("");
-	const [state, setState] = useState<State>("idle");
+	const [state, setState] = useState<
+		"idle" | "found" | "notfound" | "submitted" | "error"
+	>("idle");
 	const [loading, setLoading] = useState(false);
-	const [found, setFound] = useState<(typeof mockProducts)[0] | null>(null); // fix NEED TO FIX THIS = products must be fetched not using mock
+	const [found, setFound] = useState<Product | null>(null); // fix NEED TO FIX THIS = products must be fetched not using mock
 	const [contact, setContact] = useState({ name: "", phone: "", email: "" });
 	const [submittingContact, setSubmittingContact] = useState(false);
 	const [cErrors, setCErrors] = useState<Record<string, string>>({});
@@ -35,18 +37,21 @@ export default function CheckPage() {
 	const check = async () => {
 		if (!sn.trim()) return;
 		setLoading(true);
-		await new Promise((r) => setTimeout(r, 800)); // fix NEED TO CONNECT API = public user searching for their serial number warranty
-		const normedSN = normalizeSerialNumber(sn); // fix NEED TO VALIDATE FROM BACKEND TOO FOR SAFETY
-		const p = mockProducts.find(
-			(p) =>
-				normalizeSerialNumber(p.serialNumber) === normedSN &&
-				p.warrantyStatus !== "none",
-		);
-		setLoading(false);
-		if (p) {
-			setFound(p);
-			setState("found");
-		} else setState("notfound");
+
+		try {
+			const normedSN = normalizeSerialNumber(sn);
+			const product = await publicCheckWarranty(normedSN);
+
+			if (product) {
+				setFound(product);
+				setState("found");
+			} else setState("notfound");
+		} catch (error) {
+			if (error instanceof Error) setState("error");
+			else setState("error");
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	const submitContact = async () => {
@@ -57,10 +62,53 @@ export default function CheckPage() {
 		setCErrors(e);
 		if (Object.keys(e).length > 0) return;
 		setSubmittingContact(true);
-		await new Promise((r) => setTimeout(r, 700)); // fix NEED TO CONNECT API = public user submit contact to request their product warranty (because it didnt found)
-		setSubmittingContact(false);
-		setState("submitted");
+
+		try {
+			const normedSN = normalizeSerialNumber(sn);
+			await publicWaitinglist(
+				normedSN,
+				contact.name,
+				contact.phone,
+				contact.email,
+			);
+			setState("submitted");
+		} catch (error) {
+			if (error instanceof Error) setState("error");
+			else setState("error");
+		} finally {
+			setSubmittingContact(false);
+		}
 	};
+
+	// const check = async () => {
+	// 	if (!sn.trim()) return;
+	// 	setLoading(true);
+	// 	await new Promise((r) => setTimeout(r, 800)); // fix NEED TO CONNECT API = public user searching for their serial number warranty
+	// 	const normedSN = normalizeSerialNumber(sn); // fix NEED TO VALIDATE FROM BACKEND TOO FOR SAFETY
+	// 	const p = mockProducts.find(
+	// 		(p) =>
+	// 			normalizeSerialNumber(p.serialNumber) === normedSN &&
+	// 			p.warrantyStatus !== "none",
+	// 	);
+	// 	setLoading(false);
+	// 	if (p) {
+	// 		setFound(p);
+	// 		setState("found");
+	// 	} else setState("notfound");
+	// };
+
+	// const submitContact = async () => {
+	// 	const e: Record<string, string> = {};
+	// 	if (!contact.name) e.name = "Wajib diisi";
+	// 	if (!contact.phone) e.phone = "Wajib diisi";
+	// 	if (!contact.email) e.email = "Wajib diisi";
+	// 	setCErrors(e);
+	// 	if (Object.keys(e).length > 0) return;
+	// 	setSubmittingContact(true);
+	// 	await new Promise((r) => setTimeout(r, 700)); // fix NEED TO CONNECT API = public user submit contact to request their product warranty (because it didnt found)
+	// 	setSubmittingContact(false);
+	// 	setState("submitted");
+	// };
 
 	const days = found?.warrantyEndDate
 		? getDaysRemaining(found.warrantyEndDate)
@@ -73,7 +121,7 @@ export default function CheckPage() {
 				<div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-							<Zap size={13} className="text-white" />
+							<Zap size={13} className="text-white" />z
 						</div>
 						<span className="text-white font-semibold text-sm">
 							{SITE_NAME}
@@ -100,7 +148,7 @@ export default function CheckPage() {
 				)}
 
 				{/* Search box */}
-				{(state === "idle" || state === "notfound") && (
+				{(state === "idle" || state === "notfound" || state === "error") && (
 					<div className="bg-white border border-zinc-200 rounded-2xl shadow-sm p-5">
 						<div className="space-y-3">
 							<Input
@@ -122,67 +170,70 @@ export default function CheckPage() {
 							</Button>
 						</div>
 
-						{state === "notfound" && (
-							<div className="mt-5 pt-5 border-t border-zinc-100 animate-fade-up">
-								<div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4">
-									<AlertCircle
-										size={15}
-										className="text-amber-600 shrink-0 mt-0.5"
-									/>
-									<div>
-										<p className="text-xs font-semibold text-amber-800">
-											Serial number tidak ditemukan
-										</p>
-										<p className="text-xs text-amber-700 mt-0.5">
-											Isi data kontak Anda. Kami akan menghubungi setelah data
-											tersedia.
-										</p>
+						{state === "notfound" ||
+							(state === "error" && (
+								<div className="mt-5 pt-5 border-t border-zinc-100 animate-fade-up">
+									<div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+										<AlertCircle
+											size={15}
+											className="text-amber-600 shrink-0 mt-0.5"
+										/>
+										<div>
+											<p className="text-xs font-semibold text-amber-800">
+												{state === "error"
+													? "Terjadi kesalahan"
+													: "Serial number tidak ditemukan"}
+											</p>
+											<p className="text-xs text-amber-700 mt-0.5">
+												Isi data kontak Anda. Kami akan menghubungi setelah data
+												tersedia.
+											</p>
+										</div>
 									</div>
-								</div>
-								<div className="space-y-3">
-									<Input
-										label="Nama Lengkap"
-										placeholder="Nama Anda"
-										value={contact.name}
-										onChange={(e) =>
-											setContact({ ...contact, name: e.target.value })
-										}
-										error={cErrors.name}
-										required
-									/>
-									<div className="grid grid-cols-2 gap-3">
+									<div className="space-y-3">
 										<Input
-											label="No. HP"
-											type="tel"
-											placeholder="08xx-xxxx"
-											value={contact.phone}
+											label="Nama Lengkap"
+											placeholder="Nama Anda"
+											value={contact.name}
 											onChange={(e) =>
-												setContact({ ...contact, phone: e.target.value })
+												setContact({ ...contact, name: e.target.value })
 											}
-											error={cErrors.phone}
+											error={cErrors.name}
 											required
 										/>
-										<Input
-											label="Email"
-											type="email"
-											placeholder="email@contoh.com"
-											value={contact.email}
-											onChange={(e) =>
-												setContact({ ...contact, email: e.target.value })
-											}
-											error={cErrors.email}
-											required
-										/>
+										<div className="grid grid-cols-2 gap-3">
+											<Input
+												label="No. HP"
+												type="tel"
+												placeholder="08xx-xxxx"
+												value={contact.phone}
+												onChange={(e) =>
+													setContact({ ...contact, phone: e.target.value })
+												}
+												error={cErrors.phone}
+												required
+											/>
+											<Input
+												label="Email"
+												type="email"
+												placeholder="email@contoh.com"
+												value={contact.email}
+												onChange={(e) =>
+													setContact({ ...contact, email: e.target.value })
+												}
+												error={cErrors.email}
+												required
+											/>
+										</div>
+										<Button
+											fullWidth
+											loading={submittingContact}
+											onClick={submitContact}>
+											Submit
+										</Button>
 									</div>
-									<Button
-										fullWidth
-										loading={submittingContact}
-										onClick={submitContact}>
-										Submit
-									</Button>
 								</div>
-							</div>
-						)}
+							))}
 					</div>
 				)}
 
@@ -308,4 +359,12 @@ export default function CheckPage() {
 			</div>
 		</div>
 	);
+}
+function publicWaitinglist(
+	normedSN: string,
+	name: string,
+	phone: string,
+	email: string,
+) {
+	throw new Error("Function not implemented.");
 }

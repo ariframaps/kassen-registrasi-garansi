@@ -15,6 +15,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
+// import { Pagination } from "@/components/ui/pagination";
 import { mockWaitingList, mockProducts } from "@/mock/mock-data";
 import { formatDateShort } from "@/lib/utils";
 import {
@@ -49,6 +50,8 @@ function NotifModal({
 	entry: WaitingListEntry;
 	onClose: () => void;
 }) {
+	const [wlPage, setWlPage] = useState(1);
+	const [wlPageSize, setWlPageSize] = useState(20);
 	const [selected, setSelected] = useState<NotifOption | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [loading, setLoading] = useState(false);
@@ -424,6 +427,13 @@ export default function WaitingListPage() {
 								)}
 							</TableBody>
 						</Table>
+						{/* <Pagination
+							page={wlPage}
+							pageSize={wlPageSize}
+							total={filtered.length}
+							onPageChange={setWlPage}
+							onPageSizeChange={(s) => { setWlPageSize(s); setWlPage(1); }}
+						/> */}
 					</CardContent>
 				</Card>
 			</div>
