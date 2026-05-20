@@ -18,8 +18,8 @@ import {
 	EmptyState,
 } from "@/components/ui/table";
 import { mockProducts, PRODUCT_CATEGORIES } from "@/mock/mock-data";
-import { conditionsStore, setCondition } from "@/lib/warranty-conditions-store";
-import type { ConditionEntry } from "@/lib/warranty-conditions-store";
+import { conditionsStore, setCondition } from "@/lib/warranty-conditions.store";
+import type { ConditionEntry } from "@/lib/warranty-conditions.store";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
 import {
 	Search,

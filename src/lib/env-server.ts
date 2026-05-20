@@ -1,22 +1,22 @@
-"server-only";
+import { config } from "dotenv";
+import { expand } from "dotenv-expand";
+import { z, ZodError } from "zod";
 
-export function getServerEnv() {
-	const env = {
-		// Server-side only
-		RESEND_OTP_TIMEOUT: process.env.RESEND_OTP_TIMEOUT,
-	};
+const serverEnvSchema = z.object({
+	RESEND_OTP_TIMEOUT: z.string().min(1),
+	BETTER_AUTH_SECRET: z.string().min(1),
+	BETTER_AUTH_URL: z.string().min(1),
+	DATABASE_URL: z.string().min(1),
+});
 
-	const missingVars = Object.entries(env)
-		.filter(([_, value]) => !value)
-		.map(([key]) => key);
+expand(config());
 
-	if (missingVars.length > 0) {
-		throw new Error(
-			`Missing environment variables, :\n${missingVars.join("\n")}`,
-		);
+try {
+	serverEnvSchema.parse(process.env);
+} catch (e) {
+	if (e instanceof ZodError) {
+		console.error("Environment validation error:", e.issues);
 	}
-
-	return env;
 }
 
-export const serverEnv = getServerEnv();
+export const serverEnv = serverEnvSchema.parse(process.env);

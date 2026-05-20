@@ -143,11 +143,7 @@ export default function LoginPage() {
 
 			const user = await signIn(email);
 
-			if (!user) {
-				setError("Login failed");
-				return;
-			}
-
+			await login(email, "otp");
 			router.push(getLoginRedirect(user.role));
 		} catch (error) {
 			if (error instanceof Error) {

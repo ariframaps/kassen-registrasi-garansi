@@ -1,6 +1,6 @@
 export function getClientEnv() {
 	const env = {
-		// Next.js (client + server)
+		// Next.js (client)
 		NEXT_PUBLIC_RESEND_OTP_TIMEOUT: process.env.NEXT_PUBLIC_RESEND_OTP_TIMEOUT,
 	};
 

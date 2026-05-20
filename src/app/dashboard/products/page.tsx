@@ -24,8 +24,8 @@ import {
 	mockDealers,
 	PRODUCT_CATEGORIES,
 } from "@/mock/mock-data";
-import { conditionsStore, setCondition } from "@/lib/warranty-conditions-store";
-import type { ConditionEntry } from "@/lib/warranty-conditions-store";
+import { conditionsStore, setCondition } from "@/lib/warranty-conditions.store";
+import type { ConditionEntry } from "@/lib/warranty-conditions.store";
 import {
 	getProductStatusLabel,
 	getProductStatusBadgeVariant,
