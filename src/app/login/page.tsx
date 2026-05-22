@@ -11,18 +11,12 @@ import {
 	ArrowLeft,
 	RefreshCw,
 } from "lucide-react";
-import { clientEnv } from "@/lib/env-client";
-import {
-	checkEmailIsExist,
-	checkSession,
-	resendOtp,
-	sendOtp,
-	signIn,
-	verifyOtp,
-} from "./_actions";
+import { checkSession, resendOtp, signIn, verifyOtp } from "./_actions";
 import { formattTimeToMnS } from "@/lib/utils";
 import { isEmail } from "validator";
 import { UserRole } from "@/types";
+import { authConfig } from "@/configs/auth.config";
+import { authApi } from "@/lib/api/api-client";
 
 // TODO: logging login for users
 
@@ -76,7 +70,6 @@ const getLoginRedirect = (role: UserRole): string => {
 };
 
 export default function LoginPage() {
-	const otpTimeout = Number(clientEnv.NEXT_PUBLIC_RESEND_OTP_TIMEOUT);
 	const [step, setStep] = useState<"email" | "otp">("email");
 	const [email, setEmail] = useState("");
 	const [otp, setOtp] = useState("");
@@ -88,7 +81,7 @@ export default function LoginPage() {
 	const router = useRouter();
 
 	const startResendCountdown = () => {
-		setResendCd(otpTimeout);
+		setResendCd(Number(authConfig.OTP_RESEND_COOLDOWN));
 
 		const timer = setInterval(() => {
 			setResendCd((prev) => {
@@ -103,30 +96,23 @@ export default function LoginPage() {
 	};
 
 	const handleSendOtp = async () => {
+		// if (resendCd > 0)
+		// 	throw new Error("Please wait before requesting another OTP.");
+
 		setLoading(true);
 		setError("");
 
 		try {
-			const emailValidation = isEmail(email);
-
-			if (!emailValidation) {
-				throw new Error("Gunakan format email yang valid!");
-			}
-
-			await checkEmailIsExist(email);
-			await sendOtp(email);
-
+			// if (!isEmail(email)) throw new Error("Format email tidak valid!");
+			const request = await authApi.sendOtp(email);
+			if (!request.success) throw new Error(request.message);
 			startResendCountdown();
 			setStep("otp");
 		} catch (error) {
-			if (error instanceof Error) {
-				setError(error.message);
-			} else {
-				setError("Something went wrong");
-			}
+			if (error instanceof Error) setError(error.message);
+			else setError("Terrjadi kesalahan, silahkan coba lagi.");
 		} finally {
 			setLoading(false);
-			return;
 		}
 	};
 
@@ -154,30 +140,6 @@ export default function LoginPage() {
 		} finally {
 			setLoading(false);
 			return;
-		}
-	};
-
-	const handleResend = async () => {
-		if (resendCd > 0) return;
-
-		setLoading(true);
-		setError("");
-		setOtp("");
-
-		try {
-			await resendOtp(email);
-
-			startResendCountdown();
-		} catch (error) {
-			if (error instanceof Error) {
-				setError(error.message);
-			} else {
-				setError("Something went wrong");
-			}
-
-			setResendCd(0);
-		} finally {
-			setLoading(false);
 		}
 	};
 
@@ -367,10 +329,19 @@ export default function LoginPage() {
 								<Button
 									fullWidth
 									size="lg"
+									// disabled={resendCd > 0}
 									loading={loading}
 									onClick={handleSendOtp}>
 									Kirim Kode OTP
 								</Button>
+								{resendCd > 0 ? (
+									<p className="text-xs text-zinc-400 text-center">
+										Kirim ulang dalam{" "}
+										<span className="font-mono font-semibold text-zinc-600">
+											{formattTimeToMnS(resendCd)}
+										</span>
+									</p>
+								) : null}
 							</div>
 
 							{/* Demo quick-fill */}
@@ -518,7 +489,7 @@ export default function LoginPage() {
 									</p>
 								) : (
 									<button
-										onClick={handleResend}
+										onClick={handleSendOtp}
 										className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mx-auto transition-colors">
 										<RefreshCw size={12} /> Kirim ulang kode
 									</button>

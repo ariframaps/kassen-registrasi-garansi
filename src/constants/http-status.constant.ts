@@ -43,4 +43,8 @@ export const HTTP_STATUS = {
 		code: 500,
 		message: "Internal Server Error",
 	},
+	BAD_GATEWAY: {
+		code: 502,
+		message: "Bad Gateway",
+	},
 } as const;

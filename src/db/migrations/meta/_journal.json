@@ -15,6 +15,13 @@
       "when": 1779261823985,
       "tag": "0001_legal_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779328458929,
+      "tag": "0002_adorable_luminals",
+      "breakpoints": true
     }
   ]
 }

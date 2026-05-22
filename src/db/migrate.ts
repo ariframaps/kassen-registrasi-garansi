@@ -1,11 +1,11 @@
 import config from "$/drizzle.config";
-import { serverEnv } from "@/lib/env-server";
+import { envServer } from "@/lib/env-server";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
 const pool = new Pool({
-	connectionString: serverEnv.DATABASE_URL,
+	connectionString: envServer.DATABASE_URL,
 });
 
 const db = drizzle(pool);

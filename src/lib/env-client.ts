@@ -1,7 +1,6 @@
-export function getClientEnv() {
+function getClientEnv() {
 	const env = {
 		// Next.js (client)
-		NEXT_PUBLIC_RESEND_OTP_TIMEOUT: process.env.NEXT_PUBLIC_RESEND_OTP_TIMEOUT,
 	};
 
 	const missingVars = Object.entries(env)
@@ -17,4 +16,4 @@ export function getClientEnv() {
 	return env;
 }
 
-export const clientEnv = getClientEnv();
+export const envClient = getClientEnv();

@@ -3,10 +3,16 @@ import { expand } from "dotenv-expand";
 import { z, ZodError } from "zod";
 
 const serverEnvSchema = z.object({
+	NODE_ENV: z.string().min(1),
 	RESEND_OTP_TIMEOUT: z.string().min(1),
 	BETTER_AUTH_SECRET: z.string().min(1),
 	BETTER_AUTH_URL: z.string().min(1),
 	DATABASE_URL: z.string().min(1),
+	SMTP_HOST: z.string().min(1),
+	SMTP_USER: z.string().min(1),
+	SMTP_PASS: z.string().min(1),
+	SMTP_PORT: z.string().min(1),
+	JWT_SECRET: z.string().min(1),
 });
 
 expand(config());
@@ -19,4 +25,4 @@ try {
 	}
 }
 
-export const serverEnv = serverEnvSchema.parse(process.env);
+export const envServer = serverEnvSchema.parse(process.env);

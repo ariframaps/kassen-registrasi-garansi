@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/components/ui/toast";
-import { SITE_NAME } from "@/config/site.config";
+import { siteConfig } from "@/configs/site.config";
 
 export const metadata: Metadata = {
-	title: `${SITE_NAME} Dashboard`,
+	title: `${siteConfig.SITE_NAME} Dashboard`,
 	description: "Sistem Manajemen Garansi Produk",
 };
 

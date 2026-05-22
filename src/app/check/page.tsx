@@ -19,9 +19,9 @@ import {
 	Zap,
 	Clock,
 } from "lucide-react";
-import { SITE_NAME } from "@/config/site.config";
 import { Product } from "@/types";
 import { publicCheckWarranty } from "./_actions";
+import { siteConfig } from "@/configs/site.config";
 
 export default function CheckPage() {
 	const [sn, setSn] = useState("");
@@ -124,7 +124,7 @@ export default function CheckPage() {
 							<Zap size={13} className="text-white" />z
 						</div>
 						<span className="text-white font-semibold text-sm">
-							{SITE_NAME}
+							{siteConfig.SITE_NAME}
 						</span>
 					</div>
 					<span className="text-zinc-500 text-xs">Cek Status Garansi</span>

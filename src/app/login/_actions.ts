@@ -1,21 +1,37 @@
-"use server";
-
-import { serverEnv } from "@/lib/env-server";
 import { User } from "@/types";
 
 const wait = async () => {
 	return new Promise((resolve) => setTimeout(resolve, 800));
 };
 
-export const checkEmailIsExist = async (email: string) => {
-	await wait();
-	return;
-};
+// export const sendOtp = async (
+// 	email: string,
+// ): Promise<{ success: boolean; message?: string }> => {
+// 	try {
+// 		const response = await fetch("/api/v1/auth/send-otp", {
+// 			method: "POST",
+// 			headers: {
+// 				"Content-Type": "application/json",
+// 			},
+// 			body: JSON.stringify({ email }),
+// 		});
 
-export const sendOtp = async (email: string) => {
-	await wait();
-	return;
-};
+// 		const data = await response.json();
+
+// 		if (!response.ok) {
+// 			throw new Error(data.message || "Gagal mengirim OTP");
+// 		}
+
+// 		return
+// 	} catch (error) {
+// 		console.error("Error in sendOtp:", error);
+// 		return {
+// 			success: false,
+// 			message:
+// 				error instanceof Error ? error.message : "Terjadi kesalahan koneksi",
+// 		};
+// 	}
+// };
 
 export const verifyOtp = async (otp: string) => {
 	await wait();
