@@ -1,123 +1,102 @@
-// seeds
-import { seedUsers } from "./seeds/users.seed";
-import { seedDealers } from "./seeds/dealers.seed";
-import { seedCustomers } from "./seeds/customers.seed";
+/**
+ * seed.ts — Main seed runner
+ *
+ * Run with:
+ *   npx tsx seed.ts
+ *   or
+ *   npx ts-node seed.ts
+ *
+ * Tables seeded (in dependency order):
+ *  1. users + accounts           (no deps)
+ *  2. product_category           (no deps)
+ *  3. product_type               (→ product_category)
+ *  4. item_code_mapping          (→ product_type)
+ *  5. customer                   (no deps)
+ *  6. dealer                     (→ user)
+ *  7. delivery_order             (→ user, dealer, customer)
+ *  8. product                    (→ product_type, delivery_order, dealer)
+ *  9. purchase                   (→ customer, dealer, user)
+ * 10. purchase_item              (→ purchase, product)
+ * 11. invoice                    (→ purchase, user)
+ * 12. warranty_condition         (→ product, user)
+ * 13. waiting_list               (→ dealer, product, user)
+ * 14. notification               (→ user, waiting_list)
+ * 15. audit_log                  (→ user)
+ */
 
-import { seedProductCategories } from "./seeds/product_categories.seed";
-import { seedProductTypes } from "./seeds/product_types.seed";
-import { seedItemCodeMappings } from "./seeds/item_code_mappings.seed";
+import { seedUsers } from "./seeds/seed-users";
+import {
+	seedProductCategories,
+	seedProductTypes,
+} from "./seeds/seed-product-categories";
+import { seedItemCodeMappings } from "./seeds/seed-item-codes";
+import { seedCustomers } from "./seeds/seed-customers";
+import { seedDealers } from "./seeds/seed-dealers";
+import { seedDeliveryOrders } from "./seeds/seed-delivery-orders";
+import { seedProducts } from "./seeds/seed-products";
+import { seedPurchasesAndInvoices } from "./seeds/seed-purchases";
+import { seedWarrantyConditions } from "./seeds/seed-warranty";
+import { seedWaitingList } from "./seeds/seed-waiting-list";
+import { seedNotifications } from "./seeds/seed-notifications";
+import { seedAuditLogs } from "./seeds/seed-audit-logs";
 
-import { seedDeliveryOrders } from "./seeds/delivery_orders.seed";
-import { seedProducts } from "./seeds/products.seed";
+async function main() {
+	console.log("\n🚀 Starting database seed...\n");
+	console.log("=".repeat(50));
 
-import { seedPurchases } from "./seeds/purchases.seed";
-import { seedPurchaseItems } from "./seeds/purchase_items.seed";
-
-import { seedInvoices } from "./seeds/invoices.seed";
-import { seedWarrantyConditions } from "./seeds/warranty_conditions.seed";
-
-import { seedWaitingList } from "./seeds/waiting_list.seed";
-import { seedNotifications } from "./seeds/notifications.seed";
-
-import { seedAuditLogs } from "./seeds/audit_logs.seed";
-
-async function runSeed() {
 	try {
-		console.log("🌱 Starting seed...");
+		// ── Tier 1: No dependencies ──────────────────────────
+		await seedUsers();
+		await seedProductCategories();
+		await seedCustomers();
 
-		// =========================
-		// 1. CORE USERS
-		// =========================
-		const users = await seedUsers();
+		// ── Tier 2: Depends on Tier 1 ────────────────────────
+		await seedProductTypes();
+		await seedDealers();
 
-		// =========================
-		// 2. DEALERS (depends on users)
-		// =========================
-		const dealerIds = await seedDealers(users.dealerIds);
+		// ── Tier 3: Depends on Tier 2 ────────────────────────
+		await seedItemCodeMappings();
+		await seedDeliveryOrders();
 
-		// =========================
-		// 3. CUSTOMERS
-		// =========================
-		const customerIds = await seedCustomers();
+		// ── Tier 4: Depends on Tier 3 ────────────────────────
+		await seedProducts();
 
-		// =========================
-		// 4. PRODUCT MASTER DATA
-		// =========================
-		const categories = await seedProductCategories();
+		// ── Tier 5: Depends on Tier 4 ────────────────────────
+		// seedPurchasesAndInvoices inserts purchase, purchase_item, AND invoice
+		await seedPurchasesAndInvoices();
+		await seedWarrantyConditions();
 
-		const productTypes = await seedProductTypes(categories);
+		// ── Tier 6: Depends on Tier 5 ────────────────────────
+		const waitingListIds = await seedWaitingList();
+		await seedNotifications(waitingListIds);
+		await seedAuditLogs();
 
-		seedItemCodeMappings(productTypes);
-
-		// =========================
-		// 5. DELIVERY ORDERS + PRODUCTS
-		// =========================
-		const deliveryOrdersIds = await seedDeliveryOrders({
-			userId: users.adminId,
-			dealerIds: dealerIds,
-			customerIds: customerIds,
-		});
-
-		const productIds = await seedProducts({
-			doIds: deliveryOrdersIds,
-			productTypeMap: productTypes,
-			dealerIds: dealerIds,
-		});
-
-		// =========================
-		// 6. TRANSACTIONS
-		// =========================
-		const purchaseIds = await seedPurchases({
-			customerIds: customerIds,
-			dealerIds: dealerIds,
-			userId: users.adminId,
-		});
-
-		await seedPurchaseItems({
-			purchaseIds: purchaseIds,
-			productIds: productIds,
-		});
-
-		// =========================
-		// 7. POST TRANSACTION DATA
-		// =========================
-		await seedInvoices({
-			purchaseIds: purchaseIds,
-			userId: users.adminId,
-		});
-
-		await seedWarrantyConditions({
-			productIds: productIds,
-			userId: users.adminId,
-		});
-
-		// =========================
-		// 8. EXCEPTION FLOW
-		// =========================
-		const waitingListIds = await seedWaitingList({
-			dealerIds: dealerIds,
-			userId: users.adminId,
-			productIds: productIds,
-		});
-
-		await seedNotifications({
-			userIds: users.allUserIds,
-			waitingListIds: waitingListIds,
-		});
-
-		// =========================
-		// 9. AUDIT LOGS (GLOBAL)
-		// =========================
-		await seedAuditLogs({
-			userIds: users.allUserIds,
-		});
-
-		console.log("✅ Seed completed successfully!");
-		process.exit(0);
-	} catch (err) {
-		console.error("❌ Seed failed:", err);
+		console.log("\n" + "=".repeat(50));
+		console.log("✅ All seeds completed successfully!\n");
+		console.log("Summary:");
+		console.log("  • 9    users (admin, sales×2, dealer×4, tech_support×2)");
+		console.log("  • 5    product categories");
+		console.log("  • 23   product types (covers all categories)");
+		console.log("  • 23   item code mappings");
+		console.log("  • 15   customers");
+		console.log("  • 4    dealers (3 active, 1 inactive)");
+		console.log("  • 12   delivery orders (dealer + customer destinations)");
+		console.log(
+			"  • 100  products (unassigned/assigned/warranty_active/warranty_expired)",
+		);
+		console.log("  • 25   purchases (dealer + direct_sales sources)");
+		console.log("  • ~42  purchase items");
+		console.log("  • 25   invoices");
+		console.log("  • 45   warranty conditions (valid + rejected)");
+		console.log("  • 10   waiting list entries (pending + notified)");
+		console.log("  • 10   notifications (product_ready + general)");
+		console.log("  • 22   audit logs (all categories, statuses, priorities)");
+		console.log("");
+		process.exit(1);
+	} catch (error) {
+		console.error("\n❌ Seed failed:", error);
 		process.exit(1);
 	}
 }
 
-runSeed();
+main();

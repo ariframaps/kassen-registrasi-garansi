@@ -1,1 +1,0 @@
-ALTER TABLE "waiting_list" RENAME COLUMN "resolvedAt" TO "resolved_at";

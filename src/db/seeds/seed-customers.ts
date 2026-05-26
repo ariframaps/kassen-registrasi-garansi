@@ -1,0 +1,167 @@
+import { db } from "../";
+import { customer } from "../schemas/customer.schema";
+
+export const CUSTOMER_IDS = [
+	"cust_001",
+	"cust_002",
+	"cust_003",
+	"cust_004",
+	"cust_005",
+	"cust_006",
+	"cust_007",
+	"cust_008",
+	"cust_009",
+	"cust_010",
+	"cust_011",
+	"cust_012",
+	"cust_013",
+	"cust_014",
+	"cust_015",
+];
+
+export async function seedCustomers() {
+	console.log("🌱 Seeding customers...");
+
+	const now = new Date();
+
+	const customers = [
+		{
+			id: "cust_001",
+			name: "PT Bangun Jaya Abadi",
+			email: "procurement@bangunjaya.co.id",
+			phone: "021-55501234",
+			address: "Jl. Industri No. 45, Kawasan MM2100, Bekasi, Jawa Barat",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_002",
+			name: "CV Karya Mandiri Sejahtera",
+			email: "info@karyamandiri.com",
+			phone: "031-87654321",
+			address: "Jl. Raya Darmo No. 12, Surabaya, Jawa Timur",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_003",
+			name: "Toko Bangunan Sumber Makmur",
+			email: "sumbermakmur@gmail.com",
+			phone: "0274-345678",
+			address: "Jl. Solo KM 7, Maguwoharjo, Sleman, Yogyakarta",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_004",
+			name: "PT Konstruksi Nusantara",
+			email: "ops@konstruksinus.id",
+			phone: "022-76543210",
+			address: "Jl. Soekarno-Hatta No. 789, Bandung, Jawa Barat",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_005",
+			name: "Bapak Eko Prasetyo",
+			email: "eko.prasetyo@personal.com",
+			phone: "0812-3456-7890",
+			address: "Jl. Mawar No. 3, Depok, Jawa Barat",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_006",
+			name: "UD Teknik Abadi",
+			email: "teknikabadi@yahoo.com",
+			phone: "0341-556677",
+			address: "Jl. Letjen S. Parman No. 23, Malang, Jawa Timur",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_007",
+			name: "PT Wahana Cipta Reksa",
+			email: "purchasing@wahanacipta.co.id",
+			phone: "024-89012345",
+			address: "Jl. MT Haryono No. 77, Semarang, Jawa Tengah",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_008",
+			name: "Ibu Ratna Dewi",
+			email: "ratna.dewi@email.com",
+			phone: "0856-7890-1234",
+			address: "Jl. Kembang No. 8, Tangerang, Banten",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_009",
+			name: "CV Mitra Teknik Perkasa",
+			email: "admin@mitrateknik.net",
+			phone: "0751-234567",
+			address: "Jl. Ahmad Yani No. 55, Padang, Sumatera Barat",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_010",
+			name: "PT Mega Konstruksi Utama",
+			email: "hrd@megakonstruksi.com",
+			phone: "061-99887766",
+			address: "Jl. Gatot Subroto No. 100, Medan, Sumatera Utara",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_011",
+			name: "Toko Alat Listrik Cahaya",
+			email: "alatlistrikcahaya@gmail.com",
+			phone: "0411-445566",
+			address: "Jl. Penghibur No. 15, Makassar, Sulawesi Selatan",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_012",
+			name: "Bapak Dian Nugroho",
+			email: "dian.nugroho@work.co.id",
+			phone: "0821-4567-8901",
+			address: "Jl. Pahlawan No. 22, Bogor, Jawa Barat",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_013",
+			name: "PT Fajar Indah Gemilang",
+			email: "info@fajarindah.co.id",
+			phone: "0561-778899",
+			address: "Jl. Tanjungpura No. 60, Pontianak, Kalimantan Barat",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_014",
+			name: "UD Alat Teknik Maju",
+			email: "alatteknikmaju@mail.com",
+			phone: "0370-123456",
+			address: "Jl. Pejanggik No. 8, Mataram, NTB",
+			createdAt: now,
+			updatedAt: now,
+		},
+		{
+			id: "cust_015",
+			name: "CV Sentosa Karya Utama",
+			email: "sentosakarya@business.id",
+			phone: "0431-334455",
+			address: "Jl. Sam Ratulangi No. 44, Manado, Sulawesi Utara",
+			createdAt: now,
+			updatedAt: now,
+		},
+	];
+
+	await db.insert(customer).values(customers).onConflictDoNothing();
+	console.log(`✅ Seeded ${customers.length} customers`);
+}

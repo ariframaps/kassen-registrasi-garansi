@@ -2,7 +2,7 @@
 // components/layout/sidebar.tsx
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+// import { useAuth } from "@/lib/auth-context";
 import {
 	LayoutDashboard,
 	Package,
@@ -19,6 +19,9 @@ import {
 	UserRound,
 	ScrollText,
 } from "lucide-react";
+import { siteConfig } from "@/configs/site.config";
+import { useAuth } from "@/lib/_auth-provider";
+import { authClient } from "@/lib/auth-client";
 
 interface NavItem {
 	href: string;
@@ -148,7 +151,9 @@ const roleLabelMap: Record<string, string> = {
 
 export function Sidebar() {
 	const pathname = usePathname();
-	const { user, logout } = useAuth();
+	const { data: session } = authClient.useSession();
+	const user = session?.user;
+
 	const router = useRouter();
 
 	const nav =
@@ -165,6 +170,11 @@ export function Sidebar() {
 		return roots.includes(href) ? pathname === href : pathname.startsWith(href);
 	};
 
+	const handleLogout = async () => {
+		await authClient.signOut();
+		router.push("/login");
+	};
+
 	return (
 		<aside
 			className="w-56 shrink-0 flex flex-col h-screen sticky top-0"
@@ -176,7 +186,7 @@ export function Sidebar() {
 				</div>
 				<div>
 					<p className="text-sm font-semibold text-white leading-none">
-						Garansi
+						{siteConfig.SITE_NAME}
 					</p>
 					<p className="text-[10px] text-zinc-500 mt-0.5">
 						{roleLabelMap[user?.role ?? ""] ?? user?.role}
@@ -230,10 +240,7 @@ export function Sidebar() {
 					</p>
 				</div>
 				<button
-					onClick={() => {
-						logout();
-						router.push("/login");
-					}}
+					onClick={handleLogout}
 					className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-all">
 					<LogOut size={13} />
 					<span>Logout</span>

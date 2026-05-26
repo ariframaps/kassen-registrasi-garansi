@@ -5,7 +5,7 @@ import { zodAdapter } from "./adapters/zod.adapter";
 import { drizzleAdapter } from "./adapters/drizzle.adapter";
 import { nodemailerAdapter } from "./adapters/nodemailer.adapter";
 import { unknownAdapter } from "./adapters/unknown.adapter";
-import { joseAdapter } from "./adapters/jose.adapter";
+// import { joseAdapter } from "./adapters/_jose.adapter";
 
 export type ErrorType =
 	| "validation"
@@ -40,12 +40,12 @@ export function normalizeError(error: unknown): NormalizedError {
 		return nodemailerAdapter(error as NodemailerError);
 	}
 
-	if (error instanceof Error) {
-		const name = error.constructor?.name;
+	// if (error instanceof Error) {
+	// 	const name = error.constructor?.name;
 
-		if (name.includes("JWT") || name.includes("JWS")) {
-			return joseAdapter(error);
-		}
-	}
+	// 	if (name.includes("JWT") || name.includes("JWS")) {
+	// 		return joseAdapter(error);
+	// 	}
+	// }
 	return unknownAdapter(error);
 }

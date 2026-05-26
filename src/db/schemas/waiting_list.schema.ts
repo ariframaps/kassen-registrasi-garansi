@@ -5,13 +5,16 @@ import {
 	pgEnum,
 	timestamp,
 	index,
+	text,
 } from "drizzle-orm/pg-core";
 
 import { relations } from "drizzle-orm";
 
-import { dealers } from "./dealers.schema";
-import { products } from "./products.schema";
-import { users } from "./users.schema";
+import { dealers } from "./dealer.schema";
+import { product } from "./product.schema";
+import { user } from "./auth-schema";
+import { createSelectSchema } from "drizzle-zod";
+import z from "zod";
 
 // ENUMS
 export const requesterTypeEnum = pgEnum("requester_type", [
@@ -28,7 +31,7 @@ export const waitingListStatusEnum = pgEnum("waiting_list_status", [
 export const waitingList = pgTable(
 	"waiting_list",
 	{
-		id: uuid("id").defaultRandom().primaryKey(),
+		id: text("id").default(crypto.randomUUID()).primaryKey(),
 
 		serialNumberRequested: varchar("serial_number_requested", {
 			length: 100,
@@ -48,11 +51,11 @@ export const waitingList = pgTable(
 			length: 50,
 		}),
 
-		dealerId: uuid("dealer_id").references(() => dealers.id, {
+		dealerId: text("dealer_id").references(() => dealers.id, {
 			onDelete: "set null",
 		}),
 
-		productId: uuid("product_id").references(() => products.id, {
+		productId: text("product_id").references(() => product.id, {
 			onDelete: "set null",
 		}),
 
@@ -66,7 +69,7 @@ export const waitingList = pgTable(
 			withTimezone: true,
 		}),
 
-		notifiedBy: uuid("notified_by").references(() => users.id, {
+		notifiedBy: text("notified_by").references(() => user.id, {
 			onDelete: "set null",
 		}),
 
@@ -91,13 +94,21 @@ export const waitingListRelations = relations(waitingList, ({ one }) => ({
 		references: [dealers.id],
 	}),
 
-	product: one(products, {
+	product: one(product, {
 		fields: [waitingList.productId],
-		references: [products.id],
+		references: [product.id],
 	}),
 
-	notifiedByUser: one(users, {
+	notifiedByUser: one(user, {
 		fields: [waitingList.notifiedBy],
-		references: [users.id],
+		references: [user.id],
 	}),
 }));
+
+// schema
+export const waitingListSchema = createSelectSchema(waitingList);
+// export const productTypeInsertSchema = createInsertSchema(productType);
+// export const productTypeUpdateSchema = createUpdateSchema(productType);
+export type WaitingListSchema = z.infer<typeof waitingListSchema>;
+// export type ProductTypeInsertSchema = z.infer<typeof productTypeInsertSchema>;
+// export type ProductTypeUpdateSchema = z.infer<typeof productTypeUpdateSchema>;

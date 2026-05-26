@@ -17,7 +17,7 @@ export function formatDate(dateStr: string): string {
 	});
 }
 
-export function formatDateShort(dateStr: string): string {
+export function formatDateShort(dateStr: string | Date): string {
 	return new Date(dateStr).toLocaleDateString("id-ID", {
 		day: "2-digit",
 		month: "short",
@@ -31,8 +31,6 @@ export function getDaysRemaining(endDate: string): number {
 
 export function getProductStatusLabel(status: string): string {
 	const labels: Record<string, string> = {
-		uploaded_by_sales: "Belum Diregistrasikan",
-		assigned_to_dealer: "Di Dealer",
 		warranty_active: "Garansi Aktif",
 		warranty_expired: "Garansi Berakhir",
 	};
@@ -44,7 +42,7 @@ export function getProductStatusBadgeVariant(
 ): "neutral" | "blue" | "success" | "danger" {
 	if (status === "warranty_active") return "success";
 	if (status === "warranty_expired") return "danger";
-	if (status === "assigned_to_dealer") return "blue";
+	// if (status === "assigned_to_dealer") return "blue";
 	return "neutral";
 }
 

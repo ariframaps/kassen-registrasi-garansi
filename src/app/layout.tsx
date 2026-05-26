@@ -1,7 +1,7 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth-context";
+// import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/components/ui/toast";
 import { siteConfig } from "@/configs/site.config";
 
@@ -30,9 +30,7 @@ export default function RootLayout({
 				/>
 			</head>
 			<body>
-				<AuthProvider>
-					<ToastProvider>{children}</ToastProvider>
-				</AuthProvider>
+				<ToastProvider>{children}</ToastProvider>
 			</body>
 		</html>
 	);

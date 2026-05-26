@@ -1,11 +1,22 @@
 // types/index.ts
-export type UserRole = "admin" | "sales" | "dealer" | "technical_support";
+export const userRole = [
+	"admin",
+	"sales",
+	"dealer",
+	"technical_support",
+] as const;
 
-export type ProductStatus =
-	| "uploaded_by_sales"
-	| "assigned_to_dealer"
-	| "warranty_active"
-	| "warranty_expired";
+export type UserRole = (typeof userRole)[number];
+
+export const productStatus = [
+	// "uploaded_by_sales",
+	// "assigned_to_dealer",
+	"none",
+	"warranty_active",
+	"warranty_expired",
+] as const;
+
+export type ProductStatus = (typeof productStatus)[number];
 
 export type WarrantyStatus = "active" | "expired" | "none";
 

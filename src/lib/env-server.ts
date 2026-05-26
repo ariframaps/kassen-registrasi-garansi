@@ -4,7 +4,6 @@ import { z, ZodError } from "zod";
 
 const serverEnvSchema = z.object({
 	NODE_ENV: z.string().min(1),
-	RESEND_OTP_TIMEOUT: z.string().min(1),
 	BETTER_AUTH_SECRET: z.string().min(1),
 	BETTER_AUTH_URL: z.string().min(1),
 	DATABASE_URL: z.string().min(1),

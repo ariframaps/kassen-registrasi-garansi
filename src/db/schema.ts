@@ -1,23 +1,23 @@
-export * from "./schemas/users.schema";
-export * from "./schemas/dealers.schema";
-export * from "./schemas/customers.schema";
+export * from "./schemas/auth-schema";
+export * from "./schemas/dealer.schema";
+export * from "./schemas/customer.schema";
 
-export * from "./schemas/otp_codes.schema";
+// export * from "./schemas/otp_codes.schema";
 
-export * from "./schemas/product_categories.schema";
-export * from "./schemas/product_types.schema";
-export * from "./schemas/item_code_mappings.schema";
+export * from "./schemas/product_category.schema";
+export * from "./schemas/product_type.schema";
+export * from "./schemas/item_code_mapping.schema";
 
-export * from "./schemas/delivery_orders.schema";
-export * from "./schemas/products.schema";
+export * from "./schemas/delivery_order.schema";
+export * from "./schemas/product.schema";
 
-export * from "./schemas/purchases.schema";
-export * from "./schemas/purchase_items.schema";
-export * from "./schemas/invoices.schema";
+export * from "./schemas/purchase.schema";
+export * from "./schemas/purchase_item.schema";
+export * from "./schemas/invoice.schema";
 
-export * from "./schemas/warranty_conditions.schema";
+export * from "./schemas/warranty_condition.schema";
 
 export * from "./schemas/waiting_list.schema";
-export * from "./schemas/notifications.schema";
+export * from "./schemas/notification.schema";
 
-export * from "./schemas/audit_logs.schema";
+export * from "./schemas/audit_log.schema";
