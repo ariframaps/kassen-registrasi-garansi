@@ -626,8 +626,7 @@ export default function ProductsPage() {
 				dealerFilter === "all" ||
 				(dealerFilter === "none" ? !p.dealerId : p.dealerId === dealerFilter);
 			const matchCategory =
-				categoryFilter === "all" ||
-				p.productType.category.name === categoryFilter;
+				categoryFilter === "all" || p.productType.categoryId === categoryFilter;
 			return matchSearch && matchStatus && matchDealer && matchCategory;
 		});
 	}, [search, statusFilter, dealerFilter, categoryFilter, products]);
@@ -643,11 +642,11 @@ export default function ProductsPage() {
 	);
 
 	// Auto-filter when entering warranty select mode
-	const enterWarrantyMode = () => {
-		setWarrantyMode(true);
-		setStatusFilter("all");
-		setDealerFilter("none");
-	};
+	// const enterWarrantyMode = () => {
+	// 	setWarrantyMode(true);
+	// 	setStatusFilter("all");
+	// 	setDealerFilter("none");
+	// };
 
 	useEffect(() => {
 		Promise.all([

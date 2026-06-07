@@ -40,8 +40,9 @@ import {
 } from "lucide-react";
 import type { PurchaseGroup } from "@/types";
 import { useToast } from "@/components/ui/toast";
-import { productApi, purchaseApi } from "@/lib/api/api-client";
+import { dealerApi, productApi, purchaseApi } from "@/lib/api/api-client";
 import {
+	DealerSchema,
 	PurchaseItemsInsertSchemaType,
 	PurchaseItemsSchema,
 	PurchaseSchema,
@@ -219,6 +220,8 @@ export default function AdminPurchasesPage() {
 	const [selected, setSelected] = useState<PurchaseWithNestedSchema | null>(
 		null,
 	);
+
+	console.log(dealerFilter);
 	// const [expandedRows, setExpandedRows] = useState<string[]>([]);
 
 	// const toggleExpand = (id: string) =>
@@ -237,6 +240,7 @@ export default function AdminPurchasesPage() {
 			const matchDealer =
 				dealerFilter === "all" ||
 				(dealerFilter === "none" ? !g.dealerId : g.dealerId === dealerFilter);
+			// console.log(matchDealer);
 			const matchFrom = !dateFrom || g.purchaseDate >= dateFrom;
 			const matchTo = !dateTo || g.purchaseDate <= dateTo;
 			return matchSearch && matchDealer && matchFrom && matchTo;
@@ -255,15 +259,6 @@ export default function AdminPurchasesPage() {
 	// };
 
 	useEffect(() => {
-		const fetchData = async () => {
-			const data = await purchaseApi.getAllWithNested();
-			if (data.success) setPurchases([...data.data]);
-		};
-
-		fetchData();
-	}, []);
-
-	useEffect(() => {
 		if (selected) {
 			const getPurchaseItems = async (id: string): Promise<void> => {
 				const data = await purchaseApi.getAllPurchaseProductItems({
@@ -274,6 +269,14 @@ export default function AdminPurchasesPage() {
 			getPurchaseItems(selected.id);
 		}
 	}, [selected]);
+
+	useEffect(() => {
+		if (selected) {
+			Promise.all([purchaseApi.getAllWithNested()]).then(([p]) => {
+				if (p.success) setPurchases([...p.data]);
+			});
+		}
+	}, []);
 
 	return (
 		<div>
@@ -337,7 +340,7 @@ export default function AdminPurchasesPage() {
 											.filter((d) => d.dealerId)
 											.map((d) => [
 												d.dealerId, // Unique Key
-												{ value: d.id, label: d.dealer?.name! },
+												{ value: d.dealerId!, label: d.dealer?.name! },
 											]),
 									).values(),
 								),
@@ -679,13 +682,13 @@ export default function AdminPurchasesPage() {
 									</div>
 
 									{/* SN Management */}
-									<AdminSnEditor
+									{/* <AdminSnEditor
 										groupId={selected.id}
 										serialNumbers={selectedPurchaseItems.map(
 											(p) => p.product.serialNumber,
 										)}
 										onClose={() => setSelected(null)}
-									/>
+									/> */}
 
 									{/* Invoice */}
 									<div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">

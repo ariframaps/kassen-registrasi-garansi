@@ -1,6 +1,10 @@
+import { NextResponse } from "next/server";
+import {
+	productTypeService,
+	updateProductTypePayloadSchema,
+} from "@/services/product-type.service";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
-import { dealerInsertSchema } from "@/db/schema";
-import { errorResponse, successResponse } from "@/lib/api/api-response";
+import { successResponse, errorResponse } from "@/lib/api/api-response";
 import {
 	authenticationMiddleware,
 	authorizationMiddleware,
@@ -9,38 +13,36 @@ import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import { dealerService } from "@/services/dealer.service";
-import { productService } from "@/services/product.service";
-import { NextResponse } from "next/server";
 
-export async function GET() {
+// Reuse parameter types safely
+interface RouteContext {
+	params: Promise<{ id: string }>;
+}
+
+export async function PUT(request: Request, context: RouteContext) {
 	try {
+		const { id } = await context.params;
+		const body = await request.json();
+		const parsedBody = updateProductTypePayloadSchema.parse(body);
+
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
 			allowedRole: ["admin", "sales"],
 			currentRole: session.user.role,
 		});
 
-		const data = await dealerService.getAll();
+		const data = await productTypeService.update(id, parsedBody);
 
-		return NextResponse.json(
-			successResponse({
-				message: "Success",
-				data,
-			}),
-			{ status: HTTP_STATUS.OK.code },
-		);
+		return NextResponse.json(successResponse({ message: "Success", data }), {
+			status: HTTP_STATUS.OK.code,
+		});
 	} catch (error) {
 		if (error instanceof HttpError) {
 			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
+				errorResponse({ message: error.message, issues: [] }),
 				{ status: error.statusCode },
 			);
 		}
-
 		const normalized = normalizeError(error);
 		return NextResponse.json(
 			errorResponse({
@@ -52,37 +54,29 @@ export async function GET() {
 	}
 }
 
-export async function POST(request: Request) {
-	const body = await request.json();
-	const parsedBody = dealerInsertSchema.parse(body);
-
+export async function DELETE(request: Request, context: RouteContext) {
 	try {
+		const { id } = await context.params;
+
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
 			allowedRole: ["admin", "sales"],
 			currentRole: session.user.role,
 		});
 
-		const data = await dealerService.add(parsedBody);
+		await productTypeService.delete(id);
 
 		return NextResponse.json(
-			successResponse({
-				message: "Success",
-				data,
-			}),
+			successResponse({ message: "Success deleted", data: undefined }),
 			{ status: HTTP_STATUS.OK.code },
 		);
 	} catch (error) {
 		if (error instanceof HttpError) {
 			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
+				errorResponse({ message: error.message, issues: [] }),
 				{ status: error.statusCode },
 			);
 		}
-
 		const normalized = normalizeError(error);
 		return NextResponse.json(
 			errorResponse({

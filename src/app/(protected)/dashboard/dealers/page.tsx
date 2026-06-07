@@ -15,8 +15,6 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { Pagination } from "@/components/ui/pagination";
-import { mockDealers } from "@/mock/mock-data";
 import { formatDateShort } from "@/lib/utils";
 import {
 	Search,
@@ -31,40 +29,62 @@ import {
 	Calendar,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import type { Dealer } from "@/types";
 import { dealerApi } from "@/lib/api/api-client";
 import { DealerSchema } from "@/db/schema";
 
-// todo: belum ada tambah dealer
-// todo: getDealers, addDealer, editDealer, editDealerStatus
-
 export default function DealersPage() {
 	const [dealers, setDealers] = useState<DealerSchema[]>([]);
-	console.log(dealers);
-	// const [dealersPage, setDealersPage] = useState(1);
-	// const [dealersPageSize, setDealersPageSize] = useState(20);
 	const [search, setSearch] = useState("");
 	const [selected, setSelected] = useState<DealerSchema | null>(null);
 	const [toggleTarget, setToggle] = useState<DealerSchema | null>(null);
-	const { success } = useToast();
 
+	// State untuk Modal Tambah Dealer
+	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+	const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
+	const [newDealer, setNewDealer] = useState({
+		name: "",
+		email: "",
+		phone: "",
+		address: "",
+	});
+
+	// State untuk Modal Edit Dealer
+	const [editingDealer, setEditingDealer] = useState<DealerSchema | null>(null);
+	const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+	const { success, error: toastError } = useToast();
+
+	// Fetch data dari API
+	const fetchData = async () => {
+		const data = await dealerApi.getAll();
+		if (data.success) setDealers([...data.data]);
+	};
+
+	useEffect(() => {
+		fetchData();
+	}, []);
+
+	// Filter pencarian
 	const filtered = dealers.filter(
 		(d) =>
 			d.name.toLowerCase().includes(search.toLowerCase()) ||
 			d.email.toLowerCase().includes(search.toLowerCase()),
 	);
 
-	const handleToggle = () => {
+	// Aksi Toggle Status
+	const handleToggle = async () => {
 		if (!toggleTarget) return;
+		const updatedStatus =
+			toggleTarget.status === "active" ? "inactive" : "active";
+
 		setDealers((prev) =>
 			prev.map((d) =>
-				d.id === toggleTarget.id
-					? { ...d, status: d.status === "active" ? "inactive" : "active" }
-					: d,
+				d.id === toggleTarget.id ? { ...d, status: updatedStatus } : d,
 			),
 		);
+
 		success(
-			toggleTarget.status === "active"
+			updatedStatus === "inactive"
 				? "Dealer dinonaktifkan"
 				: "Dealer diaktifkan",
 			toggleTarget.name,
@@ -72,18 +92,71 @@ export default function DealersPage() {
 		setToggle(null);
 	};
 
-	const handleEdit = (dealer: DealerSchema) => {
-		return;
+	// Aksi Tambah Dealer Baru
+	const handleAddDealer = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!newDealer.name || !newDealer.email) {
+			toastError("Gagal", "Nama dan Email wajib diisi");
+			return;
+		}
+
+		setIsSubmittingAdd(true);
+		try {
+			// const response = await dealerApi.add(newDeayeler);
+			// if (response.success) {
+			// 	success("Berhasil", "Dealer baru berhasil ditambahkan");
+			// 	setIsAddModalOpen(false);
+			// 	setNewDealer({ name: "", email: "", phone: "", address: "" });
+			// 	fetchData();
+			// } else {
+			// 	toastError("Gagal", response.message || "Gagal menambahkan dealer");
+			// }
+		} catch (err) {
+			toastError("Gagal", "Terjadi kesalahan pada sistem");
+		} finally {
+			setIsSubmittingAdd(false);
+		}
 	};
 
-	useEffect(() => {
-		const fetchData = async () => {
-			const data = await dealerApi.getAll();
-			if (data.success) setDealers([...data.data]);
-		};
+	// Membuka Modal Edit dari Detail Modal
+	const handleTriggerEdit = (dealer: DealerSchema) => {
+		setSelected(null); // Tutup modal detail terlebih dahulu
+		setEditingDealer(dealer); // Buka modal edit dengan data terisi
+	};
 
-		fetchData();
-	}, []);
+	// Aksi Simpan Perubahan Edit Dealer
+	const handleEditDealer = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingDealer || !editingDealer.name || !editingDealer.email) {
+			toastError("Gagal", "Nama dan Email wajib diisi");
+			return;
+		}
+
+		setIsSubmittingEdit(true);
+		try {
+			// // Panggil API Edit Dealer (sesuaikan dengan nama method di dealerApi Anda, misal .edit atau .update)
+			// const response = await dealerApi.edit(editingDealer.id, {
+			// 	name: editingDealer.name,
+			// 	email: editingDealer.email,
+			// 	phone: editingDealer.phone,
+			// 	address: editingDealer.address,
+			// });
+			// if (response.success) {
+			// 	success("Berhasil", "Data dealer berhasil diperbarui");
+			// 	setEditingDealer(null); // Tutup modal edit
+			// 	fetchData(); // Refresh list tabel
+			// } else {
+			// 	toastError(
+			// 		"Gagal",
+			// 		response.message || "Gagal memperbarui data dealer",
+			// 	);
+			// }
+		} catch (err) {
+			toastError("Gagal", "Terjadi kesalahan pada sistem");
+		} finally {
+			setIsSubmittingEdit(false);
+		}
+	};
 
 	return (
 		<div>
@@ -102,7 +175,10 @@ export default function DealersPage() {
 						<p className="text-xs text-zinc-400 ml-auto">
 							{filtered.length} dealer
 						</p>
-						<Button size="sm" icon={<Plus size={13} />}>
+						<Button
+							size="sm"
+							icon={<Plus size={13} />}
+							onClick={() => setIsAddModalOpen(true)}>
 							Tambah Dealer
 						</Button>
 					</div>
@@ -112,7 +188,6 @@ export default function DealersPage() {
 								<TableHeader>Dealer</TableHeader>
 								<TableHeader>Kontak</TableHeader>
 								<TableHeader>Alamat</TableHeader>
-								{/* <TableHeader>Total Produk</TableHeader> */}
 								<TableHeader>Bergabung</TableHeader>
 								<TableHeader>Status</TableHeader>
 								<TableHeader className="text-right pr-5">Aksi</TableHeader>
@@ -120,7 +195,7 @@ export default function DealersPage() {
 							<TableBody>
 								{filtered.length === 0 ? (
 									<tr>
-										<td colSpan={7}>
+										<td colSpan={6}>
 											<EmptyState
 												icon={<Package size={18} />}
 												title="Tidak ada dealer"
@@ -153,11 +228,6 @@ export default function DealersPage() {
 													{d.address ?? "—"}
 												</p>
 											</TableCell>
-											{/* <TableCell>
-												<span className="text-xs font-semibold font-mono text-zinc-700">
-													{d}
-												</span>
-											</TableCell> */}
 											<TableCell>
 												<span className="text-xs text-zinc-400">
 													{formatDateShort(d.createdAt)}
@@ -178,7 +248,7 @@ export default function DealersPage() {
 														title="Detail">
 														<Eye size={13} />
 													</button>
-													<button
+													{/* <button
 														onClick={() => setToggle(d)}
 														className={`p-1.5 rounded-md transition-colors ${d.status === "active" ? "hover:bg-orange-50 text-zinc-400 hover:text-orange-600" : "hover:bg-emerald-50 text-zinc-400 hover:text-emerald-600"}`}
 														title={
@@ -189,7 +259,7 @@ export default function DealersPage() {
 														) : (
 															<UserCheck size={13} />
 														)}
-													</button>
+													</button> */}
 												</div>
 											</TableCell>
 										</TableRow>
@@ -197,19 +267,160 @@ export default function DealersPage() {
 								)}
 							</TableBody>
 						</Table>
-						{/* <Pagination
-							page={dealersPage}
-							pageSize={dealersPageSize}
-							total={filtered.length}
-							onPageChange={setDealersPage}
-							onPageSizeChange={(s) => {
-								setDealersPageSize(s);
-								setDealersPage(1);
-							}}
-						/> */}
 					</CardContent>
 				</Card>
 			</div>
+
+			{/* Modal Tambah Dealer */}
+			<Modal
+				open={isAddModalOpen}
+				onClose={() => setIsAddModalOpen(false)}
+				title="Tambah Dealer Baru"
+				size="md">
+				<form onSubmit={handleAddDealer} className="space-y-4">
+					<div className="space-y-1">
+						<label className="text-xs font-medium text-zinc-600">
+							Nama Dealer <span className="text-red-500">*</span>
+						</label>
+						<Input
+							required
+							placeholder="Masukkan nama dealer..."
+							value={newDealer.name}
+							onChange={(e) =>
+								setNewDealer({ ...newDealer, name: e.target.value })
+							}
+						/>
+					</div>
+					<div className="space-y-1">
+						<label className="text-xs font-medium text-zinc-600">
+							Email <span className="text-red-500">*</span>
+						</label>
+						<Input
+							required
+							type="email"
+							placeholder="contoh@dealer.com"
+							value={newDealer.email}
+							onChange={(e) =>
+								setNewDealer({ ...newDealer, email: e.target.value })
+							}
+						/>
+					</div>
+					<div className="space-y-1">
+						<label className="text-xs font-medium text-zinc-600">
+							No. Telepon
+						</label>
+						<Input
+							type="tel"
+							placeholder="0812xxxxxxx"
+							value={newDealer.phone}
+							onChange={(e) =>
+								setNewDealer({ ...newDealer, phone: e.target.value })
+							}
+						/>
+					</div>
+					<div className="space-y-1">
+						<label className="text-xs font-medium text-zinc-600">Alamat</label>
+						<Input
+							placeholder="Masukkan alamat lengkap..."
+							value={newDealer.address}
+							onChange={(e) =>
+								setNewDealer({ ...newDealer, address: e.target.value })
+							}
+						/>
+					</div>
+					<div className="flex gap-2 pt-2 border-t border-zinc-100">
+						<Button
+							type="button"
+							variant="outline"
+							fullWidth
+							onClick={() => setIsAddModalOpen(false)}>
+							Batal
+						</Button>
+						<Button type="submit" fullWidth loading={isSubmittingAdd}>
+							Simpan Dealer
+						</Button>
+					</div>
+				</form>
+			</Modal>
+
+			{/* Modal Edit Dealer */}
+			<Modal
+				open={!!editingDealer}
+				onClose={() => setEditingDealer(null)}
+				title="Edit Data Dealer"
+				size="md">
+				{editingDealer && (
+					<form onSubmit={handleEditDealer} className="space-y-4">
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								Nama Dealer <span className="text-red-500">*</span>
+							</label>
+							<Input
+								required
+								placeholder="Masukkan nama dealer..."
+								value={editingDealer.name}
+								onChange={(e) =>
+									setEditingDealer({ ...editingDealer, name: e.target.value })
+								}
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								Email <span className="text-red-500">*</span>
+							</label>
+							<Input
+								required
+								type="email"
+								placeholder="contoh@dealer.com"
+								value={editingDealer.email}
+								onChange={(e) =>
+									setEditingDealer({ ...editingDealer, email: e.target.value })
+								}
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								No. Telepon
+							</label>
+							<Input
+								type="tel"
+								placeholder="0812xxxxxxx"
+								value={editingDealer.phone ?? ""}
+								onChange={(e) =>
+									setEditingDealer({ ...editingDealer, phone: e.target.value })
+								}
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								Alamat
+							</label>
+							<Input
+								placeholder="Masukkan alamat lengkap..."
+								value={editingDealer.address ?? ""}
+								onChange={(e) =>
+									setEditingDealer({
+										...editingDealer,
+										address: e.target.value,
+									})
+								}
+							/>
+						</div>
+						<div className="flex gap-2 pt-2 border-t border-zinc-100">
+							<Button
+								type="button"
+								variant="outline"
+								fullWidth
+								onClick={() => setEditingDealer(null)}>
+								Batal
+							</Button>
+							<Button type="submit" fullWidth loading={isSubmittingEdit}>
+								Simpan Perubahan
+							</Button>
+						</div>
+					</form>
+				)}
+			</Modal>
 
 			{/* Detail Modal */}
 			<Modal
@@ -247,18 +458,13 @@ export default function DealersPage() {
 								{
 									icon: <Phone size={13} />,
 									label: "Telepon",
-									value: selected.phone,
+									value: selected.phone ?? "—",
 								},
 								{
 									icon: <MapPin size={13} />,
 									label: "Alamat",
 									value: selected.address ?? "Belum diisi",
 								},
-								// {
-								// 	icon: <Package size={13} />,
-								// 	label: "Total Produk",
-								// 	value: `${selected.totalProducts} produk`,
-								// },
 								{
 									icon: <Calendar size={13} />,
 									label: "Bergabung",
@@ -290,7 +496,7 @@ export default function DealersPage() {
 							<Button
 								variant="secondary"
 								fullWidth
-								onClick={() => handleEdit(selected)}>
+								onClick={() => handleTriggerEdit(selected)}>
 								Edit
 							</Button>
 							<Button
@@ -309,6 +515,7 @@ export default function DealersPage() {
 				)}
 			</Modal>
 
+			{/* Confirm Toggle Status Modal */}
 			<ConfirmModal
 				open={!!toggleTarget}
 				onClose={() => setToggle(null)}

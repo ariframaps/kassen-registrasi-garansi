@@ -66,6 +66,43 @@ export const productApi = {
 	},
 };
 
+// export const productTypeApi = {
+// 	getAllWithNested: async () => {
+// 		return apiFetch<ProductTypeWithNestedSchema[]>("/product-types", {
+// 			method: "GET",
+// 		});
+// 	},
+
+// 	getItemCodes: async ({ typeId }: { typeId: string }) => {
+// 		return apiFetch<ItemCodeMapsSchema[]>(`/product-types/${typeId}/codes`, {
+// 			method: "GET",
+// 		});
+// 	},
+
+// 	editCodes: async ({
+// 		typeId,
+// 		data,
+// 	}: {
+// 		typeId: string;
+// 		data: {
+// 			deleted: string[];
+// 			added: string[];
+// 		};
+// 	}) => {
+// 		return apiFetch<ItemCodeMapsSchema[]>(`/product-types/${typeId}/codes`, {
+// 			method: "PATCH",
+// 			body: JSON.stringify({ typeId, data }),
+// 		});
+// 	},
+
+// 	addNew: async (data: ProductTypeInsertSchema) => {
+// 		return apiFetch<ProductTypeWithNestedSchema>(`/product-types`, {
+// 			method: "POST",
+// 			body: JSON.stringify(data),
+// 		});
+// 	},
+// };
+
 export const productTypeApi = {
 	getAllWithNested: async () => {
 		return apiFetch<ProductTypeWithNestedSchema[]>("/product-types", {
@@ -73,32 +110,43 @@ export const productTypeApi = {
 		});
 	},
 
-	getItemCodes: async ({ typeId }: { typeId: string }) => {
-		return apiFetch<ItemCodeMapsSchema[]>(`/product-types/${typeId}/codes`, {
-			method: "GET",
+	// Perubahan 1: Mengirimkan payload gabungan saat membuat Product Type baru
+	addNew: async (data: {
+		name: string;
+		categoryId: string;
+		itemCodes: string[];
+	}) => {
+		return apiFetch<ProductTypeWithNestedSchema>(`/product-types`, {
+			method: "POST",
+			body: JSON.stringify(data),
 		});
 	},
 
-	editCodes: async ({
+	// Perubahan 2: Menggunakan PUT untuk mengupdate nama, kategori, dan sync item codes sekaligus
+	update: async ({
 		typeId,
+		name,
+		categoryId,
 		data,
 	}: {
 		typeId: string;
+		name: string;
+		categoryId: string;
 		data: {
 			deleted: string[];
 			added: string[];
 		};
 	}) => {
-		return apiFetch<ItemCodeMapsSchema[]>(`/product-types/${typeId}/codes`, {
-			method: "PATCH",
-			body: JSON.stringify({ typeId, data }),
+		return apiFetch<ProductTypeWithNestedSchema>(`/product-types/${typeId}`, {
+			method: "PUT",
+			body: JSON.stringify({ name, categoryId, data }),
 		});
 	},
 
-	addNew: async (data: ProductTypeInsertSchema) => {
-		return apiFetch<ProductTypeWithNestedSchema>(`/product-types`, {
-			method: "POST",
-			body: JSON.stringify(data),
+	// Perubahan 3: Tambahkan fungsi delete
+	delete: async (typeId: string) => {
+		return apiFetch<{ message: string }>(`/product-types/${typeId}`, {
+			method: "DELETE",
 		});
 	},
 };

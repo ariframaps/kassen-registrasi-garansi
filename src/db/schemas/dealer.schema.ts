@@ -6,7 +6,7 @@ import { product } from "./product.schema";
 import { purchase } from "./purchase.schema";
 import { waitingList } from "./waiting_list.schema";
 import { user } from "./auth-schema";
-import { createSelectSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import z from "zod";
 
 export const dealerStatusEnum = pgEnum("dealer_status", ["active", "inactive"]);
@@ -34,10 +34,10 @@ export const dealers = pgTable("dealer", {
 
 // schema
 export const dealerSchema = createSelectSchema(dealers);
-// export const productInsertSchema = createInsertSchema(product);
+export const dealerInsertSchema = createInsertSchema(dealers);
 // export const productUpdateSchema = createUpdateSchema(product);
 export type DealerSchema = z.infer<typeof dealerSchema>;
-// export type ProductInsertSchema = z.infer<typeof productInsertSchema>;
+export type DealerInsertSchema = z.infer<typeof dealerInsertSchema>;
 // export type ProductUpdateSchema = z.infer<typeof productUpdateSchema>;
 
 export const dealersRelations = relations(dealers, ({ one, many }) => ({

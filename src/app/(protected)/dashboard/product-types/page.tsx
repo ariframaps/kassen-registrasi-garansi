@@ -157,16 +157,28 @@ function ProductTypeModal({
 	const [loading, setLoading] = useState(false);
 	const [duplicateError, setDuplicateError] = useState("");
 
+	// useEffect(() => {
+	// 	if (open) {
+	// 		setName(initial?.name ?? "");
+	// 		setCategoryId(initial?.categoryId ?? "");
+	// 		setItemCodes(allCodes.map((c) => c.itemCode) ?? []);
+	// 		setNewCode("");
+	// 		setErrors({});
+	// 		setDuplicateError("");
+	// 	}
+	// }, [open, initial]);
+
 	useEffect(() => {
 		if (open) {
 			setName(initial?.name ?? "");
 			setCategoryId(initial?.categoryId ?? "");
-			setItemCodes(allCodes.map((c) => c.itemCode) ?? []);
+			// Koreksi di sini: jika tambah baru (initial undefined), pastikan state-nya array kosong []
+			setItemCodes(initial ? allCodes.map((c) => c.itemCode) : []);
 			setNewCode("");
 			setErrors({});
 			setDuplicateError("");
 		}
-	}, [open, initial]);
+	}, [open, initial, allCodes]);
 
 	const addCode = async () => {
 		const code = newCode.trim().toUpperCase();
@@ -345,53 +357,40 @@ export default function ProductTypesPage() {
 		categoryId: string,
 		data: { deleted: string[]; added: string[] },
 	) => {
-		console.log(newTypeName);
-		console.log(data);
-		console.log(categoryId);
 		if (editing) {
-			// // const updated = await productTypeAdapter.update(editing.id, data);
-			console.log(data);
-			const newValues = await productTypeApi.editCodes({
+			// ── MODE EDIT ──
+			// Panggil API update tunggal (mengubah nama, kategori, dan sinkronisasi kode sekaligus)
+			const response = await productTypeApi.update({
 				typeId: editing.id,
-				data: {
-					added: data.added,
-					deleted: data.deleted,
-				},
+				name: newTypeName,
+				categoryId,
+				data,
 			});
-			// setTypes((prev) => prev.map((t) => (t.id === editing.id ? updated : t)));
-			if (newValues.success) {
-				let newItemCodes = [...itemCodes];
-				newItemCodes = newItemCodes.filter((i) => !data.deleted.includes(i.id));
-				newItemCodes = [...newItemCodes, ...newValues.data];
-				console.log(newValues);
-				setItemCodes(newItemCodes);
-				success("Tipe produk diperbarui", editing.name);
+
+			if (response.success && response.data) {
+				// response.data sudah berisi objek ProductTypeWithNestedSchema yang paling baru
+				setTypes((prev) =>
+					prev.map((t) => (t.id === editing.id ? response.data! : t)),
+				);
+				success("Tipe produk diperbarui", newTypeName);
+			} else {
+				toastError("Gagal memperbarui tipe produk", response.message);
 			}
 		} else {
-			// const created = await productTypeAdapter.create(data);
-			const newType = await productTypeApi.addNew({
-				categoryId,
+			// ── MODE TAMBAH BARU ──
+			// Kirim nama, kategori, dan list item codes awal ke API POST
+			const response = await productTypeApi.addNew({
 				name: newTypeName,
+				categoryId,
+				itemCodes: data.added,
 			});
-			if (newType.success) {
-				setTypes((prev) => [...prev, newType.data]);
-				if (data.added.length > 0) {
-					const created = await itemCodeMappingApi.addNew(
-						data.added.map((i) => {
-							return {
-								itemCode: i,
-								productTypeId: newType.data.id,
-							};
-						}),
-					);
-					if (created.success) {
-						setItemCodes((prev) => [...prev, ...created.data]);
-						success(
-							"Tipe produk ditambahkan: ",
-							created.data.map((i) => i.itemCode).join(", "),
-						);
-					}
-				}
+
+			if (response.success && response.data) {
+				// Masukkan tipe produk baru hasil response backend ke dalam list state
+				setTypes((prev) => [response.data!, ...prev]);
+				success("Tipe produk ditambahkan", newTypeName);
+			} else {
+				toastError("Gagal menambahkan tipe produk", response.message);
 			}
 		}
 	};
@@ -399,12 +398,152 @@ export default function ProductTypesPage() {
 	const handleDelete = async () => {
 		if (!deleteTarget) return;
 		setDeleteLoading(true);
-		// await productTypeAdapter.delete(deleteTarget.id);
-		// setTypes((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+
+		const response = await productTypeApi.delete(deleteTarget.id);
 		setDeleteLoading(false);
-		setDeleteTarget(undefined);
-		success("Tipe produk dihapus");
+
+		if (response.success) {
+			// Hapus tipe produk dari state UI
+			setTypes((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+			setDeleteTarget(undefined);
+			success("Tipe produk berhasil dihapus");
+		} else {
+			toastError("Gagal menghapus tipe produk", response.message);
+		}
 	};
+
+	// const handleSave = async (
+	// 	newTypeName: string,
+	// 	categoryId: string,
+	// 	data: { deleted: string[]; added: string[] },
+	// ) => {
+	// 	if (editing) {
+	// 		// ── EDIT MODE ──
+	// 		// Panggil API PUT tunggal yang mengurusi edit nama, edit kategori, dan sync item codes sekaligus!
+	// 		const res = await fetch(`/api/product-types/${editing.id}`, {
+	// 			method: "PUT",
+	// 			headers: { "Content-Type": "application/json" },
+	// 			body: JSON.stringify({ name: newTypeName, categoryId, data }),
+	// 		});
+
+	// 		const result = await res.json();
+	// 		if (result.success) {
+	// 			// Langsung ganti data lama di state dengan data ter-update dari backend
+	// 			setTypes((prev) =>
+	// 				prev.map((t) => (t.id === editing.id ? result.data : t)),
+	// 			);
+	// 			success("Tipe produk diperbarui", newTypeName);
+	// 		} else {
+	// 			toastError("Gagal memperbarui", result.error);
+	// 		}
+	// 	} else {
+	// 		// ── CREATE MODE ──
+	// 		// Panggil API POST tunggal. Mengirim nama, kategori, dan codes awal secara bersamaan
+	// 		const res = await fetch("/api/product-types", {
+	// 			method: "POST",
+	// 			headers: { "Content-Type": "application/json" },
+	// 			body: JSON.stringify({
+	// 				name: newTypeName,
+	// 				categoryId,
+	// 				itemCodes: data.added, // Mengirim item codes yang barusan di-add di modal
+	// 			}),
+	// 		});
+
+	// 		const result = await res.json();
+	// 		if (result.success) {
+	// 			setTypes((prev) => [result.data, ...prev]);
+	// 			success("Tipe produk berhasil ditambahkan", newTypeName);
+	// 		} else {
+	// 			toastError("Gagal menambahkan", result.error);
+	// 		}
+	// 	}
+	// };
+
+	// const handleDelete = async () => {
+	// 	if (!deleteTarget) return;
+	// 	setDeleteLoading(true);
+
+	// 	const res = await fetch(`/api/product-types/${deleteTarget.id}`, {
+	// 		method: "DELETE",
+	// 	});
+
+	// 	const result = await res.json();
+	// 	setDeleteLoading(false);
+
+	// 	if (result.success) {
+	// 		setTypes((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+	// 		setDeleteTarget(undefined);
+	// 		success("Tipe produk berhasil dihapus");
+	// 	} else {
+	// 		toastError("Gagal menghapus", result.error);
+	// 	}
+	// };
+
+	// const handleSave = async (
+	// 	newTypeName: string,
+	// 	categoryId: string,
+	// 	data: { deleted: string[]; added: string[] },
+	// ) => {
+	// 	console.log(newTypeName);
+	// 	console.log(data);
+	// 	console.log(categoryId);
+	// 	if (editing) {
+	// 		// // const updated = await productTypeAdapter.update(editing.id, data);
+	// 		console.log(data);
+	// 		const newValues = await productTypeApi.editCodes({
+	// 			typeId: editing.id,
+	// 			data: {
+	// 				added: data.added,
+	// 				deleted: data.deleted,
+	// 			},
+	// 		});
+	// 		// setTypes((prev) => prev.map((t) => (t.id === editing.id ? updated : t)));
+	// 		if (newValues.success) {
+	// 			let newItemCodes = [...itemCodes];
+	// 			newItemCodes = newItemCodes.filter((i) => !data.deleted.includes(i.id));
+	// 			newItemCodes = [...newItemCodes, ...newValues.data];
+	// 			console.log(newValues);
+	// 			setItemCodes(newItemCodes);
+	// 			success("Tipe produk diperbarui", editing.name);
+	// 		}
+	// 	} else {
+	// 		// const created = await productTypeAdapter.create(data);
+	// 		const newType = await productTypeApi.addNew({
+	// 			categoryId,
+	// 			name: newTypeName,
+	// 		});
+	// 		if (newType.success) {
+	// 			setTypes((prev) => [...prev, newType.data]);
+	// 			if (data.added.length > 0) {
+	// 				const created = await itemCodeMappingApi.addNew(
+	// 					data.added.map((i) => {
+	// 						return {
+	// 							itemCode: i,
+	// 							productTypeId: newType.data.id,
+	// 						};
+	// 					}),
+	// 				);
+	// 				if (created.success) {
+	// 					setItemCodes((prev) => [...prev, ...created.data]);
+	// 					success(
+	// 						"Tipe produk ditambahkan: ",
+	// 						created.data.map((i) => i.itemCode).join(", "),
+	// 					);
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// };
+
+	// const handleDelete = async () => {
+	// 	if (!deleteTarget) return;
+	// 	setDeleteLoading(true);
+	// 	// await productTypeAdapter.delete(deleteTarget.id);
+	// 	// setTypes((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+	// 	setDeleteLoading(false);
+	// 	setDeleteTarget(undefined);
+	// 	success("Tipe produk dihapus");
+	// };
 
 	return (
 		<div className="flex flex-col min-h-screen bg-[var(--bg)]">
