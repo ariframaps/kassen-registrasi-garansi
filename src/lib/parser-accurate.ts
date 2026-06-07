@@ -171,3 +171,66 @@ export async function parseExcelFile(
 
 	return parseDeliveryOrder(rows);
 }
+
+export function validateAndPreview(
+	parsed: ParsedDeliveryOrder,
+	existingSerialNumbers: Set<string>,
+	productTypeMap: Map<string, { id: string; category: string; name: string }>,
+): {
+	preview: PreviewRow[];
+	validCount: number;
+	dupCount: number;
+	unknownCount: number;
+} {
+	const preview: PreviewRow[] = [];
+	let validCount = 0;
+	let dupCount = 0;
+	let unknownCount = 0;
+
+	for (const item of parsed.items) {
+		for (const sn of item.serialNumbers) {
+			const normalized = normalizeSerialNumber(sn);
+
+			if (existingSerialNumbers.has(normalized)) {
+				preview.push({
+					serialNumber: normalized,
+					productType: "",
+					productCategory: "",
+					itemCodeOriginal: item.itemCode,
+					status: "duplicate",
+					message: "SN sudah ada di sistem",
+				});
+				dupCount++;
+			} else {
+				const mapping = productTypeMap.get(item.itemCode);
+
+				if (mapping) {
+					preview.push({
+						serialNumber: normalized,
+						productType: mapping.name,
+						productCategory: mapping.category,
+						status: "valid",
+					});
+					validCount++;
+				} else {
+					preview.push({
+						serialNumber: normalized,
+						productType: "",
+						productCategory: "",
+						itemCodeOriginal: item.itemCode,
+						status: "unknown_type",
+						message: `Item code '${item.itemCode}' belum ada mapping`,
+					});
+					unknownCount++;
+				}
+			}
+		}
+	}
+
+	return {
+		preview,
+		validCount,
+		dupCount,
+		unknownCount,
+	};
+}

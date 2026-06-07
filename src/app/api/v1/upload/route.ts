@@ -1,3 +1,5 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { errorResponse, successResponse } from "@/lib/api/api-response";
 import {
@@ -8,13 +10,15 @@ import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import {
-	accurateService,
-	uploadAccurateSchema,
-} from "@/services/accurate.service";
-import { NextRequest, NextResponse } from "next/server";
+import { submitAccurateFile } from "@/services/accurate.service";
 
-export async function POST(request: NextRequest) {
+const uploadSchema = z.object({
+	file: z.instanceof(File),
+	destType: z.enum(["dealer", "customer"]),
+	destLabel: z.string().min(1, "Destination label diperlukan"),
+});
+
+export async function POST(req: NextRequest) {
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
@@ -22,64 +26,39 @@ export async function POST(request: NextRequest) {
 			currentRole: session.user.role,
 		});
 
-		// Parse FormData
-		const formData = await request.formData();
-		const file = formData.get("file");
-		const destType = formData.get("destType");
-		const destLabel = formData.get("destLabel");
+		const formData = await req.formData();
+		const file = formData.get("file") as File | null;
+		const destType = formData.get("destType") as string | null;
+		const destLabel = formData.get("destLabel") as string | null;
 
-		// Validate inputs
-		if (!file || !(file instanceof File)) {
-			throw new HttpError(
-				"File harus disertakan",
-				HTTP_STATUS.BAD_REQUEST.code,
-			);
-		}
-
-		// Validate file type
-		const validTypes = [
-			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-			"application/vnd.ms-excel",
-		];
-		if (!validTypes.includes(file.type)) {
-			throw new HttpError(
-				"Format file harus .xlsx atau .xls",
-				HTTP_STATUS.BAD_REQUEST.code,
-			);
-		}
-
-		// Validate and parse payload
-		const payload = uploadAccurateSchema.parse({
+		const parsedData = uploadSchema.parse({
+			file,
 			destType,
 			destLabel,
 		});
 
-		const ipAddress =
-			request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-			request.headers.get("x-real-ip");
-		const userAgent = request.headers.get("user-agent");
-
-		// Call service
-		const result = await accurateService.upload(file, payload, {
+		const result = await submitAccurateFile({
+			file: parsedData.file,
+			destType: parsedData.destType,
+			destLabel: parsedData.destLabel,
 			userId: session.user.id,
-			ipAddress,
-			userAgent,
 		});
 
 		return NextResponse.json(
 			successResponse({
-				message: `File Accurate berhasil diupload: ${result.productsCreated} produk ditambahkan`,
-				data: result,
+				message: "File berhasil diupload",
+				data: {
+					success: true,
+					doNumber: result.doNumber,
+					productsCreated: result.productsCreated,
+				},
 			}),
 			{ status: HTTP_STATUS.CREATED.code },
 		);
 	} catch (error) {
 		if (error instanceof HttpError) {
 			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
+				errorResponse({ message: error.message, issues: [] }),
 				{ status: error.statusCode },
 			);
 		}

@@ -1,124 +1,182 @@
 import { db } from "@/db";
-import {
-	itemCodeMapping,
-	product,
-	productType,
-	productCategory,
-} from "@/db/schema";
+import { product, deliveryOrders, dealers, customer, productType, itemCodeMaps } from "@/db/schema";
+import { parseExcelFile, validateAndPreview, ParsedDeliveryOrder, PreviewRow } from "@/lib/parser-accurate";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
-import {
-	ParsedDeliveryOrder,
-	PreviewRow,
-} from "@/lib/parser-accurate";
-import { normalizeSerialNumber } from "@/lib/utils";
+import crypto from "crypto";
 
-export const uploadAccurateSchema = z.object({
-	destType: z.enum(["dealer", "customer"]),
-	destLabel: z.string().min(1, "Destination label diperlukan"),
-});
+export async function getProductTypeMappings() {
+	const types = await db.query.productType.findMany({
+		with: {
+			category: true,
+			itemCodeMappings: true,
+		},
+	});
 
-export type UploadAccuratePayload = z.infer<typeof uploadAccurateSchema>;
+	const map = new Map<string, { id: string; category: string; name: string }>();
 
-async function findProductTypeByItemCode(
-	itemCode: string,
-): Promise<{ productTypeId: string; productTypeName: string; categoryName: string } | null> {
-	const mapping = await db
-		.select({
-			productTypeId: itemCodeMapping.productTypeId,
-			productTypeName: productType.name,
-			categoryName: productCategory.name,
-		})
-		.from(itemCodeMapping)
-		.innerJoin(productType, eq(itemCodeMapping.productTypeId, productType.id))
-		.innerJoin(
-			productCategory,
-			eq(productType.categoryId, productCategory.id),
-		)
-		.where(eq(itemCodeMapping.itemCode, itemCode))
-		.limit(1);
+	for (const pt of types) {
+		for (const ic of pt.itemCodeMappings) {
+			map.set(ic.itemCode, {
+				id: pt.id,
+				category: pt.category.name,
+				name: pt.name,
+			});
+		}
+	}
 
-	return mapping[0] || null;
+	return map;
 }
 
-async function isSerialNumberDuplicate(serialNumber: string): Promise<boolean> {
-	const existing = await db
-		.select({ id: product.id })
-		.from(product)
-		.where(eq(product.serialNumber, normalizeSerialNumber(serialNumber)))
-		.limit(1);
+export async function getExistingSerialNumbers(): Promise<Set<string>> {
+	const products = await db.select({ serialNumber: product.serialNumber }).from(product);
+	return new Set(products.map((p) => p.serialNumber));
+}
 
-	return existing.length > 0;
+export interface UploadValidationResult {
+	preview: PreviewRow[];
+	validCount: number;
+	dupCount: number;
+	unknownCount: number;
+	parsed: ParsedDeliveryOrder;
 }
 
 export async function validateAccurateFile(
-	parsedData: ParsedDeliveryOrder,
-): Promise<PreviewRow[]> {
-	const results: PreviewRow[] = [];
+	file: File,
+): Promise<UploadValidationResult> {
+	const [parsed, existingSerials, typeMap] = await Promise.all([
+		parseExcelFile(file),
+		getExistingSerialNumbers(),
+		getProductTypeMappings(),
+	]);
 
-	// Flatten items dengan serialNumbers
-	for (const item of parsedData.items) {
-		const { itemCode, serialNumbers } = item;
+	const { preview, validCount, dupCount, unknownCount } = validateAndPreview(
+		parsed,
+		existingSerials,
+		typeMap,
+	);
 
-		// Cek itemCode di database
-		const mapping = await findProductTypeByItemCode(itemCode);
+	return {
+		preview,
+		validCount,
+		dupCount,
+		unknownCount,
+		parsed,
+	};
+}
 
-		if (!mapping) {
-			// Item code tidak ditemukan
-			for (const sn of serialNumbers) {
-				results.push({
-					serialNumber: sn,
-					productType: "",
-					productCategory: "",
-					itemCodeOriginal: itemCode,
-					status: "unknown_type",
-					message: `Item code '${itemCode}' belum ada mapping`,
-				});
-			}
-			continue;
+export interface UploadSubmitOptions {
+	destType: "dealer" | "customer";
+	destLabel: string;
+	userId: string;
+	file: File;
+}
+
+export async function submitAccurateFile(
+	options: UploadSubmitOptions,
+): Promise<{
+	doNumber: string;
+	productsCreated: number;
+}> {
+	const { destType, destLabel, userId, file } = options;
+
+	const validation = await validateAccurateFile(file);
+	const { parsed, preview } = validation;
+
+	if (validation.validCount === 0) {
+		throw new Error("Tidak ada produk valid untuk disimpan");
+	}
+
+	// Calculate file hash
+	const buffer = await file.arrayBuffer();
+	const hash = crypto
+		.createHash("sha256")
+		.update(Buffer.from(buffer))
+		.digest("hex");
+
+	// Check if DO already uploaded
+	const existing = await db.query.deliveryOrders.findFirst({
+		where: eq(deliveryOrders.fileHash, hash),
+	});
+
+	if (existing) {
+		throw new Error("File ini sudah pernah diupload sebelumnya");
+	}
+
+	// Get dealer or customer ID
+	let dealerId: string | null = null;
+	let customerId: string | null = null;
+
+	if (destType === "dealer") {
+		const dealer = await db.query.dealers.findFirst({
+			where: eq(dealers.name, destLabel),
+		});
+		if (!dealer) {
+			throw new Error(`Dealer '${destLabel}' tidak ditemukan`);
 		}
+		dealerId = dealer.id;
+	} else {
+		const found = await db.query.customer.findFirst({
+			where: eq(customer.name, destLabel),
+		});
+		if (!found) {
+			throw new Error(`Customer '${destLabel}' tidak ditemukan`);
+		}
+		customerId = found.id;
+	}
 
-		// Item code ditemukan, cek setiap serial number
-		for (const sn of serialNumbers) {
-			const normalized = normalizeSerialNumber(sn);
-			const isDuplicate = await isSerialNumberDuplicate(normalized);
+	// Create DO record
+	const doRecord = await db
+		.insert(deliveryOrders)
+		.values({
+			doNumber: parsed.doNumber,
+			doDate: parsed.date,
+			shipToRaw: parsed.shipTo,
+			sentBy: parsed.sentBy || null,
+			orderRef: parsed.orderRef || null,
+			dcRef: parsed.area || null,
+			destinationType: destType,
+			destinationDealerId: dealerId,
+			destinationCustomerId: customerId,
+			uploadedBy: userId,
+			fileHash: hash,
+			originalFilename: file.name,
+		})
+		.returning();
 
-			if (isDuplicate) {
-				results.push({
+	const doId = doRecord[0].id;
+
+	// Get product type mapping again for save
+	const typeMap = await getProductTypeMappings();
+
+	// Create product records by matching preview with parsed items
+	const productsToCreate = [];
+	const validSerialNumbers = new Set(
+		preview.filter((p) => p.status === "valid").map((p) => p.serialNumber),
+	);
+
+	for (const item of parsed.items) {
+		const mapping = typeMap.get(item.itemCode);
+		if (!mapping) continue;
+
+		for (const sn of item.serialNumbers) {
+			if (validSerialNumbers.has(sn)) {
+				productsToCreate.push({
 					serialNumber: sn,
-					productType: mapping.productTypeName,
-					productCategory: mapping.categoryName,
-					status: "duplicate",
-					message: "SN sudah ada di sistem",
-				});
-			} else {
-				results.push({
-					serialNumber: sn,
-					productType: mapping.productTypeName,
-					productCategory: mapping.categoryName,
-					status: "valid",
+					productTypeId: mapping.id,
+					deliveryOrderId: doId,
+					dealerId: dealerId,
+					status: "none" as const,
 				});
 			}
 		}
 	}
 
-	return results;
-}
+	if (productsToCreate.length > 0) {
+		await db.insert(product).values(productsToCreate);
+	}
 
-export const accurateService = {
-	validateAccurateFile,
-	upload: async (
-		file: File,
-		payload: UploadAccuratePayload,
-		context: { userId: string; ipAddress?: string | null; userAgent?: string | null },
-	) => {
-		// Implement actual upload logic here
-		// This is a placeholder that would need full implementation
-		return {
-			doId: "DO-TEMP",
-			doNumber: "DO.2026.02.24.001",
-			productsCreated: 0,
-			purchaseCreated: false,
-		};
-	},
-};
+	return {
+		doNumber: parsed.doNumber,
+		productsCreated: productsToCreate.length,
+	};
+}
