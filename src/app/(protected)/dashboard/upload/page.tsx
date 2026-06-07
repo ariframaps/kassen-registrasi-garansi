@@ -5,7 +5,6 @@
 
 import { useState, useCallback, useRef } from "react";
 import { uploadApi } from "@/lib/api/api-client";
-import { parseExcelFile } from "@/lib/parser-accurate";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -620,35 +619,30 @@ export default function UploadPage() {
 		);
 
 		try {
-			// Parse file locally
-			const parsedData = await parseExcelFile(queueFile.file);
+			const result = await uploadApi.validateAccurateFile(queueFile.file);
 
-			// Validate with backend API
-			const response = await uploadApi.validateAccurateFile(parsedData);
-			if (!response.success) {
-				throw new Error(response.message || "Gagal memvalidasi file");
+			if (!result.success) {
+				throw new Error(result.message || "Validasi gagal");
 			}
 
-			const { preview, validCount, dupCount, unknownCount } = response.data;
+			const data = result.data!;
 
-			// Update state with preview data from API
 			setQueue((prev) =>
 				prev.map((q) =>
 					q.id === id
 						? {
 								...q,
 								state: "previewing",
-								preview,
-								validCount,
-								dupCount,
-								unknownCount,
+								preview: data.preview,
+								validCount: data.validCount,
+								dupCount: data.dupCount,
+								unknownCount: data.unknownCount,
 							}
 						: q,
 				),
 			);
 		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : "Gagal memproses file";
+			const message = err instanceof Error ? err.message : "Gagal memvalidasi file";
 			setQueue((prev) =>
 				prev.map((q) =>
 					q.id === id
@@ -656,7 +650,7 @@ export default function UploadPage() {
 						: q,
 				),
 			);
-			toastError("Proses file gagal", message);
+			toastError("Validasi gagal", message);
 			advanceQueue(id);
 		}
 	};

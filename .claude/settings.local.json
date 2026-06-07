@@ -25,7 +25,9 @@
       "Bash(npm list *)",
       "Bash(cat)",
       "Bash(node /tmp/test-parser.mjs)",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Skill(update-config)",
+      "Bash(taskkill /F /IM node.exe)"
     ]
   }
 }

@@ -358,6 +358,21 @@ export const userApi = {
 };
 
 export const uploadApi = {
+	validateAccurateFile: async (file: File) => {
+		const formData = new FormData();
+		formData.append("file", file);
+
+		return apiFetch<{
+			preview: any[];
+			validCount: number;
+			dupCount: number;
+			unknownCount: number;
+		}>("/upload/validate", {
+			method: "POST",
+			body: formData,
+		});
+	},
+
 	uploadAccurateFile: async (
 		file: File,
 		destType: "dealer" | "customer",

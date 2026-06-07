@@ -1,3 +1,4 @@
+import { NextRequest, NextResponse } from "next/server";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { errorResponse, successResponse } from "@/lib/api/api-response";
 import {
@@ -9,31 +10,8 @@ import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { validateAccurateFile } from "@/services/accurate.service";
-import { ParsedDeliveryOrder } from "@/lib/parser-accurate";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
-const validateRequestSchema = z.object({
-	doNumber: z.string(),
-	date: z.string(),
-	sentBy: z.string(),
-	orderRef: z.string(),
-	area: z.string(),
-	shipTo: z.string(),
-	items: z.array(
-		z.object({
-			itemCode: z.string(),
-			itemDescription: z.string(),
-			qty: z.number(),
-			unit: z.string(),
-			serialNumbers: z.array(z.string()),
-		}),
-	),
-	totalQty: z.number(),
-	totalItem: z.number(),
-});
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
@@ -41,30 +19,23 @@ export async function POST(request: NextRequest) {
 			currentRole: session.user.role,
 		});
 
-		// Parse JSON body
-		const body = await request.json();
+		const formData = await req.formData();
+		const file = formData.get("file") as File | null;
 
-		// Validate parsed delivery order structure
-		const parsedData = validateRequestSchema.parse(body) as ParsedDeliveryOrder;
+		if (!file) {
+			throw new Error("File diperlukan");
+		}
 
-		// Validate file data and return preview rows
-		const previewRows = await validateAccurateFile(parsedData);
-
-		// Count statuses
-		const validCount = previewRows.filter((r) => r.status === "valid").length;
-		const dupCount = previewRows.filter((r) => r.status === "duplicate").length;
-		const unknownCount = previewRows.filter(
-			(r) => r.status === "unknown_type",
-		).length;
+		const result = await validateAccurateFile(file);
 
 		return NextResponse.json(
 			successResponse({
-				message: "Preview validasi file berhasil diproses",
+				message: "Validasi berhasil",
 				data: {
-					preview: previewRows,
-					validCount,
-					dupCount,
-					unknownCount,
+					preview: result.preview,
+					validCount: result.validCount,
+					dupCount: result.dupCount,
+					unknownCount: result.unknownCount,
 				},
 			}),
 			{ status: HTTP_STATUS.OK.code },
@@ -72,10 +43,7 @@ export async function POST(request: NextRequest) {
 	} catch (error) {
 		if (error instanceof HttpError) {
 			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
+				errorResponse({ message: error.message, issues: [] }),
 				{ status: error.statusCode },
 			);
 		}
