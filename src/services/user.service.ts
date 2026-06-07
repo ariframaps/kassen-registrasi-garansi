@@ -7,15 +7,13 @@ import {
 	dealers,
 	dealerSchema,
 	auditLog,
-	verification,
 } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
-import { sendEmail } from "@/lib/email";
 import { auth } from "@/lib/auth";
-import { authConfig } from "@/configs/auth.config";
 import { eq } from "drizzle-orm";
 import z from "zod";
 import crypto from "crypto";
+import { headers } from "next/headers";
 
 const userFormFields = {
 	name: z.string().min(1, "Nama wajib diisi"),
@@ -66,11 +64,6 @@ interface AuditContext {
 	userAgent?: string | null;
 }
 
-function generateVerificationLink(token: string): string {
-	const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-	return `${baseUrl}/api/auth/verify?token=${token}`;
-}
-
 function getRoleLabel(role: string): string {
 	const labels: Record<string, string> = {
 		admin: "Admin",
@@ -96,21 +89,11 @@ export const userService = {
 			where: eq(user.email, data.email),
 		});
 		if (existingUser)
-			throw new HttpError(
-				"Email sudah terdaftar",
-				HTTP_STATUS.CONFLICT.code,
-			);
+			throw new HttpError("Email sudah terdaftar", HTTP_STATUS.CONFLICT.code);
 
 		const newUserId = crypto.randomUUID();
-		const magicLinkToken = crypto
-			.randomBytes(32)
-			.toString("base64url");
-		const hashedToken = crypto
-			.createHash("sha256")
-			.update(magicLinkToken)
-			.digest("hex");
-		const expiresAt = new Date(Date.now() + authConfig.MAGIC_LINK_EXPIRES * 1000);
 
+		// Insert user dan dealer (jika perlu) dalam satu transaction
 		await db.transaction(async (tx) => {
 			await tx.insert(user).values({
 				id: newUserId,
@@ -119,14 +102,6 @@ export const userService = {
 				emailVerified: false,
 				role: data.role,
 				status: "active",
-			});
-
-			// Store magic link token untuk Better Auth verification
-			await tx.insert(verification).values({
-				id: crypto.randomUUID(),
-				identifier: data.email,
-				value: hashedToken,
-				expiresAt,
 			});
 
 			if (data.role === "dealer") {
@@ -171,31 +146,24 @@ export const userService = {
 		});
 
 		if (!result)
-			throw new HttpError(
-				"Gagal membuat user",
-				HTTP_STATUS.BAD_GATEWAY.code,
-			);
+			throw new HttpError("Gagal membuat user", HTTP_STATUS.BAD_GATEWAY.code);
 
 		const parsed = userSchema.parse(result);
 
+		// Trigger magic link via Better Auth API Server
 		try {
-			const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-			const magicLinkUrl = `${baseUrl}/api/auth/magic-link/verify?token=${magicLinkToken}`;
-
-			void sendEmail({
-				to: data.email,
-				subject: "Akun User Baru - Verifikasi Email Anda",
-				templateFileName: "user-invitation",
-				templateVariables: {
-					name: data.name,
+			await auth.api.signInMagicLink({
+				body: {
 					email: data.email,
-					role: getRoleLabel(data.role),
-					verificationLink: magicLinkUrl,
-					expiresIn: String(authConfig.MAGIC_LINK_EXPIRES / 60),
+					callbackURL: "/",
 				},
+				headers: await headers(),
 			});
-		} catch (emailError) {
-			console.warn("⚠️ Email gagal dikirim, tapi user sudah dibuat:", emailError);
+		} catch (magicLinkError) {
+			console.warn(
+				"⚠️ Magic link gagal dikirim, tapi user sudah dibuat:",
+				magicLinkError,
+			);
 		}
 
 		return parsed;
@@ -211,6 +179,12 @@ export const userService = {
 		});
 		if (!existing)
 			throw new HttpError("User tidak ditemukan", HTTP_STATUS.NOT_FOUND.code);
+
+		if (existing.deletedAt)
+			throw new HttpError(
+				"User ini sudah dihapus dan tidak bisa diubah statusnya",
+				HTTP_STATUS.BAD_REQUEST.code,
+			);
 
 		const result = await db
 			.update(user)
@@ -264,10 +238,7 @@ export const userService = {
 		return parsed;
 	},
 
-	delete: async (
-		id: string,
-		audit: AuditContext,
-	): Promise<UserSchema> => {
+	delete: async (id: string, audit: AuditContext): Promise<UserSchema> => {
 		const existing = await db.query.user.findFirst({
 			where: eq(user.id, id),
 		});
@@ -285,10 +256,7 @@ export const userService = {
 			.returning();
 
 		if (!result[0])
-			throw new HttpError(
-				"Gagal menghapus user",
-				HTTP_STATUS.BAD_GATEWAY.code,
-			);
+			throw new HttpError("Gagal menghapus user", HTTP_STATUS.BAD_GATEWAY.code);
 
 		if (existing.role === "dealer") {
 			const dealerRecord = await db.query.dealers.findFirst({
@@ -333,6 +301,12 @@ export const userService = {
 		});
 		if (!existing)
 			throw new HttpError("User tidak ditemukan", HTTP_STATUS.NOT_FOUND.code);
+
+		if (existing.deletedAt)
+			throw new HttpError(
+				"User ini sudah dihapus dan tidak bisa diubah statusnya",
+				HTTP_STATUS.BAD_REQUEST.code,
+			);
 
 		const newStatus = existing.status === "active" ? "inactive" : "active";
 
@@ -392,40 +366,13 @@ export const userService = {
 			throw new HttpError("User tidak ditemukan", HTTP_STATUS.NOT_FOUND.code);
 
 		try {
-			// Delete old verification tokens for this user
-			await db.delete(verification).where(eq(verification.identifier, existing.email));
-
-			const magicLinkToken = crypto
-				.randomBytes(32)
-				.toString("base64url");
-			const hashedToken = crypto
-				.createHash("sha256")
-				.update(magicLinkToken)
-				.digest("hex");
-			const expiresAt = new Date(Date.now() + authConfig.MAGIC_LINK_EXPIRES * 1000);
-
-			// Store new verification token
-			await db.insert(verification).values({
-				id: crypto.randomUUID(),
-				identifier: existing.email,
-				value: hashedToken,
-				expiresAt,
-			});
-
-			const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-			const magicLinkUrl = `${baseUrl}/api/auth/magic-link/verify?token=${magicLinkToken}`;
-
-			void sendEmail({
-				to: existing.email,
-				subject: "Tautan Verifikasi Email - Akun Kassen Warranty",
-				templateFileName: "user-invitation",
-				templateVariables: {
-					name: existing.name,
+			// Trigger magic link via Better Auth API Server
+			await auth.api.signInMagicLink({
+				body: {
 					email: existing.email,
-					role: getRoleLabel(existing.role),
-					verificationLink: magicLinkUrl,
-					expiresIn: String(authConfig.MAGIC_LINK_EXPIRES / 60),
+					callbackURL: "/",
 				},
+				headers: await headers(),
 			});
 
 			await db.insert(auditLog).values({
@@ -462,10 +409,7 @@ export const userService = {
 			where: eq(user.email, data.newEmail),
 		});
 		if (existingEmail)
-			throw new HttpError(
-				"Email sudah terdaftar",
-				HTTP_STATUS.CONFLICT.code,
-			);
+			throw new HttpError("Email sudah terdaftar", HTTP_STATUS.CONFLICT.code);
 
 		const result = await db
 			.update(user)
@@ -479,10 +423,7 @@ export const userService = {
 			.returning();
 
 		if (!result[0])
-			throw new HttpError(
-				"Gagal mengubah email",
-				HTTP_STATUS.BAD_GATEWAY.code,
-			);
+			throw new HttpError("Gagal mengubah email", HTTP_STATUS.BAD_GATEWAY.code);
 
 		if (existing.role === "dealer") {
 			const dealerRecord = await db.query.dealers.findFirst({
@@ -516,46 +457,16 @@ export const userService = {
 		});
 
 		try {
-			// Delete old verification tokens for old email
-			await db.delete(verification).where(eq(verification.identifier, existing.email));
-
-			// Delete new verification tokens if any exist for new email
-			await db.delete(verification).where(eq(verification.identifier, data.newEmail));
-
-			const magicLinkToken = crypto
-				.randomBytes(32)
-				.toString("base64url");
-			const hashedToken = crypto
-				.createHash("sha256")
-				.update(magicLinkToken)
-				.digest("hex");
-			const expiresAt = new Date(Date.now() + authConfig.MAGIC_LINK_EXPIRES * 1000);
-
-			// Store verification token for new email
-			await db.insert(verification).values({
-				id: crypto.randomUUID(),
-				identifier: data.newEmail,
-				value: hashedToken,
-				expiresAt,
-			});
-
-			const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-			const magicLinkUrl = `${baseUrl}/api/auth/magic-link/verify?token=${magicLinkToken}`;
-
-			void sendEmail({
-				to: data.newEmail,
-				subject: "Verifikasi Email Baru - Akun Kassen Warranty",
-				templateFileName: "user-invitation",
-				templateVariables: {
-					name: existing.name,
+			// Trigger magic link via Better Auth API Server untuk email baru
+			await auth.api.signInMagicLink({
+				body: {
 					email: data.newEmail,
-					role: getRoleLabel(existing.role),
-					verificationLink: magicLinkUrl,
-					expiresIn: String(authConfig.MAGIC_LINK_EXPIRES / 60),
+					callbackURL: "/",
 				},
+				headers: await headers(),
 			});
-		} catch (emailError) {
-			console.warn("⚠️ Email gagal dikirim:", emailError);
+		} catch (magicLinkError) {
+			console.warn("⚠️ Magic link gagal dikirim:", magicLinkError);
 		}
 
 		const parsed = userSchema.parse(result[0]);

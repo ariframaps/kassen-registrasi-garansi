@@ -13,7 +13,15 @@
       "Bash(curl *)",
       "Bash(npx drizzle-kit *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(Select-Object Name)",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs kill -9)",
+      "Bash(npm ls *)",
+      "Bash(node -e \"import crypto from 'crypto'; console.log\\('✅ Crypto module available:', typeof crypto.randomBytes\\)\")",
+      "Bash(npm install *)",
+      "Bash(timeout 45 tail -f C:\\\\Users\\\\Rama\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Programming-Web-Programming-Project-kassen-registrasi-garansi\\\\fe5bdae0-0677-4861-aa2a-91a253c3c7b5\\\\tasks\\\\b2q97ukxf.output)",
+      "Bash(node -c src/services/accurate.service.ts)"
     ]
   }
 }

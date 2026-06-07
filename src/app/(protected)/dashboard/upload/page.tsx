@@ -1,9 +1,10 @@
 "use client";
 // app/dashboard/upload/page.tsx
 // Updated: multi-file queue, antrian per file, hash duplicate detection, fuzzy dealer match,
-// direct customer flow, item_code unknown warning
+// direct customer flow, item_code unknown warning, backend integration
 
 import { useState, useCallback, useRef } from "react";
+import { uploadApi } from "@/lib/api/api-client";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -685,14 +686,37 @@ export default function UploadPage() {
 	};
 
 	const submitFile = async (id: string) => {
+		const queueFile = queue.find((q) => q.id === id);
+		if (!queueFile) return;
+
 		setQueue((prev) =>
 			prev.map((q) => (q.id === id ? { ...q, state: "submitting" } : q)),
 		);
-		await new Promise((r) => setTimeout(r, 1200));
-		setQueue((prev) =>
-			prev.map((q) => (q.id === id ? { ...q, state: "done" } : q)),
-		);
-		advanceQueue(id);
+
+		try {
+			await uploadApi.uploadAccurateFile(
+				queueFile.file,
+				queueFile.destType as "dealer" | "customer",
+				queueFile.destLabel || "",
+			);
+
+			setQueue((prev) =>
+				prev.map((q) => (q.id === id ? { ...q, state: "done" } : q)),
+			);
+			advanceQueue(id);
+			success("File berhasil diupload", `${queueFile.validCount} produk ditambahkan`);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Gagal mengupload file";
+			setQueue((prev) =>
+				prev.map((q) =>
+					q.id === id
+						? { ...q, state: "error", errorMessage: message }
+						: q,
+				),
+			);
+			toastError("Upload gagal", message);
+			advanceQueue(id);
+		}
 	};
 
 	const advanceQueue = (doneId: string) => {

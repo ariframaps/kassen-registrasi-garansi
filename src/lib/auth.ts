@@ -85,14 +85,14 @@ export const auth = betterAuth({
 				}
 				const findUser = userSchema.parse(result[0]);
 
-				console.log("🔍 DB User Lookup Result:", user);
+				console.log("🔍 DB User Lookup Result:", findUser);
 
 				if (
 					findUser.status === "inactive" ||
 					findUser.status === "deleted" ||
-					!user.emailVerified
+					!findUser.emailVerified
 				) {
-					console.error(`❌ Auth Error: User status is ${user.status}`);
+					console.error(`❌ Auth Error: User status is ${findUser.status}`);
 					throw new APIError("UNAUTHORIZED", {
 						message: "Invalid request",
 					});
@@ -136,14 +136,42 @@ export const auth = betterAuth({
 
 		magicLink({
 			sendMagicLink: async ({ email, token, url, metadata }, ctx) => {
-				// send email to user
+				// Coba query user details untuk context yang lebih rich
+				try {
+					const result = await db
+						.select()
+						.from(user)
+						.where(eq(user.email, email))
+						.limit(1);
+
+					if (result[0]) {
+						const userData = userSchema.parse(result[0]);
+						void sendEmail({
+							to: email,
+							subject: "Verifikasi Email - Akun Anda di Kassen Warranty",
+							templateFileName: "user-invitation",
+							templateVariables: {
+								name: userData.name,
+								email: userData.email,
+								role: userData.role,
+								verificationLink: url,
+								expiresIn: String(authConfig.MAGIC_LINK_EXPIRES / 60),
+							},
+						});
+						return;
+					}
+				} catch (err) {
+					console.warn("⚠️ Failed to query user details in sendMagicLink callback:", err);
+				}
+
+				// Fallback ke template generic
 				void sendEmail({
 					to: email,
-					subject: "Verify You Email Address",
+					subject: "Verifikasi Email Anda",
 					templateFileName: "email-verification",
 					templateVariables: {
 						url,
-						expiresIn: authConfig.MAGIC_LINK_EXPIRES / 60,
+						expiresIn: String(authConfig.MAGIC_LINK_EXPIRES / 60),
 					},
 				});
 			},

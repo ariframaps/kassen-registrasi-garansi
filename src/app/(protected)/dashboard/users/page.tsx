@@ -36,6 +36,7 @@ import {
 	Package,
 	Users,
 	Wrench,
+	Mail,
 } from "lucide-react";
 import type { User, UserRole } from "@/types";
 import { userApi } from "@/lib/api/api-client";
@@ -90,27 +91,34 @@ function UserFormModal({
 	open,
 	onClose,
 	editUser,
+	onSave,
 }: {
 	open: boolean;
 	onClose: () => void;
 	editUser?: UserSchema | null;
+	onSave: (data: any) => Promise<void>;
 }) {
-	// const [usersPage, setUsersPage] = useState(1);
-	// const [usersPageSize, setUsersPageSize] = useState(20);
 	const [form, setForm] = useState({
 		name: editUser?.name ?? "",
 		email: editUser?.email ?? "",
 		role: (editUser?.role ?? "sales") as UserRole,
+		dealerName: "",
+		dealerPhone: "",
+		dealerAddress: "",
+		status: (editUser?.status ?? "active") as "active" | "inactive",
 	});
 	const [loading, setLoading] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
-	const { success } = useToast();
+	const { success, error: errorToast } = useToast();
 
 	const validate = () => {
 		const e: Record<string, string> = {};
 		if (!form.name.trim()) e.name = "Wajib diisi";
 		if (!form.email.trim()) e.email = "Wajib diisi";
 		if (!form.email.includes("@")) e.email = "Format email tidak valid";
+		if (!editUser && form.role === "dealer" && !form.dealerName.trim()) {
+			e.dealerName = "Nama perusahaan wajib diisi untuk dealer";
+		}
 		setErrors(e);
 		return Object.keys(e).length === 0;
 	};
@@ -118,13 +126,29 @@ function UserFormModal({
 	const handleSave = async () => {
 		if (!validate()) return;
 		setLoading(true);
-		await new Promise((r) => setTimeout(r, 700));
-		setLoading(false);
-		onClose();
-		success(
-			editUser ? "User berhasil diperbarui" : "User baru berhasil ditambahkan",
-			form.email,
-		);
+		try {
+			const payload = {
+				name: form.name,
+				email: form.email,
+				role: form.role,
+				...(editUser && { status: form.status }),
+				...(form.role === "dealer" && {
+					dealerName: form.dealerName || null,
+					dealerPhone: form.dealerPhone || null,
+					dealerAddress: form.dealerAddress || null,
+				}),
+			};
+			await onSave(payload);
+			success(
+				editUser ? "User berhasil diperbarui" : "User baru berhasil ditambahkan",
+				form.email,
+			);
+			onClose();
+		} catch (err: any) {
+			errorToast(err.message || "Gagal menyimpan user");
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	return (
@@ -167,6 +191,58 @@ function UserFormModal({
 						setForm({ ...form, role: e.target.value as UserRole })
 					}
 				/>
+
+				{/* Dealer fields */}
+				{form.role === "dealer" && (
+					<>
+						<Input
+							label="Nama Perusahaan"
+							placeholder="PT/CV Nama Dealer"
+							value={form.dealerName}
+							onChange={(e) =>
+								setForm({ ...form, dealerName: e.target.value })
+							}
+							error={errors.dealerName}
+							required={!editUser}
+						/>
+						<Input
+							label="Nomor Telepon"
+							placeholder="+62-xxx-xxxx-xxxx"
+							value={form.dealerPhone}
+							onChange={(e) =>
+								setForm({ ...form, dealerPhone: e.target.value })
+							}
+						/>
+						<Input
+							label="Alamat"
+							placeholder="Alamat lengkap dealer"
+							value={form.dealerAddress}
+							onChange={(e) =>
+								setForm({ ...form, dealerAddress: e.target.value })
+							}
+						/>
+					</>
+				)}
+
+				{/* Edit: Status field */}
+				{editUser && (
+					<Select
+						label="Status"
+						required
+						options={[
+							{ value: "active", label: "Aktif" },
+							{ value: "inactive", label: "Nonaktif" },
+						]}
+						value={form.status}
+						onChange={(e) =>
+							setForm({
+								...form,
+								status: e.target.value as "active" | "inactive",
+							})
+						}
+					/>
+				)}
+
 				{/* Scope description */}
 				<div className="px-3 py-2.5 rounded-lg bg-zinc-50 border border-zinc-100 text-[11px] text-zinc-500 leading-relaxed">
 					<span className="font-semibold text-zinc-700">
@@ -174,18 +250,97 @@ function UserFormModal({
 					</span>
 					{ROLE_SCOPE[form.role]}
 				</div>
-				{/* {!editUser && (
-					<div className="px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">
-						Password sementara akan di-generate otomatis dan ditampilkan setelah
-						user dibuat.
-					</div>
-				)} */}
+
 				<div className="flex gap-2 pt-1">
 					<Button variant="outline" fullWidth onClick={onClose}>
 						Batal
 					</Button>
 					<Button fullWidth loading={loading} onClick={handleSave}>
 						{editUser ? "Simpan Perubahan" : "Tambah User"}
+					</Button>
+				</div>
+			</div>
+		</Modal>
+	);
+}
+
+// ── Change Email Modal ──
+function ChangeEmailModal({
+	open,
+	user,
+	onClose,
+	onConfirm,
+	loading,
+}: {
+	open: boolean;
+	user: UserSchema | null;
+	onClose: () => void;
+	onConfirm: (newEmail: string) => Promise<void>;
+	loading: boolean;
+}) {
+	const [newEmail, setNewEmail] = useState("");
+	const [error, setError] = useState("");
+
+	const validate = () => {
+		if (!newEmail.trim()) {
+			setError("Email wajib diisi");
+			return false;
+		}
+		if (!newEmail.includes("@")) {
+			setError("Format email tidak valid");
+			return false;
+		}
+		setError("");
+		return true;
+	};
+
+	const handleSubmit = async () => {
+		if (!validate()) return;
+		try {
+			await onConfirm(newEmail);
+			setNewEmail("");
+			setError("");
+		} catch (err: any) {
+			setError(err.message || "Gagal mengubah email");
+		}
+	};
+
+	const handleClose = () => {
+		setNewEmail("");
+		setError("");
+		onClose();
+	};
+
+	return (
+		<Modal
+			open={open}
+			onClose={handleClose}
+			title="Ubah Email User"
+			description={`Email lama: ${user?.email}`}
+			size="sm">
+			<div className="space-y-3">
+				<Input
+					label="Email Baru"
+					type="email"
+					placeholder="email_baru@kassengaransi.id"
+					value={newEmail}
+					onChange={(e) => setNewEmail(e.target.value)}
+					error={error}
+					required
+				/>
+				<div className="px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">
+					⚠️ Setelah email diubah, user harus verifikasi email baru sebelum bisa
+					login lagi.
+				</div>
+				<div className="flex gap-2 pt-1">
+					<Button variant="outline" fullWidth onClick={handleClose}>
+						Batal
+					</Button>
+					<Button
+						fullWidth
+						loading={loading}
+						onClick={handleSubmit}>
+						Ubah Email
 					</Button>
 				</div>
 			</div>
@@ -347,10 +502,14 @@ export default function UsersPage() {
 	const [statusFilter, setStatus] = useState("all");
 	const [addOpen, setAddOpen] = useState(false);
 	const [editTarget, setEditTarget] = useState<UserSchema | null>(null);
-	// const [pwTarget, setPwTarget] = useState<UserSchema | null>(null);
 	const [toggleTarget, setToggle] = useState<UserSchema | null>(null);
 	const [deleteTarget, setDelete] = useState<UserSchema | null>(null);
-	const { success } = useToast();
+	const [pageLoading, setPageLoading] = useState(true);
+	const [changeEmailTarget, setChangeEmailTarget] = useState<UserSchema | null>(
+		null,
+	);
+	const [changeEmailLoading, setChangeEmailLoading] = useState(false);
+	const { success, error: errorToast } = useToast();
 
 	const filtered = useMemo(() => {
 		const q = search.toLowerCase();
@@ -363,29 +522,110 @@ export default function UsersPage() {
 		});
 	}, [users, search, roleFilter, statusFilter]);
 
-	const handleToggleStatus = () => {
-		if (!toggleTarget) return;
-		setUsers((prev) =>
-			prev.map((u) =>
-				u.id === toggleTarget.id
-					? { ...u, status: u.status === "active" ? "inactive" : "active" }
-					: u,
-			),
-		);
-		success(
-			toggleTarget.status === "active"
-				? "User dinonaktifkan"
-				: "User diaktifkan",
-			toggleTarget.email,
-		);
-		setToggle(null);
+	const handleAddUser = async (data: any) => {
+		try {
+			const res = await userApi.add(data);
+			if (res.success) {
+				setUsers((prev) => [...prev, res.data]);
+			} else {
+				throw new Error(res.message || "Gagal menambah user");
+			}
+		} catch (err: any) {
+			errorToast(err.message || "Gagal menambah user");
+			throw err;
+		}
 	};
 
-	const handleDelete = () => {
+	const handleEditUser = async (data: any) => {
+		if (!editTarget) return;
+		try {
+			const res = await userApi.update(editTarget.id, data);
+			if (res.success) {
+				setUsers((prev) =>
+					prev.map((u) => (u.id === editTarget.id ? res.data : u)),
+				);
+			} else {
+				throw new Error(res.message || "Gagal mengubah user");
+			}
+		} catch (err: any) {
+			errorToast(err.message || "Gagal mengubah user");
+			throw err;
+		}
+	};
+
+	const handleToggleStatus = async () => {
+		if (!toggleTarget) return;
+		try {
+			const res = await userApi.toggleStatus(toggleTarget.id);
+			if (res.success) {
+				setUsers((prev) =>
+					prev.map((u) => (u.id === toggleTarget.id ? res.data : u)),
+				);
+				success(
+					res.data.status === "active"
+						? "User diaktifkan"
+						: "User dinonaktifkan",
+					toggleTarget.email,
+				);
+			} else {
+				throw new Error(res.message || "Gagal mengubah status");
+			}
+		} catch (err: any) {
+			errorToast(err.message || "Gagal mengubah status");
+		} finally {
+			setToggle(null);
+		}
+	};
+
+	const handleDelete = async () => {
 		if (!deleteTarget) return;
-		setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
-		success("User dihapus", deleteTarget.email);
-		setDelete(null);
+		try {
+			const res = await userApi.delete(deleteTarget.id);
+			if (res.success) {
+				setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+				success("User dihapus", deleteTarget.email);
+			} else {
+				throw new Error(res.message || "Gagal menghapus user");
+			}
+		} catch (err: any) {
+			errorToast(err.message || "Gagal menghapus user");
+		} finally {
+			setDelete(null);
+		}
+	};
+
+	const handleResendVerification = async (userId: string, email: string) => {
+		try {
+			const res = await userApi.resendVerification(userId);
+			if (res.success) {
+				success("Email verifikasi berhasil dikirim ulang", email);
+			} else {
+				throw new Error(res.message || "Gagal mengirim email");
+			}
+		} catch (err: any) {
+			errorToast(err.message || "Gagal mengirim email");
+		}
+	};
+
+	const handleChangeEmail = async (newEmail: string) => {
+		if (!changeEmailTarget || !newEmail.trim()) return;
+		setChangeEmailLoading(true);
+		try {
+			const res = await userApi.changeEmail(changeEmailTarget.id, newEmail);
+			if (res.success) {
+				setUsers((prev) =>
+					prev.map((u) => (u.id === changeEmailTarget.id ? res.data : u)),
+				);
+				success("Email berhasil diubah", newEmail);
+				setChangeEmailTarget(null);
+			} else {
+				throw new Error(res.message || "Gagal mengubah email");
+			}
+		} catch (err: any) {
+			errorToast(err.message || "Gagal mengubah email");
+		} finally {
+			setChangeEmailLoading(false);
+		}
 	};
 
 	// Summary counts
@@ -396,8 +636,9 @@ export default function UsersPage() {
 	};
 
 	useEffect(() => {
-		Promise.all([userApi.getAll()]).then(([w]) => {
-			if (w.success) setUsers(w.data);
+		userApi.getAll().then((res) => {
+			if (res.success) setUsers(res.data);
+			setPageLoading(false);
 		});
 	}, []);
 
@@ -549,13 +790,22 @@ export default function UsersPage() {
 														title="Edit user">
 														<Pencil size={12} />
 													</button>
-													{/* Password */}
-													{/* <button
-														onClick={() => setPwTarget(u)}
-														className="p-1.5 rounded-md hover:bg-amber-50 text-zinc-400 hover:text-amber-600 transition-colors"
-														title="Ubah password">
-														<KeyRound size={12} />
-													</button> */}
+													{/* Resend Verification */}
+													{!u.emailVerified && (
+														<button
+															onClick={() => handleResendVerification(u.id, u.email)}
+															className="p-1.5 rounded-md hover:bg-blue-50 text-zinc-400 hover:text-blue-600 transition-colors"
+															title="Kirim ulang email verifikasi">
+															<RefreshCw size={12} />
+														</button>
+													)}
+													{/* Change Email */}
+													<button
+														onClick={() => setChangeEmailTarget(u)}
+														className="p-1.5 rounded-md hover:bg-purple-50 text-zinc-400 hover:text-purple-600 transition-colors"
+														title="Ubah email">
+														<Mail size={12} />
+													</button>
 													{/* Activate / Deactivate */}
 													<button
 														onClick={() => setToggle(u)}
@@ -599,17 +849,28 @@ export default function UsersPage() {
 			</div>
 
 			{/* Modals */}
-			<UserFormModal open={addOpen} onClose={() => setAddOpen(false)} />
+			<UserFormModal
+				open={addOpen}
+				onClose={() => setAddOpen(false)}
+				editUser={null}
+				onSave={handleAddUser}
+			/>
 			<UserFormModal
 				open={!!editTarget}
 				onClose={() => setEditTarget(null)}
 				editUser={editTarget}
+				onSave={handleEditUser}
 			/>
-			{/* <PasswordModal
-				open={!!pwTarget}
-				user={pwTarget}
-				onClose={() => setPwTarget(null)}
-			/> */}
+
+			<ChangeEmailModal
+				open={!!changeEmailTarget}
+				user={changeEmailTarget}
+				onClose={() => {
+					setChangeEmailTarget(null);
+				}}
+				onConfirm={handleChangeEmail}
+				loading={changeEmailLoading}
+			/>
 
 			<ConfirmModal
 				open={!!toggleTarget}

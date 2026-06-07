@@ -25,11 +25,16 @@ async function apiFetch<T>(
 	input: RequestInfo,
 	init?: RequestInit,
 ): Promise<ApiResponse<T>> {
+	const isFormData = init?.body instanceof FormData;
+	const headers = isFormData
+		? { ...(init?.headers || {}) } // Don't set Content-Type for FormData
+		: {
+				"Content-Type": "application/json",
+				...(init?.headers || {}),
+			};
+
 	const response = await fetch("/api/v1" + input, {
-		headers: {
-			"Content-Type": "application/json",
-			...(init?.headers || {}),
-		},
+		headers,
 		...init,
 	});
 	const data = await response.json();
@@ -291,5 +296,77 @@ export const waitingListApi = {
 export const userApi = {
 	getAll: async () => {
 		return apiFetch<UserSchema[]>("/users", { method: "GET" });
+	},
+
+	add: async (data: {
+		name: string;
+		email: string;
+		role: "admin" | "sales" | "dealer" | "technical_support";
+		dealerName?: string | null;
+		dealerPhone?: string | null;
+		dealerAddress?: string | null;
+	}) => {
+		return apiFetch<UserSchema>("/users", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	update: async (
+		id: string,
+		data: {
+			name: string;
+			role: "admin" | "sales" | "dealer" | "technical_support";
+			status: "active" | "inactive";
+		},
+	) => {
+		return apiFetch<UserSchema>(`/users/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		});
+	},
+
+	delete: async (id: string) => {
+		return apiFetch<UserSchema>(`/users/${id}`, { method: "DELETE" });
+	},
+
+	toggleStatus: async (id: string) => {
+		return apiFetch<UserSchema>(`/users/${id}`, { method: "PATCH" });
+	},
+
+	resendVerification: async (id: string) => {
+		return apiFetch<{ message: string }>(`/users/${id}/resend-verification`, {
+			method: "POST",
+		});
+	},
+
+	changeEmail: async (id: string, newEmail: string) => {
+		return apiFetch<UserSchema>(`/users/${id}/change-email`, {
+			method: "PUT",
+			body: JSON.stringify({ newEmail }),
+		});
+	},
+};
+
+export const uploadApi = {
+	uploadAccurateFile: async (
+		file: File,
+		destType: "dealer" | "customer",
+		destLabel: string,
+	) => {
+		const formData = new FormData();
+		formData.append("file", file);
+		formData.append("destType", destType);
+		formData.append("destLabel", destLabel);
+
+		return apiFetch<{
+			doId: string;
+			doNumber: string;
+			productsCreated: number;
+			purchaseCreated: boolean;
+		}>("/upload", {
+			method: "POST",
+			body: formData,
+		});
 	},
 };

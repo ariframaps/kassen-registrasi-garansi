@@ -8,73 +8,38 @@ import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import { addUserSchema, userService } from "@/services/user.service";
+import { userService } from "@/services/user.service";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function POST(
+	request: Request,
+	{ params }: { params: Promise<{ id: string }> },
+) {
+	const { id } = await params;
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
 			allowedRole: ["admin"],
 			currentRole: session.user.role,
 		});
-
-		const data = await userService.getAll();
-
-		return NextResponse.json(
-			successResponse({
-				message: "Success",
-				data,
-			}),
-			{ status: HTTP_STATUS.OK.code },
-		);
-	} catch (error) {
-		if (error instanceof HttpError) {
-			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
-				{ status: error.statusCode },
-			);
-		}
-
-		const normalized = normalizeError(error);
-		return NextResponse.json(
-			errorResponse({
-				message: getSafeErrorMessage(normalized),
-				issues: normalized.issues,
-			}),
-			{ status: getHttpErrorStatus(normalized) },
-		);
-	}
-}
-
-export async function POST(request: Request) {
-	try {
-		const session = await authenticationMiddleware();
-		await authorizationMiddleware({
-			allowedRole: ["admin"],
-			currentRole: session.user.role,
-		});
-
-		const body = await request.json();
-		const parsedBody = addUserSchema.parse(body);
 
 		const ipAddress =
 			request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
 			request.headers.get("x-real-ip");
 		const userAgent = request.headers.get("user-agent");
 
-		const data = await userService.add(parsedBody, {
+		await userService.resendVerification(id, {
 			userId: session.user.id,
 			ipAddress,
 			userAgent,
 		});
 
 		return NextResponse.json(
-			successResponse({ message: "User berhasil ditambahkan", data }),
-			{ status: HTTP_STATUS.CREATED.code },
+			successResponse({
+				message: "Email verifikasi berhasil dikirim ulang",
+				data: null,
+			}),
+			{ status: HTTP_STATUS.OK.code },
 		);
 	} catch (error) {
 		if (error instanceof HttpError) {

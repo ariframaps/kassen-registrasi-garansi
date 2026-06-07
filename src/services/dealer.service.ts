@@ -4,6 +4,7 @@ import { auditLog, dealers, dealerSchema, DealerSchema, user } from "@/db/schema
 import { HttpError } from "@/lib/api/http-error";
 import { eq } from "drizzle-orm";
 import z from "zod";
+import crypto from "crypto";
 
 const dealerFormFields = {
 	name: z.string().min(1, "Nama wajib diisi"),
@@ -159,6 +160,22 @@ export const dealerService = {
 				HTTP_STATUS.NOT_FOUND.code,
 			);
 
+		const relatedUser = await db.query.user.findFirst({
+			where: eq(user.id, current.userId),
+		});
+
+		if (!relatedUser)
+			throw new HttpError(
+				"User terkait tidak ditemukan",
+				HTTP_STATUS.NOT_FOUND.code,
+			);
+
+		if (relatedUser.deletedAt)
+			throw new HttpError(
+				"Dealer tidak bisa diaktifkan karena User yang bersangkutan sudah tidak ada/dihapus",
+				HTTP_STATUS.BAD_REQUEST.code,
+			);
+
 		const newStatus = current.status === "active" ? "inactive" : "active";
 
 		const result = await db
@@ -172,6 +189,11 @@ export const dealerService = {
 				"Gagal mengubah status dealer",
 				HTTP_STATUS.BAD_GATEWAY.code,
 			);
+
+		await db
+			.update(user)
+			.set({ status: newStatus, updatedAt: new Date() })
+			.where(eq(user.id, current.userId));
 
 		const parsed = dealerSchema.parse(result[0]);
 
