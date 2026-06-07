@@ -54,8 +54,14 @@ export interface Customer {
 	email: string;
 	phone: string;
 	address: string;
-	created_at: string;
-	updated_at: string;
+	created_at?: string;
+	updated_at?: string;
+}
+
+export interface CustomerDetail extends Customer {
+	createdAt: string;
+	dealers: string[];
+	totalPurchases: number;
 }
 
 export interface Product {

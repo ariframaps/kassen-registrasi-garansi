@@ -19,6 +19,7 @@ import {
 	PurchaseWithNestedSchema,
 } from "@/services/purchase.service";
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
+import type { PurchaseGroup } from "@/types";
 
 async function apiFetch<T>(
 	input: RequestInfo,
@@ -185,16 +186,30 @@ export const purchaseApi = {
 		});
 	},
 
-	getAllPurchaseProductItems: async ({
-		purchaseId,
-	}: {
-		purchaseId: string;
-	}) => {
+	getAllPurchaseProductItems: async ({ purchaseId }: { purchaseId: string }) => {
 		return apiFetch<PurchaseItemsWithNestedSchema[]>(
 			`/purchases/${purchaseId}/items`,
-			{
-				method: "GET",
-			},
+			{ method: "GET" },
+		);
+	},
+
+	update: async (
+		id: string,
+		data: { purchaseDate: string; notes?: string | null },
+	) => {
+		return apiFetch<PurchaseWithNestedSchema>(`/purchases/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		});
+	},
+
+	updateItems: async (
+		purchaseId: string,
+		data: { addedProductIds: string[]; removedProductIds: string[] },
+	) => {
+		return apiFetch<PurchaseItemsWithNestedSchema[]>(
+			`/purchases/${purchaseId}/items`,
+			{ method: "PATCH", body: JSON.stringify(data) },
 		);
 	},
 };
@@ -203,11 +218,67 @@ export const dealerApi = {
 	getAll: async () => {
 		return apiFetch<DealerSchema[]>("/dealers", { method: "GET" });
 	},
+
+	add: async (data: {
+		name: string;
+		email: string;
+		phone?: string;
+		address?: string;
+	}) => {
+		return apiFetch<DealerSchema>("/dealers", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	update: async (
+		id: string,
+		data: { name: string; email: string; phone?: string | null; address?: string | null },
+	) => {
+		return apiFetch<DealerSchema>(`/dealers/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		});
+	},
+
+	toggleStatus: async (id: string) => {
+		return apiFetch<DealerSchema>(`/dealers/${id}`, { method: "PATCH" });
+	},
 };
 
 export const customerApi = {
 	getAll: async () => {
 		return apiFetch<CustomerSchema[]>("/customers", { method: "GET" });
+	},
+
+	getById: async (id: string) => {
+		return apiFetch<{
+			customer: any;
+			dealers: string[];
+			totalPurchases: number;
+			purchases: PurchaseGroup[];
+		}>(`/customers/${id}`, { method: "GET" });
+	},
+
+	getPurchaseHistory: async (id: string) => {
+		return apiFetch<PurchaseGroup[]>(`/customers/${id}/purchases`, {
+			method: "GET",
+		});
+	},
+
+	update: async (
+		id: string,
+		data: {
+			name: string;
+			email: string;
+			phone?: string | null;
+			address?: string | null;
+		},
+	) => {
+		return apiFetch<CustomerSchema>(`/customers/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		});
 	},
 };
 

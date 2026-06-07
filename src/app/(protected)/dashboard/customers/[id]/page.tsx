@@ -9,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import {
   Table, TableHead, TableHeader, TableBody, TableRow, TableCell, EmptyState,
 } from "@/components/ui/table";
-// import { customerAdapter } from "@/lib/adapters";
-// import type { Customer } from "@/lib/adapters";
-import type { PurchaseGroup } from "@/types";
+import { customerAdapter } from "@/lib/adapters/customer.adapter";
+import type { PurchaseGroup, CustomerDetail } from "@/types";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
 import { ArrowLeft, Mail, Phone, ShoppingBag, CalendarDays, Building2 } from "lucide-react";
 
@@ -25,7 +24,7 @@ function WarrantyBadge({ endDate }: { endDate: string }) {
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [purchases, setPurchases] = useState<PurchaseGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
