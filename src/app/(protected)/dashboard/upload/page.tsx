@@ -1,10 +1,9 @@
 "use client";
 // app/dashboard/upload/page.tsx
-// Updated: multi-file queue, antrian per file, hash duplicate detection, fuzzy dealer match,
-// direct customer flow, item_code unknown warning, backend integration
+// Multi-file queue with real API integration, Excel parsing, fuzzy dealer matching
 
-import { useState, useCallback, useRef } from "react";
-import { uploadApi } from "@/lib/api/api-client";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { uploadApi, dealerApi } from "@/lib/api/api-client";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,8 +32,11 @@ import {
 	AlertCircle,
 	Hash,
 	RefreshCcw,
+	Loader,
 } from "lucide-react";
 import { normalizeSerialNumber } from "@/lib/utils";
+import { parseExcelFileClient, ParsedDeliveryOrder } from "@/lib/client-accurate-parser";
+import { DealerSchema } from "@/db/schema";
 
 // ── Types ──
 
@@ -68,71 +70,49 @@ interface QueueFile {
 	destType: DestType;
 	destLabel?: string;
 	errorMessage?: string;
+	shipTo?: string;
+	parsedData?: ParsedDeliveryOrder;
 }
 
-// ── Mock data ──
-
-const MOCK_DEALERS = [
-	{ id: "d1", name: "PT Maju Teknologi", score: 95 },
-	{ id: "d2", name: "CV Berkah Elektronik", score: 60 },
-	{ id: "d3", name: "Toko Abadi Jaya", score: 20 },
-];
-
-const MOCK_PREVIEW: PreviewRow[] = [
-	{
-		serialNumber: "SNNEW001XY",
-		productType: "KDS 2215W",
-		productCategory: "POS System",
-		status: "valid",
-	},
-	{
-		serialNumber: "SNNEW002AB",
-		productType: "Queue Kiosk - Luna",
-		productCategory: "POS System",
-		status: "valid",
-	},
-	{
-		serialNumber: "SNAC1234XY",
-		productType: "KDS 2215W",
-		productCategory: "POS System",
-		status: "duplicate",
-		message: "SN sudah ada di sistem",
-	},
-	{
-		serialNumber: "SNNEW004CD",
-		productType: "MC 40",
-		productCategory: "Bill Counter",
-		status: "valid",
-	},
-	{
-		serialNumber: "SNNEW005EF",
-		itemCodeOriginal: "POS-3453MFH",
-		productType: "",
-		productCategory: "",
-		status: "unknown_type",
-		message: "Item code 'POS-3453MFH' belum ada mapping",
-	},
-];
-
-// Simulate SHA-256 hash (just a mock)
+// Generate file hash for duplicate detection
 async function hashFile(file: File): Promise<string> {
-	return `hash_${file.name}_${file.size}`;
+	const buffer = await file.arrayBuffer();
+	const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Simple string similarity score (Levenshtein-like)
+function calcSimilarity(s1: string, s2: string): number {
+	const str1 = s1.toLowerCase();
+	const str2 = s2.toLowerCase();
+	if (str1 === str2) return 100;
+	if (str1.includes(str2) || str2.includes(str1)) return 80;
+	const matches = str1.split(" ").filter((w) => str2.includes(w)).length;
+	return Math.min(100, (matches / Math.max(str1.split(" ").length, str2.split(" ").length)) * 100);
 }
 
 // ── Fuzzy Dealer Match Modal ──
 function FuzzyDealerModal({
 	open,
 	shipTo,
+	dealers,
 	onSelect,
 	onCreateNew,
 	onClose,
 }: {
 	open: boolean;
 	shipTo: string;
+	dealers: DealerSchema[];
 	onSelect: (id: string, name: string) => void;
 	onCreateNew: () => void;
 	onClose: () => void;
 }) {
+	const scored = dealers.map((d) => ({
+		...d,
+		score: calcSimilarity(shipTo, d.name),
+	})).sort((a, b) => b.score - a.score);
+
 	return (
 		<Modal
 			open={open}
@@ -144,7 +124,7 @@ function FuzzyDealerModal({
 				<p className="text-xs text-zinc-500 mb-3">
 					Pilih dealer yang paling sesuai berdasarkan nama Ship To:
 				</p>
-				{MOCK_DEALERS.map((d) => (
+				{scored.map((d) => (
 					<button
 						key={d.id}
 						onClick={() => onSelect(d.id, d.name)}
@@ -152,7 +132,7 @@ function FuzzyDealerModal({
 						<div>
 							<p className="text-sm font-medium text-zinc-800">{d.name}</p>
 							<p className="text-xs text-zinc-400 mt-0.5">
-								Kecocokan nama: {d.score}%
+								Kecocokan nama: {Math.round(d.score)}%
 							</p>
 						</div>
 						{d.score >= 85 ? (
@@ -560,9 +540,28 @@ export default function UploadPage() {
 	const [showNewDealer, setShowNewDealer] = useState(false);
 	const [pendingFuzzyId, setPendingFuzzyId] = useState<string | null>(null);
 	const [finished, setFinished] = useState(false);
+	const [dealers, setDealers] = useState<DealerSchema[]>([]);
+	const [loadingDealers, setLoadingDealers] = useState(true);
 	const { success, error: toastError } = useToast();
+	const knownHashes = useRef<Set<string>>(new Set());
 
-	const KNOWN_HASHES = ["hash_DO-already-uploaded.xlsx_12345"]; // mock
+	// Load dealers from API on mount
+	useEffect(() => {
+		const loadDealers = async () => {
+			try {
+				const response = await dealerApi.getAll();
+				if (response.success && response.data) {
+					setDealers(response.data);
+				}
+			} catch (err) {
+				console.error("Gagal load dealers:", err);
+				toastError("Gagal memuat daftar dealer", "");
+			} finally {
+				setLoadingDealers(false);
+			}
+		};
+		loadDealers();
+	}, [toastError]);
 
 	const addFiles = useCallback(
 		async (files: File[]) => {
@@ -577,7 +576,7 @@ export default function UploadPage() {
 			const newItems: QueueFile[] = await Promise.all(
 				valid.map(async (f) => {
 					const hash = await hashFile(f);
-					const isDupHash = KNOWN_HASHES.includes(hash);
+					const isDupHash = knownHashes.current.has(hash);
 					return {
 						id: `qf_${Date.now()}_${Math.random()}`,
 						file: f,
@@ -614,25 +613,60 @@ export default function UploadPage() {
 		setQueue((prev) =>
 			prev.map((q) => (q.id === id ? { ...q, state: "processing" } : q)),
 		);
-		await new Promise((r) => setTimeout(r, 800));
-		setQueue((prev) =>
-			prev.map((q) =>
-				q.id === id
-					? {
-							...q,
-							state: "previewing",
-							preview: MOCK_PREVIEW,
-							validCount: MOCK_PREVIEW.filter((r) => r.status === "valid")
-								.length,
-							dupCount: MOCK_PREVIEW.filter((r) => r.status === "duplicate")
-								.length,
-							unknownCount: MOCK_PREVIEW.filter(
-								(r) => r.status === "unknown_type",
-							).length,
-						}
-					: q,
-			),
-		);
+
+		try {
+			const queueFile = queue.find((q) => q.id === id);
+			if (!queueFile) return;
+
+			// Parse Excel file
+			const parsed = await parseExcelFileClient(queueFile.file);
+
+			// Create preview rows from parsed data
+			const preview: PreviewRow[] = [];
+			let validCount = 0;
+			let unknownCount = 0;
+
+			for (const item of parsed.items) {
+				for (const sn of item.serialNumbers) {
+					preview.push({
+						serialNumber: sn,
+						productType: item.itemDescription || `[${item.itemCode}]`,
+						productCategory: "", // Will be filled by backend
+						itemCodeOriginal: item.itemCode,
+						status: "valid", // We'll assume valid; backend will validate
+					});
+					validCount++;
+				}
+			}
+
+			// Update queue with parsed data
+			setQueue((prev) =>
+				prev.map((q) =>
+					q.id === id
+						? {
+								...q,
+								state: "previewing",
+								preview,
+								validCount,
+								dupCount: 0,
+								unknownCount,
+								shipTo: parsed.shipTo,
+								parsedData: parsed,
+							}
+						: q,
+				),
+			);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Gagal parsing file";
+			setQueue((prev) =>
+				prev.map((q) =>
+					q.id === id
+						? { ...q, state: "error", errorMessage: message }
+						: q,
+				),
+			);
+			toastError("Error parsing file", message);
+		}
 	};
 
 	const skipFile = (id: string) => {
@@ -652,7 +686,9 @@ export default function UploadPage() {
 		);
 		if (type === "dealer") {
 			setPendingFuzzyId(id);
-			setShowFuzzy(true);
+			if (dealers.length > 0) {
+				setShowFuzzy(true);
+			}
 		}
 	};
 
@@ -970,16 +1006,19 @@ export default function UploadPage() {
 			</div>
 
 			{/* Modals */}
-			<FuzzyDealerModal
-				open={showFuzzy}
-				shipTo="PT Maju Teknologi Tbk"
-				onSelect={handleFuzzySelect}
-				onCreateNew={handleFuzzyNewDealer}
-				onClose={() => {
-					setShowFuzzy(false);
-					setPendingFuzzyId(null);
-				}}
-			/>
+			{activeFile && activeFile.shipTo && (
+				<FuzzyDealerModal
+					open={showFuzzy}
+					shipTo={activeFile.shipTo}
+					dealers={dealers}
+					onSelect={handleFuzzySelect}
+					onCreateNew={handleFuzzyNewDealer}
+					onClose={() => {
+						setShowFuzzy(false);
+						setPendingFuzzyId(null);
+					}}
+				/>
+			)}
 			<NewDealerModal
 				open={showNewDealer}
 				onClose={() => setShowNewDealer(false)}

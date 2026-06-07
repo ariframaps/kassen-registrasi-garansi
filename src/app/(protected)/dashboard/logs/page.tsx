@@ -12,9 +12,16 @@ import {
   Table, TableHead, TableHeader, TableBody, TableRow, TableCell, EmptyState,
 } from "@/components/ui/table";
 import { Pagination } from "@/components/ui/pagination";
-// import { auditLogAdapter } from "@/lib/adapters";
-// import type { AuditLog } from "@/lib/adapters";
 import { Search, FileText, X, ChevronRight } from "lucide-react";
+import { auditLog as auditLogTable } from "@/db/schema";
+import { InferSelectModel } from "drizzle-orm";
+
+type AuditLog = InferSelectModel<typeof auditLogTable>;
+
+// Stub adapter for logs
+const auditLogAdapter = {
+  getPaginated: async (_params: any) => ({ items: [] as AuditLog[], total: 0 }),
+};
 
 // ── Helpers ──
 
@@ -35,14 +42,14 @@ const CATEGORIES: { value: LogCategory | ""; label: string }[] = [
 
 const PRIORITIES: { value: LogPriority | ""; label: string }[] = [
   { value: "", label: "Semua Prioritas" },
-  { value: "LOW", label: "Low" },
-  { value: "MEDIUM", label: "Medium" },
-  { value: "HIGH", label: "High" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
 ];
 
 function priorityBadge(priority: LogPriority) {
-  if (priority === "HIGH") return <Badge variant="danger">{priority}</Badge>;
-  if (priority === "MEDIUM") return <Badge variant="warning">{priority}</Badge>;
+  if (priority === "high") return <Badge variant="danger">{priority}</Badge>;
+  if (priority === "medium") return <Badge variant="warning">{priority}</Badge>;
   return <Badge variant="neutral">{priority}</Badge>;
 }
 
@@ -60,8 +67,9 @@ function categoryBadge(cat: LogCategory) {
   return <Badge variant={map[cat]}>{cat}</Badge>;
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("id-ID", {
+function formatDateTime(iso: string | Date) {
+  const dateStr = typeof iso === "string" ? iso : iso.toISOString();
+  return new Date(dateStr).toLocaleString("id-ID", {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -90,21 +98,10 @@ function LogDetailModal({ log, onClose }: { log: AuditLog | null; onClose: () =>
               <p className="text-xs text-zinc-400 mb-0.5">Prioritas</p>
               {priorityBadge(log.priority)}
             </div>
-            {log.actorName && (
+            {log.userId && (
               <div>
-                <p className="text-xs text-zinc-400 mb-0.5">Aktor</p>
-                <p className="text-sm text-zinc-700">
-                  {log.actorName}
-                  {log.actorRole && (
-                    <span className="text-zinc-400 ml-1">({log.actorRole})</span>
-                  )}
-                </p>
-              </div>
-            )}
-            {log.targetLabel && (
-              <div>
-                <p className="text-xs text-zinc-400 mb-0.5">Target</p>
-                <p className="text-sm text-zinc-700">{log.targetLabel}</p>
+                <p className="text-xs text-zinc-400 mb-0.5">User ID</p>
+                <p className="text-sm font-mono text-zinc-700">{log.userId}</p>
               </div>
             )}
             {log.ipAddress && (
@@ -265,10 +262,10 @@ export default function LogsPage() {
                         <TableCell>{categoryBadge(log.category)}</TableCell>
                         <TableCell>{priorityBadge(log.priority)}</TableCell>
                         <TableCell className="text-xs text-zinc-600">
-                          {log.actorName ?? <span className="text-zinc-300">—</span>}
+                          {log.userId ? log.userId.slice(0, 8) : <span className="text-zinc-300">—</span>}
                         </TableCell>
                         <TableCell className="text-xs text-zinc-600 max-w-[180px] truncate">
-                          {log.targetLabel ?? <span className="text-zinc-300">—</span>}
+                          <span className="text-zinc-300">—</span>
                         </TableCell>
                         <TableCell>
                           <ChevronRight size={13} className="text-zinc-300" />
