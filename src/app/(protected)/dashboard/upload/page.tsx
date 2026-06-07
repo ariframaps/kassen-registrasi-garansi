@@ -714,11 +714,15 @@ export default function UploadPage() {
 		);
 
 		try {
-			await uploadApi.uploadAccurateFile(
+			const result = await uploadApi.uploadAccurateFile(
 				queueFile.file,
 				queueFile.destType as "dealer" | "customer",
 				queueFile.destLabel || "",
 			);
+
+			if (!result.success) {
+				throw new Error(result.message || "Upload gagal");
+			}
 
 			setQueue((prev) =>
 				prev.map((q) => (q.id === id ? { ...q, state: "done" } : q)),

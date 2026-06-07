@@ -124,12 +124,25 @@ export async function submitAccurateFile(
 		customerId = found.id;
 	}
 
+	// Parse date from "dd MMM yyyy" format to ISO date
+	let doDate = new Date().toISOString().split("T")[0]; // Default to today
+	if (parsed.date) {
+		try {
+			const dateObj = new Date(parsed.date);
+			if (!isNaN(dateObj.getTime())) {
+				doDate = dateObj.toISOString().split("T")[0];
+			}
+		} catch {
+			// If date parsing fails, use today
+		}
+	}
+
 	// Create DO record
 	const doRecord = await db
 		.insert(deliveryOrders)
 		.values({
 			doNumber: parsed.doNumber,
-			doDate: parsed.date,
+			doDate,
 			shipToRaw: parsed.shipTo,
 			sentBy: parsed.sentBy || null,
 			orderRef: parsed.orderRef || null,
