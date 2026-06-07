@@ -1,7 +1,5 @@
-// Client-side Excel parser for Accurate format
-// Uses the same parsing logic as backend but runs in browser
-
 import * as XLSX from "xlsx";
+import { normalizeSerialNumber } from "@/lib/utils";
 
 export interface ParsedItem {
 	itemCode: string;
@@ -23,7 +21,16 @@ export interface ParsedDeliveryOrder {
 	totalItem: number;
 }
 
-function lastTextCell(row: any[]) {
+export interface PreviewRow {
+	serialNumber: string;
+	productType: string;
+	productCategory: string;
+	itemCodeOriginal?: string;
+	status: "valid" | "duplicate" | "invalid" | "unknown_type";
+	message?: string;
+}
+
+function lastTextCell(row: any[]): string {
 	for (let i = row.length - 1; i >= 0; i--) {
 		const v = String(row[i] ?? "").trim();
 		if (v) return v;
@@ -31,9 +38,9 @@ function lastTextCell(row: any[]) {
 	return "";
 }
 
-function parseItemsGlobal(rows: any[][]) {
-	const items: any[] = [];
-	let currentItem: any = null;
+function parseItemsGlobal(rows: any[][]): ParsedItem[] {
+	const items: ParsedItem[] = [];
+	let currentItem: ParsedItem | null = null;
 	let inItemSection = false;
 
 	for (let j = 0; j < rows.length; j++) {
@@ -87,7 +94,7 @@ function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
 	let area = "";
 
 	let afterShipMetaRow = -1;
-	let items: any[] = [];
+	let items: ParsedItem[] = [];
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
@@ -148,14 +155,19 @@ function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
 	};
 }
 
-export async function parseExcelFileClient(file: File): Promise<ParsedDeliveryOrder> {
-	const buffer = await file.arrayBuffer();
+export async function parseExcelFile(
+	file: File,
+): Promise<ParsedDeliveryOrder> {
+	const buffer = Buffer.from(await file.arrayBuffer());
 	const workbook = XLSX.read(buffer, { type: "buffer" });
+
 	const sheetName = workbook.SheetNames[0];
 	const sheet = workbook.Sheets[sheetName];
+
 	const rows: any[][] = XLSX.utils.sheet_to_json(sheet, {
 		header: 1,
 		defval: "",
 	});
+
 	return parseDeliveryOrder(rows);
 }

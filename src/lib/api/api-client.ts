@@ -20,6 +20,7 @@ import {
 } from "@/services/purchase.service";
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
 import type { PurchaseGroup } from "@/types";
+import type { ParsedDeliveryOrder, PreviewRow } from "@/lib/parser-accurate";
 
 async function apiFetch<T>(
 	input: RequestInfo,
@@ -349,6 +350,40 @@ export const userApi = {
 };
 
 export const uploadApi = {
+	previewAccurateFile: async (file: File) => {
+		const formData = new FormData();
+		formData.append("file", file);
+
+		return apiFetch<{
+			preview: Array<{
+				serialNumber: string;
+				productType: string;
+				productCategory: string;
+				itemCodeOriginal?: string;
+				status: "valid" | "duplicate" | "invalid" | "unknown_type";
+				message?: string;
+			}>;
+			validCount: number;
+			dupCount: number;
+			unknownCount: number;
+		}>("/upload/preview", {
+			method: "POST",
+			body: formData,
+		});
+	},
+
+	validateAccurateFile: async (parsedData: ParsedDeliveryOrder) => {
+		return apiFetch<{
+			preview: PreviewRow[];
+			validCount: number;
+			dupCount: number;
+			unknownCount: number;
+		}>("/upload/validate", {
+			method: "POST",
+			body: JSON.stringify(parsedData),
+		});
+	},
+
 	uploadAccurateFile: async (
 		file: File,
 		destType: "dealer" | "customer",
