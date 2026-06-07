@@ -312,6 +312,7 @@ function ProductTypeModal({
 
 export default function ProductTypesPage() {
 	const [types, setTypes] = useState<ProductTypeWithNestedSchema[]>([]);
+  console.log(types)
 	const [itemCodes, setItemCodes] = useState<ItemCodeMapsSchema[]>([]);
 	const [categories, setCategories] = useState<CategorySchema[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -330,16 +331,21 @@ export default function ProductTypesPage() {
 	const { success, error: toastError } = useToast();
 
 	useEffect(() => {
-		Promise.all([
-			productTypeApi.getAllWithNested(),
-			itemCodeMappingApi.getAllItemCodes(),
-			productCateogoryApi.getAll(),
-		]).then(([t, i, c]) => {
-			if (t.success) setTypes(t.data);
-			if (i.success) setItemCodes(i.data);
-			if (c.success) setCategories(c.data);
-		});
-		setLoading(false);
+		const load = async () => {
+			try {
+				const [t, i, c] = await Promise.all([
+					productTypeApi.getAllWithNested(),
+					itemCodeMappingApi.getAllItemCodes(),
+					productCateogoryApi.getAll(),
+				]);
+				if (t.success) setTypes(t.data);
+				if (i.success) setItemCodes(i.data);
+				if (c.success) setCategories(c.data);
+			} finally {
+				setLoading(false);
+			}
+		};
+		load();
 	}, []);
 
 	const filtered = types.filter((t) => {

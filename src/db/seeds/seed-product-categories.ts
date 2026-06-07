@@ -2,47 +2,43 @@ import { db } from "../";
 import { productCategory } from "../schemas/product_category.schema";
 import { productType } from "../schemas/product_type.schema";
 
+// Mutable maps untuk store IDs yang di-generate saat seed dijalankan
+let _categoryIds: Record<string, string> = {};
+let _productTypeIds: Record<string, string> = {};
+
+// Public interface untuk access generated IDs
 export const CATEGORY_IDS = {
-	powerTools: "cat_power_tools",
-	handTools: "cat_hand_tools",
-	measuringTools: "cat_measuring_tools",
-	safetyEquipment: "cat_safety_equipment",
-	gardenEquipment: "cat_garden_equipment",
+	get powerTools() { return _categoryIds.powerTools; },
+	get handTools() { return _categoryIds.handTools; },
+	get measuringTools() { return _categoryIds.measuringTools; },
+	get safetyEquipment() { return _categoryIds.safetyEquipment; },
+	get gardenEquipment() { return _categoryIds.gardenEquipment; },
 };
 
 export const PRODUCT_TYPE_IDS = {
-	// Power Tools
-	electricDrill: "pt_electric_drill",
-	circularSaw: "pt_circular_saw",
-	jigsaw: "pt_jigsaw",
-	anglegrinder: "pt_angle_grinder",
-	rotaryHammer: "pt_rotary_hammer",
-	randomOrbitalSander: "pt_random_orbital_sander",
-	impactDriver: "pt_impact_driver",
-
-	// Hand Tools
-	hammerSet: "pt_hammer_set",
-	screwdriverSet: "pt_screwdriver_set",
-	wrenchSet: "pt_wrench_set",
-	pliersSet: "pt_pliers_set",
-	handsaw: "pt_handsaw",
-
-	// Measuring Tools
-	laserDistanceMeter: "pt_laser_distance_meter",
-	digitalVernier: "pt_digital_vernier",
-	spiritLevel: "pt_spirit_level",
-	tapeMeasure: "pt_tape_measure",
-
-	// Safety Equipment
-	safetyHelmet: "pt_safety_helmet",
-	safetyGlasses: "pt_safety_glasses",
-	earProtector: "pt_ear_protector",
-	safetyGloves: "pt_safety_gloves",
-
-	// Garden Equipment
-	electricLawnMower: "pt_electric_lawn_mower",
-	leafBlower: "pt_leaf_blower",
-	chainsaw: "pt_chainsaw",
+	get electricDrill() { return _productTypeIds.electricDrill; },
+	get circularSaw() { return _productTypeIds.circularSaw; },
+	get jigsaw() { return _productTypeIds.jigsaw; },
+	get anglegrinder() { return _productTypeIds.anglegrinder; },
+	get rotaryHammer() { return _productTypeIds.rotaryHammer; },
+	get randomOrbitalSander() { return _productTypeIds.randomOrbitalSander; },
+	get impactDriver() { return _productTypeIds.impactDriver; },
+	get hammerSet() { return _productTypeIds.hammerSet; },
+	get screwdriverSet() { return _productTypeIds.screwdriverSet; },
+	get wrenchSet() { return _productTypeIds.wrenchSet; },
+	get pliersSet() { return _productTypeIds.pliersSet; },
+	get handsaw() { return _productTypeIds.handsaw; },
+	get laserDistanceMeter() { return _productTypeIds.laserDistanceMeter; },
+	get digitalVernier() { return _productTypeIds.digitalVernier; },
+	get spiritLevel() { return _productTypeIds.spiritLevel; },
+	get tapeMeasure() { return _productTypeIds.tapeMeasure; },
+	get safetyHelmet() { return _productTypeIds.safetyHelmet; },
+	get safetyGlasses() { return _productTypeIds.safetyGlasses; },
+	get earProtector() { return _productTypeIds.earProtector; },
+	get safetyGloves() { return _productTypeIds.safetyGloves; },
+	get electricLawnMower() { return _productTypeIds.electricLawnMower; },
+	get leafBlower() { return _productTypeIds.leafBlower; },
+	get chainsaw() { return _productTypeIds.chainsaw; },
 };
 
 export async function seedProductCategories() {
@@ -50,41 +46,78 @@ export async function seedProductCategories() {
 
 	const now = new Date();
 
+	// Generate UUIDs for categories - EXPLICIT to avoid duplicate UUID bug
 	const categories = [
 		{
-			id: CATEGORY_IDS.powerTools,
+			id: crypto.randomUUID(),
 			name: "Power Tools",
 			createdAt: now,
 			updatedAt: now,
 		},
 		{
-			id: CATEGORY_IDS.handTools,
+			id: crypto.randomUUID(),
 			name: "Hand Tools",
 			createdAt: now,
 			updatedAt: now,
 		},
 		{
-			id: CATEGORY_IDS.measuringTools,
+			id: crypto.randomUUID(),
 			name: "Measuring Tools",
 			createdAt: now,
 			updatedAt: now,
 		},
 		{
-			id: CATEGORY_IDS.safetyEquipment,
+			id: crypto.randomUUID(),
 			name: "Safety Equipment",
 			createdAt: now,
 			updatedAt: now,
 		},
 		{
-			id: CATEGORY_IDS.gardenEquipment,
+			id: crypto.randomUUID(),
 			name: "Garden Equipment",
 			createdAt: now,
 			updatedAt: now,
 		},
 	];
 
-	await db.insert(productCategory).values(categories).onConflictDoNothing();
-	console.log(`✅ Seeded ${categories.length} product categories`);
+	console.log(`📝 Attempting to insert ${categories.length} categories:`, categories.map((c) => c.name).join(", "));
+
+	let inserted: any[] = [];
+	try {
+		inserted = await db
+			.insert(productCategory)
+			.values(categories)
+			// REMOVE onConflictDoNothing() to see actual error
+			.returning();
+		console.log(`✓ Insert returned ${inserted.length} rows:`, inserted.map((c) => c.name).join(", "));
+	} catch (error) {
+		console.error("❌ Insert failed with error:", error);
+		throw error;
+	}
+
+	// Store generated IDs - SELALU fetch dari DB untuk ensure semua category terisi
+	const categoryNames = ["Power Tools", "Hand Tools", "Measuring Tools", "Safety Equipment", "Garden Equipment"] as const;
+	const categoryKeys = ["powerTools", "handTools", "measuringTools", "safetyEquipment", "gardenEquipment"] as const;
+
+	// Fetch ALL categories dari DB untuk populate map
+	console.log("🔍 Fetching all categories from database...");
+	for (let i = 0; i < categoryNames.length; i++) {
+		const catName = categoryNames[i];
+		console.log(`  → Looking for: "${catName}"`);
+		const cat = await db.query.productCategory.findFirst({
+			where: (tbl, { eq }) => eq(tbl.name, catName),
+		});
+		if (!cat) {
+			console.error(`❌ Category "${catName}" not found!`);
+			const allCats = await db.query.productCategory.findMany();
+			console.error(`Available categories in DB:`, allCats.map((c) => c.name).join(", "));
+			throw new Error(`Category "${catName}" not found in database after insert attempt.`);
+		}
+		_categoryIds[categoryKeys[i]] = cat.id;
+		console.log(`  ✓ Found with ID: ${cat.id}`);
+	}
+
+	console.log(`✅ Seeded ${inserted.length || 5} categories, all ${Object.keys(_categoryIds).length} fetched successfully`);
 }
 
 export async function seedProductTypes() {
@@ -92,202 +125,83 @@ export async function seedProductTypes() {
 
 	const now = new Date();
 
-	const productTypes = [
+	const productTypeDefinitions = [
 		// Power Tools (24 months warranty)
-		{
-			id: PRODUCT_TYPE_IDS.electricDrill,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Electric Drill 13mm",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.circularSaw,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Circular Saw 185mm",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.jigsaw,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Jigsaw 550W",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.anglegrinder,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Angle Grinder 115mm",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.rotaryHammer,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Rotary Hammer 26mm SDS-Plus",
-			warrantyDurationMonths: 36,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.randomOrbitalSander,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Random Orbital Sander 125mm",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.impactDriver,
-			categoryId: CATEGORY_IDS.powerTools,
-			name: "Impact Driver 18V",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-
-		// Hand Tools (12 months warranty)
-		{
-			id: PRODUCT_TYPE_IDS.hammerSet,
-			categoryId: CATEGORY_IDS.handTools,
-			name: "Claw Hammer 500g",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.screwdriverSet,
-			categoryId: CATEGORY_IDS.handTools,
-			name: "Screwdriver Set 12pcs",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.wrenchSet,
-			categoryId: CATEGORY_IDS.handTools,
-			name: "Combination Wrench Set 8-22mm",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.pliersSet,
-			categoryId: CATEGORY_IDS.handTools,
-			name: "Pliers Set 5pcs",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.handsaw,
-			categoryId: CATEGORY_IDS.handTools,
-			name: "Hand Saw 550mm",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-
-		// Measuring Tools (12 months warranty)
-		{
-			id: PRODUCT_TYPE_IDS.laserDistanceMeter,
-			categoryId: CATEGORY_IDS.measuringTools,
-			name: "Laser Distance Meter 50m",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.digitalVernier,
-			categoryId: CATEGORY_IDS.measuringTools,
-			name: "Digital Vernier Caliper 150mm",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.spiritLevel,
-			categoryId: CATEGORY_IDS.measuringTools,
-			name: "Spirit Level 600mm",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.tapeMeasure,
-			categoryId: CATEGORY_IDS.measuringTools,
-			name: "Steel Tape Measure 5m",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-
-		// Safety Equipment (6 months warranty)
-		{
-			id: PRODUCT_TYPE_IDS.safetyHelmet,
-			categoryId: CATEGORY_IDS.safetyEquipment,
-			name: "Safety Helmet ABS Class B",
-			warrantyDurationMonths: 6,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.safetyGlasses,
-			categoryId: CATEGORY_IDS.safetyEquipment,
-			name: "Safety Glasses Anti-Fog",
-			warrantyDurationMonths: 6,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.earProtector,
-			categoryId: CATEGORY_IDS.safetyEquipment,
-			name: "Ear Protector 30dB",
-			warrantyDurationMonths: 6,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.safetyGloves,
-			categoryId: CATEGORY_IDS.safetyEquipment,
-			name: "Cut Resistant Safety Gloves L",
-			warrantyDurationMonths: 3,
-			createdAt: now,
-			updatedAt: now,
-		},
-
-		// Garden Equipment (12-24 months)
-		{
-			id: PRODUCT_TYPE_IDS.electricLawnMower,
-			categoryId: CATEGORY_IDS.gardenEquipment,
-			name: "Electric Lawn Mower 1800W",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.leafBlower,
-			categoryId: CATEGORY_IDS.gardenEquipment,
-			name: "Leaf Blower 550W",
-			warrantyDurationMonths: 12,
-			createdAt: now,
-			updatedAt: now,
-		},
-		{
-			id: PRODUCT_TYPE_IDS.chainsaw,
-			categoryId: CATEGORY_IDS.gardenEquipment,
-			name: "Electric Chainsaw 2000W 35cm",
-			warrantyDurationMonths: 24,
-			createdAt: now,
-			updatedAt: now,
-		},
+		{ key: "electricDrill", categoryKey: "powerTools", name: "Electric Drill 13mm", warranty: 24 },
+		{ key: "circularSaw", categoryKey: "powerTools", name: "Circular Saw 185mm", warranty: 24 },
+		{ key: "jigsaw", categoryKey: "powerTools", name: "Jigsaw 550W", warranty: 24 },
+		{ key: "anglegrinder", categoryKey: "powerTools", name: "Angle Grinder 115mm", warranty: 24 },
+		{ key: "rotaryHammer", categoryKey: "powerTools", name: "Rotary Hammer 26mm SDS-Plus", warranty: 36 },
+		{ key: "randomOrbitalSander", categoryKey: "powerTools", name: "Random Orbital Sander 125mm", warranty: 12 },
+		{ key: "impactDriver", categoryKey: "powerTools", name: "Impact Driver 18V", warranty: 24 },
+		// Hand Tools
+		{ key: "hammerSet", categoryKey: "handTools", name: "Claw Hammer 500g", warranty: 12 },
+		{ key: "screwdriverSet", categoryKey: "handTools", name: "Screwdriver Set 12pcs", warranty: 12 },
+		{ key: "wrenchSet", categoryKey: "handTools", name: "Combination Wrench Set 8-22mm", warranty: 12 },
+		{ key: "pliersSet", categoryKey: "handTools", name: "Pliers Set 5pcs", warranty: 12 },
+		{ key: "handsaw", categoryKey: "handTools", name: "Hand Saw 550mm", warranty: 12 },
+		// Measuring Tools
+		{ key: "laserDistanceMeter", categoryKey: "measuringTools", name: "Laser Distance Meter 50m", warranty: 24 },
+		{ key: "digitalVernier", categoryKey: "measuringTools", name: "Digital Vernier Caliper 150mm", warranty: 12 },
+		{ key: "spiritLevel", categoryKey: "measuringTools", name: "Spirit Level 600mm", warranty: 12 },
+		{ key: "tapeMeasure", categoryKey: "measuringTools", name: "Steel Tape Measure 5m", warranty: 12 },
+		// Safety Equipment
+		{ key: "safetyHelmet", categoryKey: "safetyEquipment", name: "Safety Helmet ABS Class B", warranty: 6 },
+		{ key: "safetyGlasses", categoryKey: "safetyEquipment", name: "Safety Glasses Anti-Fog", warranty: 6 },
+		{ key: "earProtector", categoryKey: "safetyEquipment", name: "Ear Protector 30dB", warranty: 6 },
+		{ key: "safetyGloves", categoryKey: "safetyEquipment", name: "Cut Resistant Safety Gloves L", warranty: 3 },
+		// Garden Equipment
+		{ key: "electricLawnMower", categoryKey: "gardenEquipment", name: "Electric Lawn Mower 1800W", warranty: 24 },
+		{ key: "leafBlower", categoryKey: "gardenEquipment", name: "Leaf Blower 550W", warranty: 12 },
+		{ key: "chainsaw", categoryKey: "gardenEquipment", name: "Electric Chainsaw 2000W 35cm", warranty: 24 },
 	];
 
-	await db.insert(productType).values(productTypes).onConflictDoNothing();
-	console.log(`✅ Seeded ${productTypes.length} product types`);
+	const productTypes = productTypeDefinitions.map((pt) => {
+		const categoryId = _categoryIds[pt.categoryKey];
+		if (!categoryId) {
+			throw new Error(`Category not found for key: ${pt.categoryKey}. Available: ${Object.keys(_categoryIds).join(", ")}`);
+		}
+		return {
+			id: crypto.randomUUID(), // EXPLICIT UUID to avoid duplicate UUID bug
+			categoryId,
+			name: pt.name,
+			warrantyDurationMonths: pt.warranty,
+			createdAt: now,
+			updatedAt: now,
+		};
+	});
+
+	console.log(`📝 Attempting to insert ${productTypeDefinitions.length} product types`);
+
+	let inserted: any[] = [];
+	try {
+		inserted = await db
+			.insert(productType)
+			.values(productTypes)
+			// REMOVE onConflictDoNothing() to see actual error
+			.returning();
+		console.log(`✓ Insert returned ${inserted.length} rows`);
+	} catch (error) {
+		console.error("❌ Insert failed with error:", error);
+		throw error;
+	}
+
+	// Store generated IDs - SELALU fetch dari DB untuk ensure SEMUA product type terisi
+	console.log("🔍 Fetching all product types from database...");
+	for (const def of productTypeDefinitions) {
+		console.log(`  → Looking for: "${def.name}"`);
+		const pt = await db.query.productType.findFirst({
+			where: (tbl, { eq }) => eq(tbl.name, def.name),
+		});
+		if (!pt) {
+			console.error(`❌ Product type "${def.name}" not found!`);
+			const allPts = await db.query.productType.findMany();
+			console.error(`Available product types in DB:`, allPts.map((p) => p.name).join(", "));
+			throw new Error(`Product type "${def.name}" not found in database after insert attempt.`);
+		}
+		_productTypeIds[def.key] = pt.id;
+		console.log(`  ✓ Found with ID: ${pt.id}`);
+	}
+
+	console.log(`✅ Seeded ${inserted.length || productTypeDefinitions.length} product types, all ${Object.keys(_productTypeIds).length} fetched successfully`);
 }

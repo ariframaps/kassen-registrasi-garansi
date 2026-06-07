@@ -1,18 +1,18 @@
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { UserRole } from "@/types";
+import { HttpError } from "@/lib/api/http-error";
 
 type Session = typeof auth.$Infer.Session;
 
 export const authenticationMiddleware = async (): Promise<Session> => {
 	const session = await auth.api.getSession({
-		headers: await headers(), // you need to pass the headers object.
+		headers: await headers(),
 	});
 
 	if (session && session.user && session.session) return session;
 	else {
-		console.error("UNAUTHORIZED");
-		throw new Error("Unauthorized");
+		throw new HttpError("Unauthorized", 401);
 	}
 };
 
@@ -29,7 +29,6 @@ export const authorizationMiddleware = async ({
 
 	if (isRoleAllowed) return;
 	else {
-		console.error("access denied role Unauthorized");
-		throw new Error("Access Denied");
+		throw new HttpError("Access Denied", 403);
 	}
 };

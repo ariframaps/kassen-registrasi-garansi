@@ -5,16 +5,25 @@ import {
 	productTypeSchema,
 	categorySchema,
 	itemCodeMapsSchema,
+	auditLog,
 } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import z from "zod";
 import { productTypeInsertSchema } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
 
+interface AuditContext {
+	userId: string;
+	ipAddress?: string | null;
+	userAgent?: string | null;
+}
+
 // Schema untuk payload saat membuat Product Type Baru beserta Item Codes awal
-export const createProductTypePayloadSchema = productTypeInsertSchema.extend({
-	itemCodes: z.array(z.string()).optional(),
-});
+export const createProductTypePayloadSchema = productTypeInsertSchema
+	.extend({
+		warrantyDurationMonths: z.coerce.number().int().positive().default(12),
+		itemCodes: z.array(z.string()).optional(),
+	});
 export type CreateProductTypePayload = z.infer<
 	typeof createProductTypePayloadSchema
 >;
@@ -23,22 +32,20 @@ export type CreateProductTypePayload = z.infer<
 export const updateProductTypePayloadSchema = productTypeInsertSchema
 	.partial()
 	.extend({
+		warrantyDurationMonths: z.coerce.number().int().positive().optional(),
 		data: z.object({
 			added: z.array(z.string()),
-			deleted: z.array(z.string()), // Berisi array ID dari item_code_mapping yang dihapus
+			deleted: z.array(z.string()),
 		}),
 	});
 export type UpdateProductTypePayload = z.infer<
 	typeof updateProductTypePayloadSchema
 >;
 
-export const productTypeWithNestedSchema = productTypeSchema
-	.extend({
-		category: categorySchema,
-	})
-	.extend({
-		itemCodeMappings: itemCodeMapsSchema,
-	});
+export const productTypeWithNestedSchema = productTypeSchema.extend({
+	category: categorySchema,
+	itemCodeMappings: z.array(itemCodeMapsSchema),
+});
 
 export type ProductTypeWithNestedSchema = z.infer<
 	typeof productTypeWithNestedSchema
@@ -65,6 +72,7 @@ export const productTypeService = {
 	 */
 	add: async (
 		payload: CreateProductTypePayload,
+		audit: AuditContext,
 	): Promise<ProductTypeWithNestedSchema> => {
 		const parsedInput = createProductTypePayloadSchema.parse(payload);
 		const { itemCodes, ...productTypeData } = parsedInput;
@@ -82,7 +90,7 @@ export const productTypeService = {
 				// 2. Insert data product type utama
 				const [newType] = await tx
 					.insert(productType)
-					.values(productTypeData)
+					.values({ ...productTypeData, id: crypto.randomUUID() })
 					.returning();
 
 				if (!newType) {
@@ -92,6 +100,7 @@ export const productTypeService = {
 				// 3. Insert item codes jika dilampirkan
 				if (itemCodes && itemCodes.length > 0) {
 					const formattedCodes = itemCodes.map((code) => ({
+						id: crypto.randomUUID(),
 						itemCode: code.toUpperCase().trim(),
 						productTypeId: newType.id,
 					}));
@@ -122,7 +131,27 @@ export const productTypeService = {
 				});
 			});
 
-			return productTypeWithNestedSchema.parse(result);
+			const parsed = productTypeWithNestedSchema.parse(result);
+
+			// 5. Tambahkan audit log
+			await db.insert(auditLog).values({
+				id: crypto.randomUUID(),
+				userId: audit.userId,
+				category: "PRODUCT",
+				event: "PRODUCT_TYPE_ADDED",
+				status: "success",
+				priority: "medium",
+				ipAddress: audit.ipAddress ?? undefined,
+				userAgent: audit.userAgent ?? undefined,
+				data: {
+					productTypeId: parsed.id,
+					name: parsed.name,
+					categoryId: parsed.categoryId,
+					itemCodesCount: parsed.itemCodeMappings?.length ?? 0,
+				},
+			});
+
+			return parsed;
 		} catch (error) {
 			if (error instanceof HttpError) throw error;
 			throw new HttpError(
@@ -138,6 +167,7 @@ export const productTypeService = {
 	update: async (
 		id: string,
 		payload: UpdateProductTypePayload,
+		audit: AuditContext,
 	): Promise<ProductTypeWithNestedSchema> => {
 		const parsedInput = updateProductTypePayloadSchema.parse(payload);
 		const { data: syncData, ...productTypeData } = parsedInput;
@@ -168,6 +198,7 @@ export const productTypeService = {
 				// 4. Tambahkan item codes baru yang dimasukkan user
 				if (syncData.added.length > 0) {
 					const newCodes = syncData.added.map((code) => ({
+						id: crypto.randomUUID(),
 						itemCode: code.toUpperCase().trim(),
 						productTypeId: id,
 					}));
@@ -198,7 +229,30 @@ export const productTypeService = {
 				});
 			});
 
-			return productTypeWithNestedSchema.parse(result);
+			const parsed = productTypeWithNestedSchema.parse(result);
+
+			// 6. Tambahkan audit log
+			await db.insert(auditLog).values({
+				id: crypto.randomUUID(),
+				userId: audit.userId,
+				category: "PRODUCT",
+				event: "PRODUCT_TYPE_UPDATED",
+				status: "success",
+				priority: "medium",
+				ipAddress: audit.ipAddress ?? undefined,
+				userAgent: audit.userAgent ?? undefined,
+				data: {
+					productTypeId: id,
+					changes: {
+						name: productTypeData.name,
+						categoryId: productTypeData.categoryId,
+						addedCodes: syncData.added,
+						deletedCodeIds: syncData.deleted,
+					},
+				},
+			});
+
+			return parsed;
 		} catch (error) {
 			if (error instanceof HttpError) throw error;
 			throw new HttpError(
@@ -211,7 +265,7 @@ export const productTypeService = {
 	/**
 	 * Menghapus Product Type (Item Code otomatis terhapus berkat CASCADE pada schema)
 	 */
-	delete: async (id: string): Promise<void> => {
+	delete: async (id: string, audit: AuditContext): Promise<void> => {
 		try {
 			const currentType = await db.query.productType.findFirst({
 				where: eq(productType.id, id),
@@ -221,6 +275,23 @@ export const productTypeService = {
 			}
 
 			await db.delete(productType).where(eq(productType.id, id));
+
+			// Tambahkan audit log
+			await db.insert(auditLog).values({
+				id: crypto.randomUUID(),
+				userId: audit.userId,
+				category: "PRODUCT",
+				event: "PRODUCT_TYPE_DELETED",
+				status: "success",
+				priority: "medium",
+				ipAddress: audit.ipAddress ?? undefined,
+				userAgent: audit.userAgent ?? undefined,
+				data: {
+					productTypeId: id,
+					name: currentType.name,
+					categoryId: currentType.categoryId,
+				},
+			});
 		} catch (error) {
 			if (error instanceof HttpError) throw error;
 

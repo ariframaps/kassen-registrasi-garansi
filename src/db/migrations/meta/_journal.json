@@ -43,6 +43,13 @@
       "when": 1779716237916,
       "tag": "0005_lying_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780850731825,
+      "tag": "0006_real_maestro",
+      "breakpoints": true
     }
   ]
 }

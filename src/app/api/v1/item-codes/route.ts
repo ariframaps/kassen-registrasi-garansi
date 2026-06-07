@@ -63,12 +63,12 @@ export async function POST(request: Request) {
 			currentRole: session.user.role,
 		});
 
-		await itemCodeService.add(parsedBody);
+		const data = await itemCodeService.add(parsedBody);
 
 		return NextResponse.json(
 			successResponse({
 				message: "Success",
-				data: undefined,
+				data,
 			}),
 			{ status: HTTP_STATUS.OK.code },
 		);

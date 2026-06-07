@@ -74,22 +74,25 @@ export default function DealersPage() {
 	// Aksi Toggle Status
 	const handleToggle = async () => {
 		if (!toggleTarget) return;
-		const updatedStatus =
-			toggleTarget.status === "active" ? "inactive" : "active";
 
-		setDealers((prev) =>
-			prev.map((d) =>
-				d.id === toggleTarget.id ? { ...d, status: updatedStatus } : d,
-			),
-		);
-
-		success(
-			updatedStatus === "inactive"
-				? "Dealer dinonaktifkan"
-				: "Dealer diaktifkan",
-			toggleTarget.name,
-		);
-		setToggle(null);
+		try {
+			const response = await dealerApi.toggleStatus(toggleTarget.id);
+			if (response.success) {
+				success(
+					response.data.status === "inactive"
+						? "Dealer dinonaktifkan"
+						: "Dealer diaktifkan",
+					toggleTarget.name,
+				);
+				fetchData();
+			} else {
+				toastError("Gagal", response.message || "Gagal mengubah status dealer");
+			}
+		} catch {
+			toastError("Gagal", "Terjadi kesalahan pada sistem");
+		} finally {
+			setToggle(null);
+		}
 	};
 
 	// Aksi Tambah Dealer Baru
@@ -102,16 +105,16 @@ export default function DealersPage() {
 
 		setIsSubmittingAdd(true);
 		try {
-			// const response = await dealerApi.add(newDeayeler);
-			// if (response.success) {
-			// 	success("Berhasil", "Dealer baru berhasil ditambahkan");
-			// 	setIsAddModalOpen(false);
-			// 	setNewDealer({ name: "", email: "", phone: "", address: "" });
-			// 	fetchData();
-			// } else {
-			// 	toastError("Gagal", response.message || "Gagal menambahkan dealer");
-			// }
-		} catch (err) {
+			const response = await dealerApi.add(newDealer);
+			if (response.success) {
+				success("Berhasil", "Dealer baru berhasil ditambahkan");
+				setIsAddModalOpen(false);
+				setNewDealer({ name: "", email: "", phone: "", address: "" });
+				fetchData();
+			} else {
+				toastError("Gagal", response.message || "Gagal menambahkan dealer");
+			}
+		} catch {
 			toastError("Gagal", "Terjadi kesalahan pada sistem");
 		} finally {
 			setIsSubmittingAdd(false);
@@ -134,24 +137,20 @@ export default function DealersPage() {
 
 		setIsSubmittingEdit(true);
 		try {
-			// // Panggil API Edit Dealer (sesuaikan dengan nama method di dealerApi Anda, misal .edit atau .update)
-			// const response = await dealerApi.edit(editingDealer.id, {
-			// 	name: editingDealer.name,
-			// 	email: editingDealer.email,
-			// 	phone: editingDealer.phone,
-			// 	address: editingDealer.address,
-			// });
-			// if (response.success) {
-			// 	success("Berhasil", "Data dealer berhasil diperbarui");
-			// 	setEditingDealer(null); // Tutup modal edit
-			// 	fetchData(); // Refresh list tabel
-			// } else {
-			// 	toastError(
-			// 		"Gagal",
-			// 		response.message || "Gagal memperbarui data dealer",
-			// 	);
-			// }
-		} catch (err) {
+			const response = await dealerApi.update(editingDealer.id, {
+				name: editingDealer.name,
+				email: editingDealer.email,
+				phone: editingDealer.phone,
+				address: editingDealer.address,
+			});
+			if (response.success) {
+				success("Berhasil", "Data dealer berhasil diperbarui");
+				setEditingDealer(null);
+				fetchData();
+			} else {
+				toastError("Gagal", response.message || "Gagal memperbarui data dealer");
+			}
+		} catch {
 			toastError("Gagal", "Terjadi kesalahan pada sistem");
 		} finally {
 			setIsSubmittingEdit(false);
@@ -248,7 +247,7 @@ export default function DealersPage() {
 														title="Detail">
 														<Eye size={13} />
 													</button>
-													{/* <button
+													<button
 														onClick={() => setToggle(d)}
 														className={`p-1.5 rounded-md transition-colors ${d.status === "active" ? "hover:bg-orange-50 text-zinc-400 hover:text-orange-600" : "hover:bg-emerald-50 text-zinc-400 hover:text-emerald-600"}`}
 														title={
@@ -259,7 +258,7 @@ export default function DealersPage() {
 														) : (
 															<UserCheck size={13} />
 														)}
-													</button> */}
+													</button>
 												</div>
 											</TableCell>
 										</TableRow>

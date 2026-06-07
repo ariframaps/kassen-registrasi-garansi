@@ -58,7 +58,15 @@ export async function POST(request: Request) {
 			currentRole: session.user.role,
 		});
 
-		const data = await productTypeService.add(parsedBody);
+		const ipAddress = request.headers.get("x-forwarded-for") ||
+			request.headers.get("x-real-ip");
+		const userAgent = request.headers.get("user-agent");
+
+		const data = await productTypeService.add(parsedBody, {
+			userId: session.user.id,
+			ipAddress,
+			userAgent,
+		});
 
 		return NextResponse.json(successResponse({ message: "Success", data }), {
 			status: HTTP_STATUS.OK.code,

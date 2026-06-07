@@ -62,6 +62,7 @@ export const itemCodeService = {
 		if (data.added.length > 0) {
 			const addItems: ItemCodeInsertSchema[] = data.added.map((code) => {
 				return {
+					id: crypto.randomUUID(),
 					itemCode: code,
 					productTypeId: typeId,
 				};
@@ -79,7 +80,11 @@ export const itemCodeService = {
 	},
 
 	add: async (data: ItemCodeInsertSchema[]): Promise<ItemCodeMapsSchema[]> => {
-		const result = await db.insert(itemCodeMapping).values(data).returning();
+		const dataWithIds = data.map((item) => ({
+			...item,
+			id: crypto.randomUUID(),
+		}));
+		const result = await db.insert(itemCodeMapping).values(dataWithIds).returning();
 		const parsed = itemCodeMapsSchema.array().parse(result);
 		return parsed;
 	},

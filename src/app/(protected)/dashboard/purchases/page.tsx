@@ -1,5 +1,4 @@
 "use client";
-// app/dashboard/purchases/page.tsx — Admin/Sales: all purchase groups
 import { useState, useMemo, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,13 +16,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-// import { Pagination } from "@/components/ui/pagination";
-import {
-	mockProducts,
-	mockDealers,
-	mockPurchaseGroups,
-} from "@/mock/mock-data";
-import { formatDateShort, getDaysRemaining } from "@/lib/utils";
+import { formatDateShort } from "@/lib/utils";
 import {
 	Search,
 	Eye,
@@ -32,251 +25,374 @@ import {
 	Package,
 	Users,
 	Calendar,
-	ChevronDown,
-	ChevronUp,
 	Pencil,
 	Plus,
 	X,
+	User,
 } from "lucide-react";
-import type { PurchaseGroup } from "@/types";
 import { useToast } from "@/components/ui/toast";
-import { dealerApi, productApi, purchaseApi } from "@/lib/api/api-client";
 import {
-	DealerSchema,
-	PurchaseItemsInsertSchemaType,
-	PurchaseItemsSchema,
-	PurchaseSchema,
-} from "@/db/schema";
+	customerApi,
+	dealerApi,
+	productApi,
+	purchaseApi,
+} from "@/lib/api/api-client";
+import { CustomerSchema } from "@/db/schema";
 import {
 	PurchaseItemsWithNestedSchema,
 	PurchaseWithNestedSchema,
 } from "@/services/purchase.service";
 import { ProductWithNestedSchema } from "@/services/product.service";
 
-// ── Inline SN Editor for Admin/Sales ──
-function AdminSnEditor({
-	groupId,
-	serialNumbers,
-	onClose,
+// ── Inline SN Editor ──
+function PurchaseItemEditor({
+	purchaseId,
+	items,
+	onItemsSaved,
 }: {
-	groupId: string;
-	serialNumbers: string[];
-	onClose: () => void;
+	purchaseId: string;
+	items: PurchaseItemsWithNestedSchema[];
+	onItemsSaved: (updatedItems: PurchaseItemsWithNestedSchema[]) => void;
 }) {
-	const [products, setProducts] = useState<ProductWithNestedSchema[]>([]);
-	const [pPage, setPPage] = useState(1);
-	const [pPageSize, setPPageSize] = useState(20);
-	const [editing, setEditing] = useState(false);
-	const [sns, setSns] = useState([...serialNumbers]);
-	const [newSn, setNewSn] = useState("");
-	const [confirmOpen, setConfirm] = useState(false);
-	const [loading, setLoading] = useState(false);
-	const { success } = useToast();
-
-	const available = products.filter(
-		(p) =>
-			!p.dealerId &&
-			!sns.includes(p.serialNumber) &&
-			(newSn === "" ||
-				p.serialNumber.toLowerCase().includes(newSn.toLowerCase()) ||
-				p.productType.name.toLowerCase().includes(newSn.toLowerCase())),
+	const [allProducts, setAllProducts] = useState<ProductWithNestedSchema[]>([]);
+	const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(
+		new Set(),
 	);
+	const [pendingAdditions, setPendingAdditions] = useState<string[]>([]);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [isSaving, setIsSaving] = useState(false);
+	const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const { success, error: toastError } = useToast();
 
-	const manageProductItems = async () => {
-		setEditing(true);
-		const fetchProducts = await productApi.getAllWithNested();
-		if (fetchProducts.success) setProducts([...fetchProducts.data]);
-	};
+	useEffect(() => {
+		setIsLoadingProducts(true);
+		productApi.getAllWithNested().then((res) => {
+			if (res.success) setAllProducts(res.data);
+			setIsLoadingProducts(false);
+		});
+	}, []);
+
+	const currentItemProductIds = items.map((i) => i.productId);
+
+	const activeItems = items.filter((i) => !pendingRemovals.has(i.productId));
+
+	const addedProducts = pendingAdditions
+		.map((id) => allProducts.find((p) => p.id === id))
+		.filter((p): p is ProductWithNestedSchema => !!p);
+
+	const available = allProducts
+		.filter(
+			(p) =>
+				p.status === "none" &&
+				!currentItemProductIds.includes(p.id) &&
+				!pendingAdditions.includes(p.id) &&
+				(searchQuery === "" ||
+					p.serialNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+					p.productType.name
+						.toLowerCase()
+						.includes(searchQuery.toLowerCase())),
+		)
+		.slice(0, 6);
+
+	const hasChanges = pendingRemovals.size > 0 || pendingAdditions.length > 0;
 
 	const handleSave = async () => {
-		setLoading(true);
-		await new Promise((r) => setTimeout(r, 700));
-		setLoading(false);
-		setConfirm(false);
-		setEditing(false);
-		success(
-			"SN dalam pembelian diperbarui",
-			`${groupId.toUpperCase()} · ${sns.length} produk`,
-		);
+		setIsSaving(true);
+		try {
+			const res = await purchaseApi.updateItems(purchaseId, {
+				addedProductIds: pendingAdditions,
+				removedProductIds: Array.from(pendingRemovals),
+			});
+			if (res.success) {
+				success(
+					"Produk diperbarui",
+					`${res.data.length} produk dalam pembelian`,
+				);
+				onItemsSaved(res.data);
+				setPendingRemovals(new Set());
+				setPendingAdditions([]);
+			} else {
+				toastError("Gagal", res.message || "Gagal memperbarui produk");
+			}
+		} catch {
+			toastError("Gagal", "Terjadi kesalahan pada sistem");
+		} finally {
+			setIsSaving(false);
+			setConfirmOpen(false);
+		}
 	};
 
-	if (!editing) {
-		return (
-			<button
-				onClick={() => manageProductItems()}
-				className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors">
-				<Pencil size={11} /> Edit daftar produk (tambah / hapus SN)
-			</button>
-		);
-	}
-
 	return (
-		<>
-			<div className="p-3 border border-blue-200 bg-blue-50/50 rounded-xl space-y-3">
-				<p className="text-xs font-semibold text-blue-800">
-					Edit Produk dalam Pembelian {groupId.toUpperCase()}
+		<div className="space-y-3 p-3 border border-zinc-100 rounded-xl bg-zinc-50/50">
+			<div className="flex items-center justify-between">
+				<p className="text-xs font-semibold text-zinc-700">
+					Kelola Produk dalam Pembelian
 				</p>
-				{/* Current SNs */}
-				<div className="space-y-1">
-					{sns.map((sn) => {
-						const p = products.find((x) => x.serialNumber === sn);
-						return (
-							<div
-								key={sn}
-								className="flex items-center gap-2 px-3 py-2 bg-white border border-zinc-100 rounded-lg">
-								<span className="font-mono text-xs text-zinc-700 flex-1">
-									{sn}
-								</span>
-								{p && (
-									<span className="text-[11px] text-zinc-400">
-										{p.productType.name}
-									</span>
-								)}
-								<button
-									onClick={() => setSns((prev) => prev.filter((s) => s !== sn))}
-									className="p-1 hover:bg-red-50 text-zinc-300 hover:text-red-500 rounded transition-colors">
-									<X size={11} />
-								</button>
-							</div>
-						);
-					})}
-				</div>
-				{/* Add SN */}
-				<div>
-					<Input
-						placeholder="Cari SN atau tipe untuk ditambahkan…"
-						value={newSn}
-						onChange={(e) => setNewSn(e.target.value)}
-						leftIcon={<Search size={12} />}
-					/>
-					{newSn && available.length > 0 && (
-						<div className="mt-1 border border-zinc-100 rounded-lg max-h-32 overflow-y-auto divide-y divide-zinc-50">
-							{available.slice(0, 6).map((p) => (
-								<button
-									key={p.id}
-									onClick={() => {
-										setSns((prev) => [...prev, p.serialNumber]);
-										setNewSn("");
-									}}
-									className="w-full flex items-center gap-2 px-3 py-2 hover:bg-zinc-50 text-left transition-colors">
-									<Plus size={11} className="text-blue-500 shrink-0" />
-									<span className="font-mono text-xs text-zinc-700">
-										{p.serialNumber}
-									</span>
-									<span className="text-[11px] text-zinc-400 flex-1 truncate">
-										{p.productType.name}
-									</span>
-								</button>
-							))}
-						</div>
-					)}
-				</div>
-				<div className="flex gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						fullWidth
-						onClick={() => {
-							setEditing(false);
-							setSns([...serialNumbers]);
-						}}>
-						Batal
+				{hasChanges && (
+					<Button size="xs" onClick={() => setConfirmOpen(true)}>
+						Simpan Perubahan Produk
 					</Button>
-					<Button
-						size="sm"
-						fullWidth
-						onClick={() => setConfirm(true)}
-						disabled={sns.length === 0}>
-						Simpan Perubahan
-					</Button>
-				</div>
+				)}
 			</div>
+
+			<div className="space-y-1">
+				{activeItems.map((item) => (
+					<div
+						key={item.productId}
+						className="flex items-center gap-2 px-3 py-2 bg-white border border-zinc-100 rounded-lg">
+						<span className="font-mono text-xs text-zinc-700 flex-1">
+							{item.product.serialNumber}
+						</span>
+						<span className="text-[11px] text-zinc-400">
+							{item.product.productType.name}
+						</span>
+						<button
+							onClick={() =>
+								setPendingRemovals(
+									(prev) => new Set([...prev, item.productId]),
+								)
+							}
+							className="p-1 hover:bg-red-50 text-zinc-300 hover:text-red-500 rounded transition-colors">
+							<X size={11} />
+						</button>
+					</div>
+				))}
+				{addedProducts.map((p) => (
+					<div
+						key={p.id}
+						className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+						<span className="font-mono text-xs text-blue-700 flex-1">
+							{p.serialNumber}
+						</span>
+						<span className="text-[11px] text-blue-400">
+							{p.productType.name}
+						</span>
+						<span className="text-[10px] text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded font-medium">
+							+Baru
+						</span>
+						<button
+							onClick={() =>
+								setPendingAdditions((prev) => prev.filter((id) => id !== p.id))
+							}
+							className="p-1 hover:bg-red-50 text-blue-300 hover:text-red-500 rounded transition-colors">
+							<X size={11} />
+						</button>
+					</div>
+				))}
+				{activeItems.length === 0 && addedProducts.length === 0 && (
+					<p className="text-xs text-zinc-400 text-center py-2">
+						Belum ada produk dalam pembelian ini
+					</p>
+				)}
+			</div>
+
+			<div>
+				<Input
+					placeholder={
+						isLoadingProducts
+							? "Memuat daftar produk…"
+							: "Cari SN atau tipe untuk ditambahkan…"
+					}
+					value={searchQuery}
+					onChange={(e) => setSearchQuery(e.target.value)}
+					leftIcon={<Search size={12} />}
+					disabled={isLoadingProducts}
+				/>
+				{searchQuery && available.length > 0 && (
+					<div className="mt-1 border border-zinc-100 rounded-lg max-h-32 overflow-y-auto divide-y divide-zinc-50">
+						{available.map((p) => (
+							<button
+								key={p.id}
+								onClick={() => {
+									setPendingAdditions((prev) => [...prev, p.id]);
+									setSearchQuery("");
+								}}
+								className="w-full flex items-center gap-2 px-3 py-2 hover:bg-zinc-50 text-left transition-colors">
+								<Plus size={11} className="text-blue-500 shrink-0" />
+								<span className="font-mono text-xs text-zinc-700">
+									{p.serialNumber}
+								</span>
+								<span className="text-[11px] text-zinc-400 flex-1 truncate">
+									{p.productType.name}
+								</span>
+							</button>
+						))}
+					</div>
+				)}
+				{searchQuery && available.length === 0 && !isLoadingProducts && (
+					<p className="text-[11px] text-zinc-400 mt-1 px-1">
+						Tidak ada produk tersedia yang cocok
+					</p>
+				)}
+			</div>
+
 			<ConfirmModal
 				open={confirmOpen}
-				onClose={() => setConfirm(false)}
+				onClose={() => setConfirmOpen(false)}
 				onConfirm={handleSave}
-				title="Simpan perubahan SN?"
-				description={`Pembelian ${groupId.toUpperCase()} akan diperbarui menjadi ${sns.length} produk.`}
+				title="Simpan perubahan produk?"
+				description={`${pendingRemovals.size} produk dihapus, ${pendingAdditions.length} produk ditambahkan.`}
 				confirmLabel="Simpan"
-				loading={loading}
+				loading={isSaving}
 			/>
-		</>
+		</div>
 	);
 }
 
 export default function AdminPurchasesPage() {
-	// const purchases = mockPurchaseGroups;
-	// const dealers = mockDealers;
-	// const products = mockProducts;
 	const [purchases, setPurchases] = useState<PurchaseWithNestedSchema[]>([]);
 	const [selectedPurchaseItems, setSelectedPurchaseItems] = useState<
 		PurchaseItemsWithNestedSchema[] | null
 	>(null);
-	console.log(selectedPurchaseItems);
+
+	// Filter state
 	const [search, setSearch] = useState("");
 	const [dealerFilter, setDealerFilter] = useState("all");
 	const [dateFrom, setDateFrom] = useState("");
 	const [dateTo, setDateTo] = useState("");
+
+	// Detail modal
 	const [selected, setSelected] = useState<PurchaseWithNestedSchema | null>(
 		null,
 	);
 
-	console.log(dealerFilter);
-	// const [expandedRows, setExpandedRows] = useState<string[]>([]);
+	// Edit purchase modal
+	const [editingPurchase, setEditingPurchase] =
+		useState<PurchaseWithNestedSchema | null>(null);
+	const [editPurchaseForm, setEditPurchaseForm] = useState({
+		purchaseDate: "",
+		notes: "",
+	});
+	const [editPurchaseItems, setEditPurchaseItems] = useState<
+		PurchaseItemsWithNestedSchema[]
+	>([]);
+	const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
 
-	// const toggleExpand = (id: string) =>
-	// 	setExpandedRows((prev) =>
-	// 		prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id],
-	// 	);
+	// Edit customer modal
+	const [editingCustomer, setEditingCustomer] =
+		useState<CustomerSchema | null>(null);
+	const [editCustomerForm, setEditCustomerForm] = useState({
+		name: "",
+		email: "",
+		phone: "",
+		address: "",
+	});
+	const [isSubmittingCustomer, setIsSubmittingCustomer] = useState(false);
+
+	const { success, error: toastError } = useToast();
+
+	const fetchData = async () => {
+		const res = await purchaseApi.getAllWithNested();
+		if (res.success) setPurchases(res.data);
+	};
+
+	// Load on mount
+	useEffect(() => {
+		fetchData();
+	}, []);
+
+	// Load items when a purchase is selected for detail view
+	useEffect(() => {
+		if (selected) {
+			purchaseApi
+				.getAllPurchaseProductItems({ purchaseId: selected.id })
+				.then((res) => {
+					if (res.success) setSelectedPurchaseItems(res.data);
+				});
+		} else {
+			setSelectedPurchaseItems(null);
+		}
+	}, [selected]);
 
 	const filtered = useMemo(() => {
 		const q = search.toLowerCase();
 		return purchases.filter((g) => {
 			const matchSearch =
+				q === "" ||
 				g.customer.name.toLowerCase().includes(q) ||
 				g.customer.email.toLowerCase().includes(q) ||
-				// g.serialNumbers.some((sn) => sn.toLowerCase().includes(q)) ||
 				(g.dealer?.name ?? "").toLowerCase().includes(q);
 			const matchDealer =
 				dealerFilter === "all" ||
 				(dealerFilter === "none" ? !g.dealerId : g.dealerId === dealerFilter);
-			// console.log(matchDealer);
 			const matchFrom = !dateFrom || g.purchaseDate >= dateFrom;
 			const matchTo = !dateTo || g.purchaseDate <= dateTo;
 			return matchSearch && matchDealer && matchFrom && matchTo;
 		});
 	}, [search, dealerFilter, dateFrom, dateTo, purchases]);
 
-	// const getGroupProducts = (g: PurchaseGroup) =>
-	// 	products.filter((p) => g.serialNumbers.includes(p.serialNumber));
+	const handleTriggerEdit = (p: PurchaseWithNestedSchema) => {
+		setSelected(null);
+		setEditingPurchase(p);
+		setEditPurchaseForm({
+			purchaseDate: p.purchaseDate,
+			notes: p.notes ?? "",
+		});
+		setEditPurchaseItems(selectedPurchaseItems ?? []);
+	};
 
-	// const getGroupStatus = (g: PurchaseGroup) => {
-	// 	const products = getGroupProducts(g);
-	// 	if (products.every((p) => p.warrantyStatus === "active")) return "active";
-	// 	if (products.every((p) => p.warrantyStatus === "expired")) return "expired";
-	// 	if (products.some((p) => p.warrantyStatus === "active")) return "partial";
-	// 	return "none";
-	// };
-
-	useEffect(() => {
-		if (selected) {
-			const getPurchaseItems = async (id: string): Promise<void> => {
-				const data = await purchaseApi.getAllPurchaseProductItems({
-					purchaseId: id,
-				});
-				if (data.success) setSelectedPurchaseItems([...data.data]);
-			};
-			getPurchaseItems(selected.id);
-		}
-	}, [selected]);
-
-	useEffect(() => {
-		if (selected) {
-			Promise.all([purchaseApi.getAllWithNested()]).then(([p]) => {
-				if (p.success) setPurchases([...p.data]);
+	const handleSavePurchase = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingPurchase) return;
+		setIsSubmittingPurchase(true);
+		try {
+			const res = await purchaseApi.update(editingPurchase.id, {
+				purchaseDate: editPurchaseForm.purchaseDate,
+				notes: editPurchaseForm.notes || null,
 			});
+			if (res.success) {
+				success("Berhasil", "Data pembelian berhasil diperbarui");
+				setEditingPurchase(null);
+				fetchData();
+			} else {
+				toastError("Gagal", res.message || "Gagal memperbarui data pembelian");
+			}
+		} catch {
+			toastError("Gagal", "Terjadi kesalahan pada sistem");
+		} finally {
+			setIsSubmittingPurchase(false);
 		}
-	}, []);
+	};
+
+	const handleTriggerEditCustomer = () => {
+		if (!editingPurchase) return;
+		const c = editingPurchase.customer;
+		setEditingCustomer(c);
+		setEditCustomerForm({
+			name: c.name,
+			email: c.email,
+			phone: c.phone ?? "",
+			address: c.address ?? "",
+		});
+	};
+
+	const handleSaveCustomer = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingCustomer) return;
+		setIsSubmittingCustomer(true);
+		try {
+			const res = await customerApi.update(editingCustomer.id, {
+				name: editCustomerForm.name,
+				email: editCustomerForm.email,
+				phone: editCustomerForm.phone || null,
+				address: editCustomerForm.address || null,
+			});
+			if (res.success) {
+				success("Berhasil", "Data customer berhasil diperbarui");
+				if (editingPurchase) {
+					setEditingPurchase({ ...editingPurchase, customer: res.data });
+				}
+				setEditingCustomer(null);
+			} else {
+				toastError("Gagal", res.message || "Gagal memperbarui data customer");
+			}
+		} catch {
+			toastError("Gagal", "Terjadi kesalahan pada sistem");
+		} finally {
+			setIsSubmittingCustomer(false);
+		}
+	};
 
 	return (
 		<div>
@@ -286,35 +402,27 @@ export default function AdminPurchasesPage() {
 			/>
 			<div className="p-6 animate-fade-up">
 				{/* Summary cards */}
-				<div className="grid grid-cols-4 gap-4 mb-5">
+				<div className="grid grid-cols-3 gap-4 mb-5">
 					{[
-						{
-							l: "Total Pembelian",
-							v: purchases.length,
-							c: "text-zinc-900",
-						},
+						{ l: "Total Pembelian", v: purchases.length, c: "text-zinc-900" },
 						{
 							l: "Via Dealer",
 							v: purchases.filter((g) => g.dealerId).length,
 							c: "text-blue-700",
 						},
 						{
-							l: "Via Sales",
+							l: "Via Sales Langsung",
 							v: purchases.filter((g) => !g.dealerId).length,
 							c: "text-violet-700",
 						},
-						// {
-						// 	l: "Garansi Berakhir",
-						// 	v: purchases.filter((g) => getGroupStatus(g) === "expired")
-						// 		.length,
-						// 	c: "text-red-600",
-						// },
 					].map((s) => (
 						<div
 							key={s.l}
 							className="bg-white border border-zinc-200 rounded-xl px-4 py-3.5 shadow-sm">
 							<p className="text-xs text-zinc-400 mb-1">{s.l}</p>
-							<p className={`text-2xl font-semibold font-mono ${s.c}`}>{s.v}</p>
+							<p className={`text-2xl font-semibold font-mono ${s.c}`}>
+								{s.v}
+							</p>
 						</div>
 					))}
 				</div>
@@ -324,7 +432,7 @@ export default function AdminPurchasesPage() {
 					<div className="px-5 py-3.5 border-b border-zinc-100 flex flex-wrap gap-2.5 items-center">
 						<div className="flex-1 min-w-48 max-w-64">
 							<Input
-								placeholder="Cari customer, atau dealer…"
+								placeholder="Cari customer atau dealer…"
 								value={search}
 								onChange={(e) => setSearch(e.target.value)}
 								leftIcon={<Search size={13} />}
@@ -339,7 +447,7 @@ export default function AdminPurchasesPage() {
 										purchases
 											.filter((d) => d.dealerId)
 											.map((d) => [
-												d.dealerId, // Unique Key
+												d.dealerId,
 												{ value: d.dealerId!, label: d.dealer?.name! },
 											]),
 									).values(),
@@ -372,20 +480,16 @@ export default function AdminPurchasesPage() {
 					<CardContent className="p-0">
 						<Table>
 							<TableHead>
-								{/* <TableHeader className="w-8" /> */}
-								<TableHeader>ID Grup</TableHeader>
+								<TableHeader>ID Pembelian</TableHeader>
 								<TableHeader>Customer</TableHeader>
 								<TableHeader>Tgl Pembelian</TableHeader>
 								<TableHeader>Didaftarkan Oleh</TableHeader>
-								{/* <TableHeader>Status</TableHeader> */}
-								{/* <TableHeader>Produk</TableHeader> */}
-								{/* <TableHeader>Garansi</TableHeader> */}
 								<TableHeader className="text-right pr-5">Aksi</TableHeader>
 							</TableHead>
 							<TableBody>
 								{filtered.length === 0 ? (
 									<tr>
-										<td colSpan={9}>
+										<td colSpan={5}>
 											<EmptyState
 												icon={<ShoppingBag size={18} />}
 												title="Tidak ada pembelian"
@@ -394,331 +498,393 @@ export default function AdminPurchasesPage() {
 										</td>
 									</tr>
 								) : (
-									filtered.map((g) => {
-										// const status = getGroupStatus(g);
-										// const expanded = expandedRows.includes(g.id);
-										// const products = getGroupProducts(g);
-										return (
-											<>
-												<TableRow key={g.id}>
-													{/* <TableCell>
-														<button
-															onClick={() => toggleExpand(g.id)}
-															className="p-1 rounded hover:bg-zinc-100 text-zinc-400 transition-colors">
-															{expanded ? (
-																<ChevronUp size={13} />
-															) : (
-																<ChevronDown size={13} />
-															)}
-														</button>
-													</TableCell> */}
-													<TableCell>
-														<span className="font-mono text-xs bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
-															{g.id.toUpperCase()}
-														</span>
-													</TableCell>
-													<TableCell>
-														<div>
-															<p className="text-xs font-medium text-zinc-900">
-																{g.customer.name}
-															</p>
-															<p className="text-[11px] text-zinc-400">
-																{g.customer.email}
-															</p>
-														</div>
-													</TableCell>
-													{/* <TableCell>
-														<span className="text-xs font-semibold font-mono text-zinc-700">
-															{g.invoice.length} unit
-														</span>
-													</TableCell> */}
-													<TableCell>
-														<span className="text-xs text-zinc-600">
-															{g.purchaseDate}
-														</span>
-													</TableCell>
-													{/* <TableCell>
-														<div>
-															<p className="text-xs text-zinc-600">
-																{formatDateShort(g.purchaseDate)}
-															</p>
-															<p className="text-[11px] text-zinc-400">
-																s/d {formatDateShort(g.warrantyEndDate)}
-															</p>
-														</div>
-													</TableCell> */}
-													<TableCell>
-														<span className="text-xs text-zinc-500">
-															{g.dealer?.name ?? g.registeredByUser.name ?? "—"}
-														</span>
-													</TableCell>
-													{/* <TableCell>
-														<Badge
-															variant={
-																status === "active"
-																	? "success"
-																	: status === "expired"
-																		? "danger"
-																		: status === "partial"
-																			? "warning"
-																			: "neutral"
-															}
-															dot>
-															{status === "active"
-																? "Aktif"
-																: status === "expired"
-																	? "Berakhir"
-																	: status === "partial"
-																		? "Sebagian"
-																		: "—"}
-														</Badge>
-													</TableCell> */}
-													<TableCell>
-														<div className="flex items-center justify-end">
-															<button
-																onClick={() => setSelected(g)}
-																className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors">
-																<Eye size={13} />
-															</button>
-														</div>
-													</TableCell>
-												</TableRow>
-												{/* Expanded row: list SN details */}
-												{/* {expanded && (
-													<tr key={`${g.id}-expand`} className="bg-zinc-50/60">
-														<td />
-														<td colSpan={8} className="px-4 pb-3 pt-1">
-															<div className="grid grid-cols-2 gap-2">
-																{products.map((p) => (
-																	<div
-																		key={p.id}
-																		className="flex items-center gap-2.5 p-2 bg-white border border-zinc-100 rounded-lg">
-																		<Package
-																			size={12}
-																			className="text-zinc-400 shrink-0"
-																		/>
-																		<span className="font-mono text-[11px] text-zinc-600">
-																			{p.serialNumber}
-																		</span>
-																		<span className="text-[11px] text-zinc-400 flex-1 truncate">
-																			{p.productType}
-																		</span>
-																		<Badge
-																			variant={
-																				p.warrantyStatus === "active"
-																					? "success"
-																					: p.warrantyStatus === "expired"
-																						? "danger"
-																						: "neutral"
-																			}
-																			dot>
-																			{p.warrantyStatus === "active"
-																				? "Aktif"
-																				: p.warrantyStatus === "expired"
-																					? "Berakhir"
-																					: "—"}
-																		</Badge>
-																	</div>
-																))}
-															</div>
-														</td>
-													</tr>
-												)} */}
-											</>
-										);
-									})
+									filtered.map((g) => (
+										<TableRow key={g.id}>
+											<TableCell>
+												<span className="font-mono text-xs bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">
+													{g.id.slice(0, 8).toUpperCase()}
+												</span>
+											</TableCell>
+											<TableCell>
+												<div>
+													<p className="text-xs font-medium text-zinc-900">
+														{g.customer.name}
+													</p>
+													<p className="text-[11px] text-zinc-400">
+														{g.customer.email}
+													</p>
+												</div>
+											</TableCell>
+											<TableCell>
+												<span className="text-xs text-zinc-600">
+													{formatDateShort(g.purchaseDate)}
+												</span>
+											</TableCell>
+											<TableCell>
+												<span className="text-xs text-zinc-500">
+													{g.dealer?.name ??
+														g.registeredByUser.name ??
+														"—"}
+												</span>
+											</TableCell>
+											<TableCell>
+												<div className="flex items-center justify-end">
+													<button
+														onClick={() => setSelected(g)}
+														className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+														title="Detail">
+														<Eye size={13} />
+													</button>
+												</div>
+											</TableCell>
+										</TableRow>
+									))
 								)}
 							</TableBody>
 						</Table>
-						{/* <Pagination
-							page={pPage}
-							pageSize={pPageSize}
-							total={filtered.length}
-							onPageChange={setPPage}
-							onPageSizeChange={(s) => { setPPageSize(s); setPPage(1); }}
-						/> */}
 					</CardContent>
 				</Card>
 			</div>
 
-			{/* Detail Modal */}
-			{selected !== null && selectedPurchaseItems !== null && (
-				<Modal
-					open={!!selected}
-					onClose={() => setSelected(null)}
-					title="Detail Pembelian"
-					size="lg">
-					{selected &&
-						(() => {
-							// const products = getGroupProducts(selected);
-							// const days = getDaysRemaining(
-							// 	selectedPurchaseItems[0].product.warrantyEndDate,
-							// );
-							return (
-								<div className="space-y-5">
-									{/* Header */}
-									<div className="flex items-start gap-3 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
-										<div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
-											<ShoppingBag size={18} className="text-zinc-400" />
-										</div>
-										<div className="flex-1">
-											<div className="flex items-center gap-2 mb-0.5">
-												<span className="font-mono text-xs bg-zinc-200 text-zinc-600 px-2 py-0.5 rounded-md">
-													{selected.id.toUpperCase()}
-												</span>
-												<span className="text-xs text-zinc-400">·</span>
-												<span className="text-xs text-zinc-500">
-													{formatDateShort(selected.invoice.createdAt)}
-												</span>
-											</div>
-											<p className="text-sm font-semibold text-zinc-900">
-												{selected.customer.name}
-											</p>
-											<p className="text-xs text-zinc-400">
-												{selected.customer.email} · {selected.customer.phone}
-											</p>
-										</div>
-									</div>
-
-									{/* Info grid */}
-									<div className="grid grid-cols-3 gap-4">
-										<div className="p-3 bg-zinc-50 rounded-xl">
-											<div className="flex items-center gap-1.5 mb-1">
-												<Calendar size={12} className="text-zinc-400" />
-												<p className="text-[11px] text-zinc-400">
-													Tgl Pembelian
-												</p>
-											</div>
-											<p className="text-xs font-semibold text-zinc-800">
-												{formatDateShort(selected.purchaseDate)}
-											</p>
-										</div>
-										<div className="p-3 bg-zinc-50 rounded-xl">
-											<div className="flex items-center gap-1.5 mb-1">
-												<Package size={12} className="text-zinc-400" />
-												<p className="text-[11px] text-zinc-400">
-													Jumlah Produk
-												</p>
-											</div>
-											<p className="text-xs font-semibold text-zinc-800">
-												{selectedPurchaseItems.length} unit
-											</p>
-										</div>
-										<div className="p-3 bg-zinc-50 rounded-xl">
-											<div className="flex items-center gap-1.5 mb-1">
-												<Users size={12} className="text-zinc-400" />
-												<p className="text-[11px] text-zinc-400">Didaftarkan</p>
-											</div>
-											<p className="text-xs font-semibold text-zinc-800">
-												{selected.dealer?.name ??
-													selected.registeredByUser.name ??
-													"—"}
-											</p>
-										</div>
-									</div>
-
-									{/* Warranty period */}
-									{/* <div className="p-3 border border-zinc-100 rounded-xl">
-										<p className="text-[11px] text-zinc-400 mb-1">
-											Periode Garansi
-										</p>
-										<div className="flex items-center justify-between">
-											<div>
-												<span className="text-xs text-zinc-600">
-													{formatDateShort(selected.)}
-												</span>
-												<span className="text-zinc-300 mx-2">→</span>
-												<span className="text-xs text-zinc-600">
-													{formatDateShort(selected.warrantyEndDate)}
-												</span>
-											</div>
-											{days > 0 ? (
-												<Badge variant="success">{days} hari tersisa</Badge>
-											) : (
-												<Badge variant="danger">Berakhir</Badge>
-											)}
-										</div>
-									</div> */}
-
-									{/* Products */}
-									<div>
-										<p className="text-xs font-semibold text-zinc-700 mb-2">
-											Produk dalam pembelian ini
-										</p>
-										<div className="space-y-1.5">
-											{selectedPurchaseItems.map((p) => (
-												<div
-													key={p.id}
-													className="flex items-center gap-3 p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
-													<span className="font-mono text-xs bg-white border border-zinc-200 px-2 py-1 rounded-md text-zinc-700 shrink-0">
-														{p.product.serialNumber}
-													</span>
-													<div className="flex-1 min-w-0">
-														<p className="text-xs font-medium text-zinc-800">
-															{p.product.productType.name}
-														</p>
-														<p className="text-[11px] text-zinc-400">
-															{p.product.productType.category.name}
-														</p>
-													</div>
-													<Badge
-														variant={
-															p.product.status === "warranty_active"
-																? "success"
-																: p.product.status === "warranty_expired"
-																	? "danger"
-																	: "neutral"
-														}
-														dot>
-														{p.product.status === "warranty_active"
-															? "Aktif"
-															: p.product.status === "warranty_expired"
-																? "Berakhir"
-																: "—"}
-													</Badge>
-												</div>
-											))}
-										</div>
-									</div>
-
-									{/* SN Management */}
-									{/* <AdminSnEditor
-										groupId={selected.id}
-										serialNumbers={selectedPurchaseItems.map(
-											(p) => p.product.serialNumber,
-										)}
-										onClose={() => setSelected(null)}
-									/> */}
-
-									{/* Invoice */}
-									<div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">
-										<div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-											<FileText size={14} className="text-blue-500" />
-										</div>
-										<div className="flex-1 min-w-0">
-											<p className="text-xs font-medium text-zinc-800">
-												{selected.invoice.originalFilename}
-											</p>
-											<p className="text-[11px] text-zinc-400">Invoice · PDF</p>
-										</div>
-										<Button size="xs" variant="outline">
-											Lihat Invoice
-										</Button>
-									</div>
-
-									<div className="flex justify-end">
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => setSelected(null)}>
-											Tutup
-										</Button>
-									</div>
+			{/* ── Detail Modal ── */}
+			<Modal
+				open={!!selected}
+				onClose={() => setSelected(null)}
+				title="Detail Pembelian"
+				size="lg">
+				{selected && (
+					<div className="space-y-5">
+						{/* Header */}
+						<div className="flex items-start gap-3 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
+							<div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
+								<ShoppingBag size={18} className="text-zinc-400" />
+							</div>
+							<div className="flex-1">
+								<div className="flex items-center gap-2 mb-0.5">
+									<span className="font-mono text-xs bg-zinc-200 text-zinc-600 px-2 py-0.5 rounded-md">
+										{selected.id.slice(0, 8).toUpperCase()}
+									</span>
+									<span className="text-xs text-zinc-400">·</span>
+									<span className="text-xs text-zinc-500">
+										{formatDateShort(selected.invoice.createdAt)}
+									</span>
 								</div>
-							);
-						})()}
-				</Modal>
-			)}
+								<p className="text-sm font-semibold text-zinc-900">
+									{selected.customer.name}
+								</p>
+								<p className="text-xs text-zinc-400">
+									{selected.customer.email}
+									{selected.customer.phone
+										? ` · ${selected.customer.phone}`
+										: ""}
+								</p>
+							</div>
+						</div>
+
+						{/* Info grid */}
+						<div className="grid grid-cols-3 gap-4">
+							<div className="p-3 bg-zinc-50 rounded-xl">
+								<div className="flex items-center gap-1.5 mb-1">
+									<Calendar size={12} className="text-zinc-400" />
+									<p className="text-[11px] text-zinc-400">Tgl Pembelian</p>
+								</div>
+								<p className="text-xs font-semibold text-zinc-800">
+									{formatDateShort(selected.purchaseDate)}
+								</p>
+							</div>
+							<div className="p-3 bg-zinc-50 rounded-xl">
+								<div className="flex items-center gap-1.5 mb-1">
+									<Package size={12} className="text-zinc-400" />
+									<p className="text-[11px] text-zinc-400">Jumlah Produk</p>
+								</div>
+								<p className="text-xs font-semibold text-zinc-800">
+									{selectedPurchaseItems
+										? `${selectedPurchaseItems.length} unit`
+										: "—"}
+								</p>
+							</div>
+							<div className="p-3 bg-zinc-50 rounded-xl">
+								<div className="flex items-center gap-1.5 mb-1">
+									<Users size={12} className="text-zinc-400" />
+									<p className="text-[11px] text-zinc-400">Didaftarkan</p>
+								</div>
+								<p className="text-xs font-semibold text-zinc-800">
+									{selected.dealer?.name ??
+										selected.registeredByUser.name ??
+										"—"}
+								</p>
+							</div>
+						</div>
+
+						{/* Notes */}
+						{selected.notes && (
+							<div className="p-3 border border-zinc-100 rounded-xl">
+								<p className="text-[11px] text-zinc-400 mb-1">Catatan</p>
+								<p className="text-xs text-zinc-700">{selected.notes}</p>
+							</div>
+						)}
+
+						{/* Products */}
+						{selectedPurchaseItems !== null && (
+							<div>
+								<p className="text-xs font-semibold text-zinc-700 mb-2">
+									Produk dalam pembelian ini
+								</p>
+								<div className="space-y-1.5 max-h-52 overflow-y-auto">
+									{selectedPurchaseItems.map((p) => (
+										<div
+											key={p.id}
+											className="flex items-center gap-3 p-3 bg-zinc-50 border border-zinc-100 rounded-xl">
+											<span className="font-mono text-xs bg-white border border-zinc-200 px-2 py-1 rounded-md text-zinc-700 shrink-0">
+												{p.product.serialNumber}
+											</span>
+											<div className="flex-1 min-w-0">
+												<p className="text-xs font-medium text-zinc-800">
+													{p.product.productType.name}
+												</p>
+												<p className="text-[11px] text-zinc-400">
+													{p.product.productType.category.name}
+												</p>
+											</div>
+											<Badge
+												variant={
+													p.product.status === "warranty_active"
+														? "success"
+														: p.product.status === "warranty_expired"
+															? "danger"
+															: "neutral"
+												}
+												dot>
+												{p.product.status === "warranty_active"
+													? "Aktif"
+													: p.product.status === "warranty_expired"
+														? "Berakhir"
+														: "—"}
+											</Badge>
+										</div>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* Invoice */}
+						<div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">
+							<div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+								<FileText size={14} className="text-blue-500" />
+							</div>
+							<div className="flex-1 min-w-0">
+								<p className="text-xs font-medium text-zinc-800">
+									{selected.invoice.originalFilename}
+								</p>
+								<p className="text-[11px] text-zinc-400">
+									Invoice · {selected.invoice.mimeType}
+								</p>
+							</div>
+						</div>
+
+						<div className="flex gap-2 pt-1 border-t border-zinc-100">
+							<Button
+								variant="outline"
+								fullWidth
+								onClick={() => setSelected(null)}>
+								Tutup
+							</Button>
+							<Button
+								variant="secondary"
+								fullWidth
+								onClick={() => handleTriggerEdit(selected)}>
+								<Pencil size={13} className="mr-1.5" />
+								Edit Pembelian
+							</Button>
+						</div>
+					</div>
+				)}
+			</Modal>
+
+			{/* ── Edit Purchase Modal ── */}
+			<Modal
+				open={!!editingPurchase}
+				onClose={() => setEditingPurchase(null)}
+				title="Edit Data Pembelian"
+				size="lg">
+				{editingPurchase && (
+					<div className="space-y-5">
+						{/* Customer info banner */}
+						<div className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+							<div className="flex items-center gap-2.5">
+								<div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+									<User size={14} className="text-blue-600" />
+								</div>
+								<div>
+									<p className="text-xs font-semibold text-zinc-900">
+										{editingPurchase.customer.name}
+									</p>
+									<p className="text-[11px] text-zinc-400">
+										{editingPurchase.customer.email}
+									</p>
+								</div>
+							</div>
+							<Button
+								size="xs"
+								variant="outline"
+								onClick={handleTriggerEditCustomer}>
+								<Pencil size={11} className="mr-1" />
+								Edit Customer
+							</Button>
+						</div>
+
+						{/* Purchase form */}
+						<form onSubmit={handleSavePurchase} className="space-y-4">
+							<div className="space-y-1">
+								<label className="text-xs font-medium text-zinc-600">
+									Tanggal Pembelian <span className="text-red-500">*</span>
+								</label>
+								<Input
+									type="date"
+									required
+									value={editPurchaseForm.purchaseDate}
+									onChange={(e) =>
+										setEditPurchaseForm((f) => ({
+											...f,
+											purchaseDate: e.target.value,
+										}))
+									}
+								/>
+							</div>
+							<div className="space-y-1">
+								<label className="text-xs font-medium text-zinc-600">
+									Catatan
+								</label>
+								<textarea
+									className="w-full min-h-[72px] text-xs rounded-lg border border-zinc-200 px-3 py-2 text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+									placeholder="Catatan tambahan…"
+									value={editPurchaseForm.notes}
+									onChange={(e) =>
+										setEditPurchaseForm((f) => ({
+											...f,
+											notes: e.target.value,
+										}))
+									}
+								/>
+							</div>
+
+							<div className="flex gap-2 pt-2 border-t border-zinc-100">
+								<Button
+									type="button"
+									variant="outline"
+									fullWidth
+									onClick={() => setEditingPurchase(null)}>
+									Batal
+								</Button>
+								<Button
+									type="submit"
+									fullWidth
+									loading={isSubmittingPurchase}>
+									Simpan Data Pembelian
+								</Button>
+							</div>
+						</form>
+
+						{/* SN Editor */}
+						<PurchaseItemEditor
+							purchaseId={editingPurchase.id}
+							items={editPurchaseItems}
+							onItemsSaved={(updatedItems) => {
+								setEditPurchaseItems(updatedItems);
+								setSelectedPurchaseItems(updatedItems);
+							}}
+						/>
+					</div>
+				)}
+			</Modal>
+
+			{/* ── Edit Customer Modal (sub-modal) ── */}
+			<Modal
+				open={!!editingCustomer}
+				onClose={() => setEditingCustomer(null)}
+				title="Edit Data Customer"
+				size="md">
+				{editingCustomer && (
+					<form onSubmit={handleSaveCustomer} className="space-y-4">
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								Nama <span className="text-red-500">*</span>
+							</label>
+							<Input
+								required
+								placeholder="Nama customer…"
+								value={editCustomerForm.name}
+								onChange={(e) =>
+									setEditCustomerForm((f) => ({ ...f, name: e.target.value }))
+								}
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								Email <span className="text-red-500">*</span>
+							</label>
+							<Input
+								required
+								type="email"
+								placeholder="email@contoh.com"
+								value={editCustomerForm.email}
+								onChange={(e) =>
+									setEditCustomerForm((f) => ({
+										...f,
+										email: e.target.value,
+									}))
+								}
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								No. Telepon
+							</label>
+							<Input
+								type="tel"
+								placeholder="0812xxxxxxx"
+								value={editCustomerForm.phone}
+								onChange={(e) =>
+									setEditCustomerForm((f) => ({
+										...f,
+										phone: e.target.value,
+									}))
+								}
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-xs font-medium text-zinc-600">
+								Alamat
+							</label>
+							<Input
+								placeholder="Alamat lengkap…"
+								value={editCustomerForm.address}
+								onChange={(e) =>
+									setEditCustomerForm((f) => ({
+										...f,
+										address: e.target.value,
+									}))
+								}
+							/>
+						</div>
+						<div className="flex gap-2 pt-2 border-t border-zinc-100">
+							<Button
+								type="button"
+								variant="outline"
+								fullWidth
+								onClick={() => setEditingCustomer(null)}>
+								Batal
+							</Button>
+							<Button
+								type="submit"
+								fullWidth
+								loading={isSubmittingCustomer}>
+								Simpan Data Customer
+							</Button>
+						</div>
+					</form>
+				)}
+			</Modal>
 		</div>
 	);
 }
