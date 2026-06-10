@@ -37,7 +37,7 @@ import type { ProductWithNestedSchema } from "@/services/product.service";
 
 const transformApiProduct = (
 	apiProduct: ProductWithNestedSchema,
-): Product & { warrantyConditionData?: any } => {
+): Product => {
 	const now = new Date();
 	const warrantyStartDate = apiProduct.warrantyStartDate
 		? new Date(apiProduct.warrantyStartDate)
@@ -74,8 +74,26 @@ const transformApiProduct = (
 			apiProduct.createdAt instanceof Date
 				? apiProduct.createdAt.toISOString()
 				: String(apiProduct.createdAt),
-		warrantyConditionData: apiProduct.warrantyCondition,
 	};
+};
+
+const loadWarrantyConditionsFromApi = (
+	apiProducts: ProductWithNestedSchema[],
+): void => {
+	apiProducts.forEach((apiProduct) => {
+		if (apiProduct.warrantyCondition && apiProduct.serialNumber) {
+			setCondition(apiProduct.serialNumber, {
+				warrantyCondition: apiProduct.warrantyCondition.condition || "valid",
+				warrantyConditionNote: apiProduct.warrantyCondition.reason || "",
+				warrantyConditionUpdatedAt: apiProduct.warrantyCondition.updatedAt
+					? new Date(apiProduct.warrantyCondition.updatedAt)
+							.toISOString()
+							.slice(0, 10)
+					: "",
+				warrantyConditionUpdatedBy: "", // Could be populated if needed
+			});
+		}
+	});
 };
 
 const getProductCategories = (products: Product[]): string[] => {
@@ -377,21 +395,10 @@ export default function SupportProductsPage() {
 					throw new Error(response.message || "No data in response");
 				}
 
+				// Load warranty condition data from API into store
+				loadWarrantyConditionsFromApi(response.data);
+
 				const transformed = response.data.map(transformApiProduct);
-
-				// Initialize conditions store with warranty condition data from API
-				transformed.forEach((product) => {
-					const conditionData = (product as any).warrantyConditionData;
-					if (conditionData && product.serialNumber) {
-						setCondition(product.serialNumber, {
-							warrantyCondition: conditionData.condition || "valid",
-							warrantyConditionNote: conditionData.reason || "",
-							warrantyConditionUpdatedAt: conditionData.updatedAt || "",
-							warrantyConditionUpdatedBy: "", // Could be populated if needed
-						});
-					}
-				});
-
 				const eligible = transformed.filter(
 					(p) => p.warrantyStatus === "active",
 				);
