@@ -1,8 +1,9 @@
 "use client";
 // app/dashboard/product-types/page.tsx
-import { useState, useEffect } from "react";
+import { useState, useLayoutEffect, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -168,16 +169,15 @@ function ProductTypeModal({
 	// 	}
 	// }, [open, initial]);
 
-	useEffect(() => {
-		if (open) {
-			setName(initial?.name ?? "");
-			setCategoryId(initial?.categoryId ?? "");
-			// Koreksi di sini: jika tambah baru (initial undefined), pastikan state-nya array kosong []
-			setItemCodes(initial ? allCodes.map((c) => c.itemCode) : []);
-			setNewCode("");
-			setErrors({});
-			setDuplicateError("");
-		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	useLayoutEffect(() => {
+		if (!open) return;
+		setName(initial?.name ?? "");
+		setCategoryId(initial?.categoryId ?? "");
+		setItemCodes(initial ? allCodes.map((c) => c.itemCode) : []);
+		setNewCode("");
+		setErrors({});
+		setDuplicateError("");
 	}, [open, initial, allCodes]);
 
 	const addCode = async () => {
@@ -311,8 +311,8 @@ function ProductTypeModal({
 }
 
 export default function ProductTypesPage() {
+	const router = useRouter();
 	const [types, setTypes] = useState<ProductTypeWithNestedSchema[]>([]);
-  console.log(types)
 	const [itemCodes, setItemCodes] = useState<ItemCodeMapsSchema[]>([]);
 	const [categories, setCategories] = useState<CategorySchema[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -379,6 +379,7 @@ export default function ProductTypesPage() {
 					prev.map((t) => (t.id === editing.id ? response.data! : t)),
 				);
 				success("Tipe produk diperbarui", newTypeName);
+				router.refresh();
 			} else {
 				toastError("Gagal memperbarui tipe produk", response.message);
 			}
@@ -395,6 +396,7 @@ export default function ProductTypesPage() {
 				// Masukkan tipe produk baru hasil response backend ke dalam list state
 				setTypes((prev) => [response.data!, ...prev]);
 				success("Tipe produk ditambahkan", newTypeName);
+				router.refresh();
 			} else {
 				toastError("Gagal menambahkan tipe produk", response.message);
 			}
@@ -413,6 +415,7 @@ export default function ProductTypesPage() {
 			setTypes((prev) => prev.filter((t) => t.id !== deleteTarget.id));
 			setDeleteTarget(undefined);
 			success("Tipe produk berhasil dihapus");
+			router.refresh();
 		} else {
 			toastError("Gagal menghapus tipe produk", response.message);
 		}

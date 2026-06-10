@@ -463,7 +463,7 @@ export default function AdminPurchasesPage() {
 											.filter((d) => d.dealerId)
 											.map((d) => [
 												d.dealerId,
-												{ value: d.dealerId!, label: d.dealer?.name! },
+												{ value: d.dealerId, label: d.dealer?.name ?? "Unknown" },
 											]),
 									).values(),
 								),
@@ -645,7 +645,7 @@ export default function AdminPurchasesPage() {
 								<p className="text-xs font-semibold text-zinc-700 mb-2">
 									Produk dalam pembelian ini
 								</p>
-								<div className="space-y-1.5 max-h-52 overflow-y-auto">
+								<div className="space-y-1.5 max-h-[75vh] overflow-y-auto">
 									{selectedPurchaseItems.map((p) => (
 										<div
 											key={p.id}
@@ -696,6 +696,15 @@ export default function AdminPurchasesPage() {
 										Invoice · {selected.invoice.mimeType}
 									</p>
 								</div>
+								<a
+									href={selected.invoice.storagePath}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="shrink-0">
+									<Button size="xs" variant="outline">
+										Lihat
+									</Button>
+								</a>
 							</div>
 						) : (
 							<div className="p-3 border border-amber-100 rounded-xl bg-amber-50">
