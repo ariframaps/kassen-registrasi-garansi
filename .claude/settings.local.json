@@ -40,7 +40,11 @@
       "Bash(python3)",
       "Bash(cp -r src/app/api/v1/products/[id]/warranty-status src/app/api/v1/products/[sn]/)",
       "Bash(rm -rf src/app/api/v1/products/[id])",
-      "Bash(git commit -m 'fix: Resolve dynamic route naming conflict - use consistent '\\\\''sn'\\\\'' parameter *)"
+      "Bash(git commit -m 'fix: Resolve dynamic route naming conflict - use consistent '\\\\''sn'\\\\'' parameter *)",
+      "Bash(Find \"D:\\\\Programming\\\\Web Programming\\\\Project\\\\kassen-registrasi-garansi\\\\src\\\\app\\\\api\\\\v1\\\\products\" -type d)",
+      "Bash(Sort-Object)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Programming\\\\Web Programming\\\\Project\\\\kassen-registrasi-garansi\\\\src\\\\app\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)"
     ]
   }
 }

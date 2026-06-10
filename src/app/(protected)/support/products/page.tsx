@@ -1,6 +1,6 @@
 "use client";
 // app/support/products/page.tsx — Technical Support: all registered products default valid, can change condition
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { mockProducts, PRODUCT_CATEGORIES } from "@/mock/mock-data";
 import { conditionsStore, setCondition } from "@/lib/warranty-conditions.store";
 import type { ConditionEntry } from "@/lib/warranty-conditions.store";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
@@ -34,11 +33,54 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { Product } from "@/types";
 import { productApi } from "@/lib/api/api-client";
+import type { ProductWithNestedSchema } from "@/services/product.service";
 
-// Only products with active warranty are shown here
-const eligibleProducts = mockProducts.filter(
-	(p) => p.warrantyStatus === "active",
-);
+const transformApiProduct = (
+	apiProduct: ProductWithNestedSchema,
+): Product => {
+	const now = new Date();
+	const warrantyStartDate = apiProduct.warrantyStartDate
+		? new Date(apiProduct.warrantyStartDate)
+		: null;
+	const warrantyEndDate = apiProduct.warrantyEndDate
+		? new Date(apiProduct.warrantyEndDate)
+		: null;
+
+	const warrantyStatus: "active" | "expired" | "none" =
+		warrantyStartDate && warrantyEndDate && warrantyEndDate > now
+			? "active"
+			: warrantyEndDate && warrantyEndDate <= now
+				? "expired"
+				: "none";
+
+	return {
+		id: apiProduct.id,
+		serialNumber: apiProduct.serialNumber,
+		productType: apiProduct.productType?.name || "",
+		productCategory: apiProduct.productType?.category?.name || "",
+		status: apiProduct.status,
+		assignedDealerId: apiProduct.dealer?.id,
+		assignedDealerName: apiProduct.dealer?.name,
+		warrantyStatus,
+		warrantyStartDate: apiProduct.warrantyStartDate || undefined,
+		warrantyEndDate: apiProduct.warrantyEndDate || undefined,
+		customerName:
+			apiProduct.deliveryOrder?.destinationCustomer?.name || undefined,
+		customerPhone:
+			apiProduct.deliveryOrder?.destinationCustomer?.phone || undefined,
+		customerEmail:
+			apiProduct.deliveryOrder?.destinationCustomer?.email || undefined,
+		uploadedAt:
+			apiProduct.createdAt instanceof Date
+				? apiProduct.createdAt.toISOString()
+				: String(apiProduct.createdAt),
+	};
+};
+
+const getProductCategories = (products: Product[]): string[] => {
+	const categories = new Set(products.map((p) => p.productCategory));
+	return Array.from(categories).sort();
+};
 
 function ConditionBadge({ cond }: { cond: ConditionEntry | null }) {
 	if (!cond || cond.warrantyCondition === "valid")
@@ -318,14 +360,49 @@ export default function SupportProductsPage() {
 	const [categoryFilter, setCategory] = useState("all");
 	const [conditionFilter, setCondition] = useState("all");
 	const [selectedProduct, setSelected] = useState<Product | null>(null);
-	// local mirror of store for re-render
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [products, setProducts] = useState<Product[]>([]);
 	const [, forceUpdate] = useState(0);
+
+	useEffect(() => {
+		const fetchProducts = async () => {
+			try {
+				setLoading(true);
+				setError(null);
+				const response = await productApi.getAllWithNested();
+
+				if (!response.success || !response.data) {
+					throw new Error(response.message || "No data in response");
+				}
+
+				const transformed = response.data.map(transformApiProduct);
+				const eligible = transformed.filter(
+					(p) => p.warrantyStatus === "active",
+				);
+				setProducts(eligible);
+			} catch (err) {
+				console.error("Failed to fetch products:", err);
+				setError(
+					err instanceof Error ? err.message : "Failed to fetch products",
+				);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchProducts();
+	}, []);
 
 	const getC = (sn: string) => conditionsStore[sn] ?? null;
 
+	const productCategories = useMemo(() => getProductCategories(products), [
+		products,
+	]);
+
 	const filtered = useMemo(() => {
 		const q = search.toLowerCase();
-		return eligibleProducts.filter((p) => {
+		return products.filter((p) => {
 			const matchSearch =
 				p.serialNumber.toLowerCase().includes(q) ||
 				p.productType.toLowerCase().includes(q) ||
@@ -345,17 +422,63 @@ export default function SupportProductsPage() {
 			return matchSearch && matchCategory && matchCondition;
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [search, categoryFilter, conditionFilter]);
+	}, [search, categoryFilter, conditionFilter, products]);
 
 	const stats = {
-		total: eligibleProducts.length,
-		valid: eligibleProducts.filter(
+		total: products.length,
+		valid: products.filter(
 			(p) => (getC(p.serialNumber)?.warrantyCondition ?? "valid") === "valid",
 		).length,
-		rejected: eligibleProducts.filter(
+		rejected: products.filter(
 			(p) => getC(p.serialNumber)?.warrantyCondition === "rejected",
 		).length,
 	};
+
+	if (loading) {
+		return (
+			<div>
+				<Topbar
+					title="Kondisi Garansi"
+					description="Semua produk terdaftar garansinya valid secara default"
+				/>
+				<div className="p-6">
+					<div className="flex items-center justify-center h-64">
+						<div className="text-center">
+							<Wrench className="w-8 h-8 animate-spin text-zinc-400 mx-auto mb-2" />
+							<p className="text-sm text-zinc-600">
+								Memuat data produk...
+							</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (error) {
+		return (
+			<div>
+				<Topbar
+					title="Kondisi Garansi"
+					description="Semua produk terdaftar garansinya valid secara default"
+				/>
+				<div className="p-6">
+					<div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3.5 flex items-start gap-3">
+						<AlertTriangle
+							size={15}
+							className="text-red-600 shrink-0 mt-0.5"
+						/>
+						<div>
+							<p className="text-xs font-semibold text-red-800">
+								Gagal memuat data
+							</p>
+							<p className="text-xs text-red-700 mt-0.5">{error}</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div>
@@ -430,7 +553,10 @@ export default function SupportProductsPage() {
 						<Select
 							options={[
 								{ value: "all", label: "Semua Kategori" },
-								...PRODUCT_CATEGORIES.map((c) => ({ value: c, label: c })),
+								...productCategories.map((c) => ({
+									value: c,
+									label: c,
+								})),
 							]}
 							value={categoryFilter}
 							onChange={(e) => setCategory(e.target.value)}
