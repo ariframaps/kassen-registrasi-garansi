@@ -40,7 +40,7 @@ export const auditLogPriorityEnum = pgEnum("audit_log_priority", [
 export const auditLog = pgTable(
 	"audit_log",
 	{
-		id: text("id").default(crypto.randomUUID()).primaryKey(),
+		id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 
 		userId: text("user_id").references(() => user.id, {
 			onDelete: "set null",

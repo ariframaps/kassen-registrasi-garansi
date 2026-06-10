@@ -80,7 +80,7 @@ export const productApi = {
 		condition: "valid" | "rejected";
 		reason?: string;
 	}) => {
-		return apiFetch(`/products/${serialNumber}/warranty-status`, {
+		return apiFetch<any>(`/products/${serialNumber}/warranty-status`, {
 			method: "PATCH",
 			body: JSON.stringify({ condition, reason: reason || "" }),
 		});

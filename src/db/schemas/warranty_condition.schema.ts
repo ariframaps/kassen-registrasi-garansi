@@ -14,7 +14,7 @@ export const warrantyStatusEnum = pgEnum("warranty_status", [
 ]);
 
 export const warrantyCondition = pgTable("warranty_condition", {
-	id: text("id").default(crypto.randomUUID()).primaryKey(),
+	id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
 
 	productId: text("product_id")
 		.notNull()

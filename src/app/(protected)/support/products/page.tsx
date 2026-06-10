@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import type { Product } from "@/types";
+import { productApi } from "@/lib/api/api-client";
 
 // Only products with active warranty are shown here
 const eligibleProducts = mockProducts.filter(
@@ -72,7 +73,7 @@ function ConditionModal({
 	const [note, setNote] = useState(current?.warrantyConditionNote ?? "");
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [loading, setLoading] = useState(false);
-	const { success } = useToast();
+	const { success, error: errorToast } = useToast();
 
 	const isDowngrading = currentStatus === "valid" && status === "rejected";
 	const isUpgrading = currentStatus === "rejected" && status === "valid";
@@ -80,23 +81,34 @@ function ConditionModal({
 
 	const handleConfirm = async () => {
 		setLoading(true);
-		await new Promise((r) => setTimeout(r, 700));
-		setLoading(false);
-		const data: ConditionEntry = {
-			warrantyCondition: status,
-			warrantyConditionNote: note.trim(),
-			warrantyConditionUpdatedAt: new Date().toISOString().slice(0, 10),
-			warrantyConditionUpdatedBy: "Technical Support",
-		};
-		onSave(data);
-		setConfirmOpen(false);
-		onClose();
-		success(
-			status === "valid"
-				? "Kondisi diubah ke Valid"
-				: "Kondisi diubah ke Rejected",
-			`SN ${product.serialNumber}`,
-		);
+		try {
+			await productApi.updateWarrantyStatus({
+				serialNumber: product.serialNumber,
+				condition: status,
+				reason: note.trim(),
+			});
+
+			const data: ConditionEntry = {
+				warrantyCondition: status,
+				warrantyConditionNote: note.trim(),
+				warrantyConditionUpdatedAt: new Date().toISOString().slice(0, 10),
+				warrantyConditionUpdatedBy: "Technical Support",
+			};
+			onSave(data);
+			setConfirmOpen(false);
+			onClose();
+			success(
+				status === "valid"
+					? "Kondisi diubah ke Valid"
+					: "Kondisi diubah ke Rejected",
+				`SN ${product.serialNumber}`,
+			);
+		} catch (err) {
+			errorToast("Gagal", "Terjadi kesalahan saat menyimpan kondisi");
+			console.error(err);
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	const days = product.warrantyEndDate
