@@ -666,7 +666,27 @@ export default function ProductsPage() {
 			productCateogoryApi.getAll(),
 			dealerApi.getAll(),
 		]).then(([p, c, d]) => {
-			if (p.success) setProducts(p.data);
+			if (p.success && p.data) {
+				// Load warranty condition data from API into store
+				p.data.forEach((apiProduct) => {
+					if (apiProduct.warrantyCondition && apiProduct.serialNumber) {
+						setCondition(apiProduct.serialNumber, {
+							warrantyCondition:
+								apiProduct.warrantyCondition.condition || "valid",
+							warrantyConditionNote:
+								apiProduct.warrantyCondition.reason || "",
+							warrantyConditionUpdatedAt: apiProduct.warrantyCondition
+								.updatedAt
+								? new Date(apiProduct.warrantyCondition.updatedAt)
+										.toISOString()
+										.slice(0, 10)
+								: "",
+							warrantyConditionUpdatedBy: "",
+						});
+					}
+				});
+				setProducts(p.data);
+			}
 			if (c.success) setCategories(c.data);
 			if (d.success) setDealers(d.data);
 		});
