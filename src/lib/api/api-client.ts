@@ -286,18 +286,16 @@ export const dealerApi = {
 	},
 
 	getProducts: async ({
-		dealerId,
 		page = 1,
 		pageSize = 20,
 		search,
 		categoryId,
 	}: {
-		dealerId: string;
 		page?: number;
 		pageSize?: number;
 		search?: string;
 		categoryId?: string;
-	}) => {
+	} = {}) => {
 		const params = new URLSearchParams();
 		params.set("page", page.toString());
 		params.set("pageSize", pageSize.toString());
@@ -309,16 +307,10 @@ export const dealerApi = {
 			total: number;
 			page: number;
 			pageSize: number;
-		}>(`/dealers/${dealerId}/products?${params.toString()}`, { method: "GET" });
+		}>(`/dealers/current/products?${params.toString()}`, { method: "GET" });
 	},
 
-	getCustomers: async ({
-		dealerId,
-		search,
-	}: {
-		dealerId: string;
-		search?: string;
-	}) => {
+	getCustomers: async ({ search }: { search?: string } = {}) => {
 		const params = new URLSearchParams();
 		if (search) params.set("search", search);
 
@@ -329,12 +321,12 @@ export const dealerApi = {
 				email: string;
 				phone: string | null;
 			}>
-		>(`/dealers/${dealerId}/customers?${params.toString()}`, {
+		>(`/dealers/current/customers?${params.toString()}`, {
 			method: "GET",
 		});
 	},
 
-	getPurchases: async (dealerId: string) => {
+	getPurchases: async () => {
 		return apiFetch<
 			Array<{
 				id: string;
@@ -360,7 +352,7 @@ export const dealerApi = {
 				invoiceFile: string | null;
 				totalProducts: number;
 			}>
-		>(`/dealers/${dealerId}/purchases`, { method: "GET" });
+		>(`/dealers/current/purchases`, { method: "GET" });
 	},
 };
 

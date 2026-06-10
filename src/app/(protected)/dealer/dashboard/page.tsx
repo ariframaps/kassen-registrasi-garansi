@@ -70,12 +70,10 @@ export default function DealerDashboardPage() {
 		setLoadingProducts(true);
 		try {
 			const response = await dealerApi.getProducts({
-				dealerId: DEMO_DEALER_ID,
 				page,
 				pageSize,
 				search: search || undefined,
 			});
-			console.log(response);
 			if (!response.success) {
 				console.error("Failed to load dealer products:", response.message);
 				setLoadingProducts(false);
