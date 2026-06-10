@@ -3,7 +3,7 @@ import { pgTable, uuid, text, pgEnum, timestamp } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 import { product } from "./product.schema";
-import { createInsertSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import z from "zod";
 import { user } from "./auth-schema";
 
@@ -41,7 +41,11 @@ export const warrantyCondition = pgTable("warranty_condition", {
 });
 
 // type
+export const warrantyCondSelectSchema = createSelectSchema(warrantyCondition);
 export const warrantyCondInsertSchema = createInsertSchema(warrantyCondition);
+export type WarrantyCondSelectSchemaType = z.infer<
+	typeof warrantyCondSelectSchema
+>;
 export type WarrantyCondInsertSchemaType = z.infer<
 	typeof warrantyCondInsertSchema
 >;

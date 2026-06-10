@@ -13,6 +13,7 @@ import {
 	productTypeSchema,
 	userSchema,
 	warrantyCondition,
+	warrantyCondSelectSchema,
 	auditLog,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -33,6 +34,9 @@ export const productWithNestedSchema = productSchema
 			destinationCustomer: customerSchema.optional(),
 			uploadedByUser: userSchema,
 		}),
+	})
+	.extend({
+		warrantyCondition: warrantyCondSelectSchema.nullable(),
 	});
 
 export type ProductWithNestedSchema = z.infer<typeof productWithNestedSchema>;
@@ -77,6 +81,7 @@ export const productService = {
 						uploadedByUser: true,
 					},
 				},
+				warrantyCondition: true,
 			},
 		});
 
@@ -138,6 +143,7 @@ export const productService = {
 
 		// Create audit log
 		await db.insert(auditLog).values({
+			id: crypto.randomUUID(),
 			userId,
 			category: "WARRANTY",
 			event: `Update warranty condition to ${condition}`,

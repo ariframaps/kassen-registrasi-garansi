@@ -17,7 +17,7 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { conditionsStore, setCondition } from "@/lib/warranty-conditions.store";
+import { conditionsStore, setCondition, getCondition } from "@/lib/warranty-conditions.store";
 import type { ConditionEntry } from "@/lib/warranty-conditions.store";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
 import {
@@ -37,7 +37,7 @@ import type { ProductWithNestedSchema } from "@/services/product.service";
 
 const transformApiProduct = (
 	apiProduct: ProductWithNestedSchema,
-): Product => {
+): Product & { warrantyConditionData?: any } => {
 	const now = new Date();
 	const warrantyStartDate = apiProduct.warrantyStartDate
 		? new Date(apiProduct.warrantyStartDate)
@@ -74,6 +74,7 @@ const transformApiProduct = (
 			apiProduct.createdAt instanceof Date
 				? apiProduct.createdAt.toISOString()
 				: String(apiProduct.createdAt),
+		warrantyConditionData: apiProduct.warrantyCondition,
 	};
 };
 
@@ -358,7 +359,7 @@ function ConditionModal({
 export default function SupportProductsPage() {
 	const [search, setSearch] = useState("");
 	const [categoryFilter, setCategory] = useState("all");
-	const [conditionFilter, setCondition] = useState("all");
+	const [conditionFilter, setConditionFilterState] = useState("all");
 	const [selectedProduct, setSelected] = useState<Product | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -377,6 +378,20 @@ export default function SupportProductsPage() {
 				}
 
 				const transformed = response.data.map(transformApiProduct);
+
+				// Initialize conditions store with warranty condition data from API
+				transformed.forEach((product) => {
+					const conditionData = (product as any).warrantyConditionData;
+					if (conditionData && product.serialNumber) {
+						setCondition(product.serialNumber, {
+							warrantyCondition: conditionData.condition || "valid",
+							warrantyConditionNote: conditionData.reason || "",
+							warrantyConditionUpdatedAt: conditionData.updatedAt || "",
+							warrantyConditionUpdatedBy: "", // Could be populated if needed
+						});
+					}
+				});
+
 				const eligible = transformed.filter(
 					(p) => p.warrantyStatus === "active",
 				);
@@ -569,7 +584,7 @@ export default function SupportProductsPage() {
 								{ value: "rejected", label: "Rejected" },
 							]}
 							value={conditionFilter}
-							onChange={(e) => setCondition(e.target.value)}
+							onChange={(e) => setConditionFilterState(e.target.value)}
 							className="w-36"
 						/>
 						<p className="text-xs text-zinc-400 ml-auto">
@@ -688,7 +703,7 @@ export default function SupportProductsPage() {
 					current={getC(selectedProduct.serialNumber)}
 					onClose={() => setSelected(null)}
 					onSave={(data) => {
-						setCondition(selectedProduct.serialNumber);
+						setCondition(selectedProduct.serialNumber, data);
 						forceUpdate((n) => n + 1);
 						setSelected(null);
 					}}
