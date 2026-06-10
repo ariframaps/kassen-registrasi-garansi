@@ -1321,7 +1321,7 @@ function QueueItem({
 					</div>
 
 					{/* No valid products warning */}
-					{qf.preview && qf.validCount === 0 && (
+					{qf.preview && qf.validCount === 0 && qf.unknownCount === 0 && (
 						<div className="flex gap-2 items-start p-3 bg-amber-50 border border-amber-100 rounded-xl">
 							<AlertTriangle
 								size={13}
@@ -1329,7 +1329,7 @@ function QueueItem({
 							/>
 							<div className="flex-1">
 								<p className="text-xs font-medium text-amber-800">
-									Semua produk adalah duplikat atau unknown
+									Semua produk adalah duplikat
 								</p>
 								<p className="text-xs text-amber-700 mt-0.5">
 									Tidak ada produk valid untuk disimpan
@@ -1339,7 +1339,7 @@ function QueueItem({
 					)}
 
 					{/* Destination */}
-					{qf.preview && qf.preview.length > 0 && qf.validCount > 0 && (
+					{qf.preview && qf.preview.length > 0 && (qf.validCount > 0 || (qf.unknownCount > 0 && qf.itemCodesHandled)) && (
 						<div className="space-y-3">
 							{/* Guide after item codes handled */}
 							{qf.itemCodesHandled && (
