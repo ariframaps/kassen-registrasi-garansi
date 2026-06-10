@@ -65,11 +65,46 @@ interface PreviewRow {
 	productType: string;
 	productCategory: string;
 	itemCodeOriginal?: string;
+	itemDescription?: string;
 	status: "valid" | "duplicate" | "invalid" | "unknown_type";
 	message?: string;
 }
 
 type DestType = "dealer" | "customer" | null;
+
+interface ParsedItem {
+	itemCode: string;
+	itemDescription: string;
+	qty: number;
+	unit: string;
+	serialNumbers: string[];
+}
+
+interface PendingDealerCreation {
+	name: string;
+	email: string;
+	phone?: string;
+}
+
+interface PendingCustomerCreation {
+	name: string;
+	email?: string;
+	phone?: string;
+}
+
+interface PendingItemCode {
+	code: string;
+	productTypeName: string;
+	categoryId: string;
+	warrantyDurationMonths: number;
+}
+
+interface PurchaseData {
+	purchaseDate: string;
+	notes?: string;
+	invoiceFile?: File;
+	dealerId?: string; // optional - who is the dealer for this purchase
+}
 
 interface QueueFile {
 	id: string;
@@ -84,6 +119,7 @@ interface QueueFile {
 		| "done"
 		| "error";
 	preview?: PreviewRow[];
+	parsedItems?: ParsedItem[];
 	validCount: number;
 	dupCount: number;
 	unknownCount: number;
@@ -92,6 +128,14 @@ interface QueueFile {
 	errorMessage?: string;
 	shipTo?: string;
 	doNumber?: string;
+	// Pending creations (validated but not yet created)
+	pendingDealerCreation?: PendingDealerCreation;
+	pendingCustomerCreation?: PendingCustomerCreation;
+	pendingItemCodes?: PendingItemCode[];
+	// Purchase data for end customer
+	purchaseData?: PurchaseData;
+	// Track if item codes have been handled
+	itemCodesHandled?: boolean;
 }
 
 // ── Mock data ──
@@ -138,9 +182,12 @@ const MOCK_PREVIEW: PreviewRow[] = [
 	},
 ];
 
-// Simulate SHA-256 hash (just a mock)
+// Generate SHA-256 hash of file
 async function hashFile(file: File): Promise<string> {
-	return `hash_${file.name}_${file.size}`;
+	const buffer = await file.arrayBuffer();
+	const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // ── Fuzzy Dealer Match Modal ──
@@ -299,14 +346,61 @@ function NewDealerModal({
 	open,
 	onClose,
 	onSave,
+	suggestedName,
 }: {
 	open: boolean;
 	onClose: () => void;
-	onSave: (name: string, email: string) => void;
+	onSave: (data: PendingDealerCreation) => void;
+	suggestedName?: string;
 }) {
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
 	const [phone, setPhone] = useState("");
+	const [loading, setLoading] = useState(false);
+	const { error: toastError } = useToast();
+
+	React.useEffect(() => {
+		if (open && suggestedName) {
+			setName(suggestedName);
+		}
+	}, [open, suggestedName]);
+
+	const handleValidateAndSave = async () => {
+		if (!name || !email) {
+			toastError("Validasi", "Nama dan email wajib diisi");
+			return;
+		}
+
+		setLoading(true);
+		try {
+			// Validate dealer creation
+			const result = await dealerApi.validate({
+				name: name.trim(),
+				email: email.trim(),
+				phone: phone?.trim(),
+			});
+
+			if (result.success) {
+				// Only store pending data, don't create yet
+				onSave({
+					name: name.trim(),
+					email: email.trim(),
+					phone: phone?.trim(),
+				});
+				setName("");
+				setEmail("");
+				setPhone("");
+			} else {
+				throw new Error(result.message || "Validasi gagal");
+			}
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Validasi dealer gagal";
+			toastError("Validasi Gagal", msg);
+		} finally {
+			setLoading(false);
+		}
+	};
+
 	return (
 		<Modal open={open} onClose={onClose} title="Tambah Dealer Baru" size="md">
 			<div className="space-y-3">
@@ -314,7 +408,9 @@ function NewDealerModal({
 					label="Nama Dealer"
 					value={name}
 					onChange={(e) => setName(e.target.value)}
+					placeholder="Contoh: PT Maju Jaya, CV Elektronik"
 					required
+					disabled={loading}
 				/>
 				<Input
 					label="Email"
@@ -322,28 +418,36 @@ function NewDealerModal({
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					required
+					disabled={loading}
 				/>
 				<Input
 					label="Nomor Telepon"
+					type="tel"
+					pattern="[0-9+\-\s]*"
 					value={phone}
-					onChange={(e) => setPhone(e.target.value)}
+					onChange={(e) => {
+						const value = e.target.value;
+						// Only allow digits and common phone number characters
+						if (/^[0-9+\-\s]*$/.test(value)) {
+							setPhone(value);
+						}
+					}}
+					disabled={loading}
 				/>
 				<div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-700 border border-blue-100">
-					Akun login dealer akan dibuat otomatis. Dealer akan mendapat email
-					notifikasi cara login via OTP.
+					Akun login dealer akan dibuat otomatis saat upload selesai. Dealer akan mendapat email notifikasi.
 				</div>
 				<div className="flex justify-end gap-2 pt-1">
-					<Button variant="outline" size="sm" onClick={onClose}>
+					<Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
 						Batal
 					</Button>
 					<Button
 						size="sm"
-						onClick={() => {
-							if (name && email) {
-								onSave(name, email);
-							}
-						}}>
-						Simpan & Lanjut
+						onClick={handleValidateAndSave}
+						disabled={loading || !name || !email}
+						icon={loading ? <Loader2 size={13} className="animate-spin" /> : undefined}
+						iconPosition="left">
+						{loading ? "Validasi..." : "Simpan & Lanjut"}
 					</Button>
 				</div>
 			</div>
@@ -356,14 +460,60 @@ function NewCustomerModal({
 	open,
 	onClose,
 	onSave,
+	suggestedName,
 }: {
 	open: boolean;
 	onClose: () => void;
-	onSave: (name: string, email: string) => void;
+	onSave: (data: PendingCustomerCreation) => void;
+	suggestedName?: string;
 }) {
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
 	const [phone, setPhone] = useState("");
+	const [loading, setLoading] = useState(false);
+	const { error: toastError } = useToast();
+
+	React.useEffect(() => {
+		if (open && suggestedName) {
+			setName(suggestedName);
+		}
+	}, [open, suggestedName]);
+
+	const handleValidateAndSave = async () => {
+		if (!name.trim()) {
+			toastError("Validasi", "Nama customer wajib diisi");
+			return;
+		}
+
+		setLoading(true);
+		try {
+			// Validate customer creation
+			const result = await customerApi.validate({
+				name: name.trim(),
+				email: email?.trim(),
+				phone: phone?.trim(),
+			});
+
+			if (result.success) {
+				// Only store pending data, don't create yet
+				onSave({
+					name: name.trim(),
+					email: email?.trim(),
+					phone: phone?.trim(),
+				});
+				setName("");
+				setEmail("");
+				setPhone("");
+			} else {
+				throw new Error(result.message || "Validasi gagal");
+			}
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Validasi customer gagal";
+			toastError("Validasi Gagal", msg);
+		} finally {
+			setLoading(false);
+		}
+	};
 
 	return (
 		<Modal open={open} onClose={onClose} title="Tambah Customer Baru" size="md">
@@ -374,30 +524,187 @@ function NewCustomerModal({
 					onChange={(e) => setName(e.target.value)}
 					placeholder="Contoh: Toko ABC, PT Maju Jaya"
 					required
+					disabled={loading}
 				/>
 				<Input
 					label="Email (Optional)"
 					type="email"
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
+					disabled={loading}
 				/>
 				<Input
 					label="Nomor Telepon (Optional)"
+					type="tel"
+					pattern="[0-9+\-\s]*"
 					value={phone}
-					onChange={(e) => setPhone(e.target.value)}
+					onChange={(e) => {
+						const value = e.target.value;
+						// Only allow digits and common phone number characters
+						if (/^[0-9+\-\s]*$/.test(value)) {
+							setPhone(value);
+						}
+					}}
+					disabled={loading}
 				/>
 				<div className="flex justify-end gap-2 pt-1">
-					<Button variant="outline" size="sm" onClick={onClose}>
+					<Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
 						Batal
 					</Button>
 					<Button
 						size="sm"
-						onClick={() => {
-							if (name.trim()) {
-								onSave(name.trim(), email || "");
-							}
-						}}>
-						Simpan & Lanjut
+						onClick={handleValidateAndSave}
+						disabled={loading || !name.trim()}
+						icon={loading ? <Loader2 size={13} className="animate-spin" /> : undefined}
+						iconPosition="left">
+						{loading ? "Validasi..." : "Simpan & Lanjut"}
+					</Button>
+				</div>
+			</div>
+		</Modal>
+	);
+}
+
+// ── Fuzzy Customer Modal ──
+function FuzzyCustomerModal({
+	open,
+	shipTo,
+	onSelect,
+	onCreateNew,
+	onClose,
+}: {
+	open: boolean;
+	shipTo: string;
+	onSelect: (name: string) => void;
+	onCreateNew: () => void;
+	onClose: () => void;
+}) {
+	const [allCustomers, setAllCustomers] = React.useState<CustomerSchema[]>([]);
+	const [displayedCustomers, setDisplayedCustomers] = React.useState<
+		(CustomerSchema & { score: number })[]
+	>([]);
+	const [search, setSearch] = React.useState("");
+	const [loading, setLoading] = React.useState(true);
+
+	React.useEffect(() => {
+		if (open) {
+			loadCustomers();
+		}
+	}, [open]);
+
+	React.useEffect(() => {
+		filterCustomers(search);
+	}, [search, allCustomers]);
+
+	const loadCustomers = async () => {
+		try {
+			setLoading(true);
+			const result = await customerApi.getAll();
+			if (result.success && result.data) {
+				setAllCustomers(result.data);
+				const scoredCustomers = result.data
+					.map((c) => ({
+						...c,
+						score: fuzzyMatch(shipTo, c.name),
+					}))
+					.filter((c) => c.score > 0)
+					.sort((a, b) => b.score - a.score);
+				setDisplayedCustomers(scoredCustomers);
+			}
+		} catch (err) {
+			console.error("Gagal load customers:", err);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const filterCustomers = (query: string) => {
+		if (!query.trim()) {
+			const scoredCustomers = allCustomers
+				.map((c) => ({
+					...c,
+					score: fuzzyMatch(shipTo, c.name),
+				}))
+				.filter((c) => c.score > 0)
+				.sort((a, b) => b.score - a.score);
+			setDisplayedCustomers(scoredCustomers);
+		} else {
+			const scoredCustomers = allCustomers
+				.map((c) => {
+					const nameMatch = fuzzyMatch(query, c.name);
+					const emailMatch = c.email ? fuzzyMatch(query, c.email) : 0;
+					const phoneMatch = c.phone ? fuzzyMatch(query, c.phone) : 0;
+					const score = Math.max(nameMatch, emailMatch, phoneMatch);
+					return { ...c, score };
+				})
+				.filter((c) => c.score > 0)
+				.sort((a, b) => b.score - a.score);
+			setDisplayedCustomers(scoredCustomers);
+		}
+	};
+
+	return (
+		<Modal
+			open={open}
+			onClose={onClose}
+			title="Pilih atau Cari Customer"
+			description={`Ship To dari file: "${shipTo}"`}
+			size="md">
+			<div className="space-y-3">
+				<Input
+					label="Cari Customer (nama, email, atau nomor telepon)"
+					value={search}
+					onChange={(e) => setSearch(e.target.value)}
+					placeholder="Ketik nama, email, atau nomor telepon..."
+				/>
+
+				{loading ? (
+					<div className="text-center py-4 text-xs text-zinc-500">
+						Memuat customers...
+					</div>
+				) : displayedCustomers.length === 0 ? (
+					<div className="text-center py-4 text-xs text-zinc-500">
+						{search
+							? `Tidak ada customer yang cocok dengan "${search}"`
+							: `Tidak ada customer yang cocok dengan "${shipTo}"`}
+					</div>
+				) : (
+					<div className="max-h-64 overflow-y-auto space-y-2">
+						{displayedCustomers.map((c) => (
+							<button
+								key={c.id}
+								onClick={() => onSelect(c.name)}
+								className="w-full flex items-start justify-between px-4 py-3 rounded-xl border border-zinc-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left">
+								<div className="flex-1">
+									<p className="text-sm font-medium text-zinc-800">{c.name}</p>
+									{c.email && (
+										<p className="text-xs text-zinc-400 mt-0.5">{c.email}</p>
+									)}
+									{c.phone && (
+										<p className="text-xs text-zinc-400">{c.phone}</p>
+									)}
+								</div>
+								{!search && (
+									<Badge variant={c.score >= 50 ? "success" : "warning"}>
+										{Math.round((c.score / 10) * 10)}%
+									</Badge>
+								)}
+							</button>
+						))}
+					</div>
+				)}
+
+				<button
+					onClick={onCreateNew}
+					className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-zinc-300 hover:border-blue-400 hover:bg-blue-50 transition-all text-left">
+					<div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+						<span className="text-blue-600 text-xs font-bold">+</span>
+					</div>
+					<span className="text-sm text-zinc-600">Buat customer baru</span>
+				</button>
+				<div className="flex justify-end pt-2">
+					<Button variant="ghost" size="sm" onClick={onClose}>
+						Batal
 					</Button>
 				</div>
 			</div>
@@ -473,6 +780,134 @@ function EndCustomerModal({
 	);
 }
 
+// ── Purchase Form Modal ──
+function PurchaseFormModal({
+	open,
+	onClose,
+	onSave,
+}: {
+	open: boolean;
+	onClose: () => void;
+	onSave: (data: PurchaseData) => void;
+}) {
+	const [purchaseDate, setPurchaseDate] = useState<string>(
+		new Date().toISOString().split("T")[0]
+	);
+	const [notes, setNotes] = useState("");
+	const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+	const [loading, setLoading] = useState(false);
+	const { error: toastError } = useToast();
+
+	const handleSave = async () => {
+		if (!purchaseDate) {
+			toastError("Validasi", "Tanggal pembelian wajib diisi");
+			return;
+		}
+
+		setLoading(true);
+		try {
+			onSave({
+				purchaseDate,
+				notes: notes?.trim() || undefined,
+				invoiceFile: invoiceFile || undefined,
+			});
+			// Reset form
+			setPurchaseDate(new Date().toISOString().split("T")[0]);
+			setNotes("");
+			setInvoiceFile(null);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Gagal menyimpan data pembelian";
+			toastError("Error", msg);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	return (
+		<Modal
+			open={open}
+			onClose={onClose}
+			title="Detail Pembelian (End Customer)"
+			size="md">
+			<div className="space-y-3">
+				<div>
+					<label className="text-xs font-medium text-zinc-700 mb-1.5 block">
+						Tanggal Pembelian*
+					</label>
+					<input
+						type="date"
+						value={purchaseDate}
+						onChange={(e) => setPurchaseDate(e.target.value)}
+						disabled={loading}
+						className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						required
+					/>
+				</div>
+
+				<Input
+					label="Catatan (Optional)"
+					value={notes}
+					onChange={(e) => setNotes(e.target.value)}
+					placeholder="Contoh: Pembelian offline, custom order, dll"
+					disabled={loading}
+				/>
+
+				<div>
+					<label className="text-xs font-medium text-zinc-700 mb-1.5 block">
+						Invoice/Receipt (Optional)
+					</label>
+					<div className="border-2 border-dashed border-zinc-200 rounded-lg p-3 text-center hover:border-blue-300 cursor-pointer transition-colors">
+						<input
+							type="file"
+							accept=".pdf,.jpg,.jpeg,.png"
+							onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+							disabled={loading}
+							className="sr-only"
+							id="invoice-upload"
+						/>
+						<label htmlFor="invoice-upload" className="cursor-pointer block">
+							{invoiceFile ? (
+								<div className="text-xs">
+									<p className="font-medium text-emerald-600">✓ File dipilih</p>
+									<p className="text-zinc-500 mt-1">{invoiceFile.name}</p>
+									<p
+										className="text-blue-600 underline mt-2"
+										onClick={() => setInvoiceFile(null)}>
+										Ganti file
+									</p>
+								</div>
+							) : (
+								<div className="text-xs text-zinc-500">
+									<p>Klik untuk upload file (PDF, JPG, PNG)</p>
+									<p className="mt-1 text-zinc-400">Ukuran max: 5MB</p>
+								</div>
+							)}
+						</label>
+					</div>
+				</div>
+
+				<div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-700 border border-blue-100">
+					Informasi pembelian ini akan muncul di detail customer setelah upload selesai.
+				</div>
+
+				<div className="flex justify-end gap-2 pt-1">
+					<Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
+						Batal
+					</Button>
+					<Button
+						size="sm"
+						onClick={handleSave}
+						disabled={loading}
+						icon={loading ? <Loader2 size={13} className="animate-spin" /> : undefined}
+						iconPosition="left">
+						{loading ? "Menyimpan..." : "Simpan & Lanjut"}
+					</Button>
+				</div>
+			</div>
+		</Modal>
+	);
+}
+
 // ── Create Unknown Item Codes Modal ──
 interface UnknownItemCode {
 	code: string;
@@ -490,17 +925,19 @@ function CreateUnknownItemCodesModal({
 	open,
 	onClose,
 	unknownCodes,
+	parsedItems,
 	onSuccess,
 }: {
 	open: boolean;
 	onClose: () => void;
 	unknownCodes: UnknownItemCode[];
-	onSuccess: () => void;
+	parsedItems?: ParsedItem[];
+	onSuccess: (itemCodes: PendingItemCode[]) => void;
 }) {
 	const [forms, setForms] = useState<ItemCodeForm[]>([]);
 	const [categories, setCategories] = useState<CategorySchema[]>([]);
 	const [loading, setLoading] = useState(false);
-	const { success, error: toastError } = useToast();
+	const { error: toastError } = useToast();
 
 	// Load categories when modal opens
 	React.useEffect(() => {
@@ -524,12 +961,16 @@ function CreateUnknownItemCodesModal({
 
 	const initializeForms = () => {
 		setForms(
-			unknownCodes.map((item) => ({
-				code: item.code,
-				productTypeName: "",
-				categoryId: "",
-				warrantyDurationMonths: 12,
-			})),
+			unknownCodes.map((item) => {
+				// Find itemDescription from parsedItems
+				const parsedItem = parsedItems?.find((p) => p.itemCode === item.code);
+				return {
+					code: item.code,
+					productTypeName: parsedItem?.itemDescription || "",
+					categoryId: "",
+					warrantyDurationMonths: 12,
+				};
+			}),
 		);
 	};
 
@@ -545,7 +986,7 @@ function CreateUnknownItemCodesModal({
 		});
 	};
 
-	const handleSubmit = async () => {
+	const handleValidateAndSave = async () => {
 		// Validate all forms
 		const validForms = forms.every(
 			(f) => f.productTypeName.trim() && f.categoryId,
@@ -557,25 +998,19 @@ function CreateUnknownItemCodesModal({
 
 		setLoading(true);
 		try {
-			// Create all product types
-			await Promise.all(
-				forms.map((form) =>
-					productTypeApi.addNew({
-						name: form.productTypeName.trim(),
-						categoryId: form.categoryId,
-						itemCodes: [form.code],
-					}),
-				),
-			);
+			// Convert forms to pending item codes (no creation yet)
+			const pendingItemCodes: PendingItemCode[] = forms.map((form) => ({
+				code: form.code,
+				productTypeName: form.productTypeName.trim(),
+				categoryId: form.categoryId,
+				warrantyDurationMonths: form.warrantyDurationMonths,
+			}));
 
-			success(
-				"Berhasil",
-				`${forms.length} item code baru telah ditambahkan ke sistem`,
-			);
-			onSuccess();
+			// Pass pending item codes to parent
+			onSuccess(pendingItemCodes);
 			onClose();
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : "Gagal membuat item codes";
+			const msg = err instanceof Error ? err.message : "Gagal memproses item codes";
 			toastError("Error", msg);
 		} finally {
 			setLoading(false);
@@ -652,11 +1087,11 @@ function CreateUnknownItemCodesModal({
 				</Button>
 				<Button
 					size="sm"
-					onClick={handleSubmit}
+					onClick={handleValidateAndSave}
 					disabled={loading}
 					icon={loading ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
 					iconPosition="left">
-					{loading ? "Menyimpan..." : `Buat ${forms.length} Item Code`}
+					{loading ? "Validasi..." : `Simpan ${forms.length} Item Code`}
 				</Button>
 			</div>
 		</Modal>
@@ -760,7 +1195,7 @@ function QueueItem({
 					</div>
 
 					{/* Unknown item code notice */}
-					{qf.unknownCount > 0 && (
+					{qf.unknownCount > 0 && !qf.itemCodesHandled && (
 						<div className="flex gap-2 items-start p-3 bg-amber-50 border border-amber-100 rounded-xl">
 							<AlertTriangle
 								size={13}
@@ -791,6 +1226,21 @@ function QueueItem({
 						</div>
 					)}
 
+					{/* Item codes handled - show next step message */}
+					{qf.unknownCount > 0 && qf.itemCodesHandled && (
+						<div className="flex gap-2 items-start p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+							<CheckCircle size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+							<div className="flex-1">
+								<p className="text-xs font-medium text-emerald-800">
+									{qf.pendingItemCodes?.length || 0} item code siap untuk dibuat
+								</p>
+								<p className="text-xs text-emerald-700 mt-0.5">
+									Item codes akan dibuat saat upload selesai. Lanjutkan dengan memilih dealer atau end customer.
+								</p>
+							</div>
+						</div>
+					)}
+
 					{/* Mini preview table */}
 					<div className="border border-zinc-100 rounded-xl overflow-hidden">
 						<table className="w-full text-xs">
@@ -798,6 +1248,9 @@ function QueueItem({
 								<tr>
 									<th className="px-3 py-2 text-left text-zinc-500 font-medium">
 										Serial Number
+									</th>
+									<th className="px-3 py-2 text-left text-zinc-500 font-medium">
+										Item Code / Nama Produk
 									</th>
 									<th className="px-3 py-2 text-left text-zinc-500 font-medium">
 										Tipe Produk
@@ -824,9 +1277,23 @@ function QueueItem({
 											</span>
 										</td>
 										<td className="px-3 py-2 text-zinc-600">
+											<div className="flex flex-col gap-0.5">
+												{r.itemCodeOriginal && (
+													<span className="font-mono text-[10px] text-zinc-500">
+														{r.itemCodeOriginal}
+													</span>
+												)}
+												{r.itemDescription && (
+													<span className="text-[11px] text-zinc-700 font-medium">
+														{r.itemDescription}
+													</span>
+												)}
+											</div>
+										</td>
+										<td className="px-3 py-2 text-zinc-600">
 											{r.productType || (
 												<span className="text-amber-600 italic text-[11px]">
-													{r.itemCodeOriginal} — belum dikenali
+													—
 												</span>
 											)}
 										</td>
@@ -853,10 +1320,41 @@ function QueueItem({
 						</table>
 					</div>
 
+					{/* No valid products warning */}
+					{qf.preview && qf.validCount === 0 && (
+						<div className="flex gap-2 items-start p-3 bg-amber-50 border border-amber-100 rounded-xl">
+							<AlertTriangle
+								size={13}
+								className="text-amber-500 shrink-0 mt-0.5"
+							/>
+							<div className="flex-1">
+								<p className="text-xs font-medium text-amber-800">
+									Semua produk adalah duplikat atau unknown
+								</p>
+								<p className="text-xs text-amber-700 mt-0.5">
+									Tidak ada produk valid untuk disimpan
+								</p>
+							</div>
+						</div>
+					)}
+
 					{/* Destination */}
-					{qf.validCount > 0 && (
-						<div>
-							<p className="text-xs font-medium text-zinc-700 mb-2">
+					{qf.preview && qf.preview.length > 0 && qf.validCount > 0 && (
+						<div className="space-y-3">
+							{/* Guide after item codes handled */}
+							{qf.itemCodesHandled && (
+								<div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+									<div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+										2
+									</div>
+									<div className="flex-1">
+										<p className="text-xs font-medium text-blue-900">Langkah 2: Pilih Destinasi</p>
+										<p className="text-xs text-blue-700 mt-1">Pilih apakah produk ini untuk Dealer atau End Customer</p>
+									</div>
+								</div>
+							)}
+
+							<p className="text-xs font-medium text-zinc-700">
 								Tujuan produk ini:
 							</p>
 							<div className="grid grid-cols-2 gap-2">
@@ -880,7 +1378,19 @@ function QueueItem({
 									</div>
 								</button>
 								<button
-									onClick={() => onDestSelect(qf.id, "customer")}
+									onClick={() => {
+											if (qf.destType === "dealer" && qf.destLabel) {
+												if (confirm("Mengganti ke End Customer akan membatalkan pilihan dealer. Lanjutkan?")) {
+													setQueue((prev) =>
+														prev.map((q) =>
+															q.id === qf.id ? { ...q, destType: "customer", destLabel: undefined, pendingDealerCreation: undefined } : q,
+														),
+													);
+												}
+											} else {
+												onDestSelect(qf.id, "customer");
+											}
+										}}
 									className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left ${qf.destType === "customer" ? "border-blue-400 bg-blue-50" : "border-zinc-200 hover:border-zinc-300"}`}>
 									<UserRound
 										size={14}
@@ -912,6 +1422,38 @@ function QueueItem({
 						</div>
 					)}
 
+					{/* Customer confirmed label */}
+					{qf.destType === "customer" && qf.destLabel && (
+						<div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+							<CheckCircle size={13} />
+							Customer: <span className="font-medium">{qf.destLabel}</span>
+						</div>
+					)}
+
+					{/* Pending creations indicators */}
+					{(qf.pendingDealerCreation || qf.pendingCustomerCreation || qf.pendingItemCodes?.length) && (
+						<div className="space-y-2 text-xs">
+							{qf.pendingDealerCreation && (
+								<div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700">
+									<Plus size={12} />
+									<span>Dealer baru akan dibuat: <span className="font-medium">{qf.pendingDealerCreation.name}</span></span>
+								</div>
+							)}
+							{qf.pendingCustomerCreation && (
+								<div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700">
+									<Plus size={12} />
+									<span>Customer baru akan dibuat: <span className="font-medium">{qf.pendingCustomerCreation.name}</span></span>
+								</div>
+							)}
+							{qf.pendingItemCodes && qf.pendingItemCodes.length > 0 && (
+								<div className="flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-100 rounded-lg text-purple-700">
+									<Plus size={12} />
+									<span>{qf.pendingItemCodes.length} item code baru akan dibuat</span>
+								</div>
+							)}
+						</div>
+					)}
+
 					{/* Submit button */}
 					<div className="flex justify-between items-center pt-1">
 						<Button
@@ -921,7 +1463,7 @@ function QueueItem({
 							onClick={() => onSkip(qf.id)}>
 							Lewati File Ini
 						</Button>
-						{qf.validCount > 0 && (
+						{qf.preview && qf.preview.length > 0 && (
 							<Button
 								size="sm"
 								onClick={() => onSubmit(qf.id)}
@@ -930,7 +1472,7 @@ function QueueItem({
 								}
 								icon={<ChevronRight size={13} />}
 								iconPosition="right">
-								Submit File Ini ({qf.validCount} produk)
+								Submit File Ini ({qf.validCount + qf.unknownCount} produk)
 							</Button>
 						)}
 					</div>
@@ -990,14 +1532,16 @@ export default function UploadPage() {
 	const [queue, setQueue] = useState<QueueFile[]>([]);
 	const [activeIdx, setActiveIdx] = useState(0);
 	const [showFuzzy, setShowFuzzy] = useState(false);
+	const [showFuzzyCustomer, setShowFuzzyCustomer] = useState(false);
 	const [showNewDealer, setShowNewDealer] = useState(false);
 	const [showNewCustomer, setShowNewCustomer] = useState(false);
-	const [showEndCustomer, setShowEndCustomer] = useState(false);
 	const [showCreateItemCodes, setShowCreateItemCodes] = useState(false);
+	const [showPurchaseForm, setShowPurchaseForm] = useState(false);
 	const [unknownItemCodes, setUnknownItemCodes] = useState<UnknownItemCode[]>([]);
+	const [pendingParsedItems, setPendingParsedItems] = useState<ParsedItem[] | undefined>(undefined);
 	const [pendingItemCodesId, setPendingItemCodesId] = useState<string | null>(null);
 	const [pendingFuzzyId, setPendingFuzzyId] = useState<string | null>(null);
-	const [pendingCustomerId, setPendingCustomerId] = useState<string | null>(null);
+	const [suggestedShipTo, setSuggestedShipTo] = useState<string>("");
 	const [finished, setFinished] = useState(false);
 	const { success, error: toastError } = useToast();
 
@@ -1089,6 +1633,7 @@ export default function UploadPage() {
 								...q,
 								state: "previewing",
 								preview: data.preview,
+								parsedItems: data.parsedItems,
 								validCount: data.validCount,
 								dupCount: data.dupCount,
 								unknownCount: data.unknownCount,
@@ -1128,15 +1673,27 @@ export default function UploadPage() {
 	const setDestType = (id: string, type: DestType) => {
 		setQueue((prev) =>
 			prev.map((q) =>
-				q.id === id ? { ...q, destType: type, destLabel: undefined } : q,
+				q.id === id
+					? {
+							...q,
+							destType: type,
+							destLabel: undefined,
+							pendingDealerCreation: type === "customer" ? undefined : q.pendingDealerCreation,
+							pendingCustomerCreation: type === "dealer" ? undefined : q.pendingCustomerCreation,
+						}
+					: q,
 			),
 		);
 		if (type === "dealer") {
+			const qf = queue.find((q) => q.id === id);
+			setSuggestedShipTo(qf?.shipTo || "");
 			setPendingFuzzyId(id);
 			setShowFuzzy(true);
 		} else if (type === "customer") {
-			setPendingCustomerId(id);
-			setShowEndCustomer(true);
+			const qf = queue.find((q) => q.id === id);
+			setSuggestedShipTo(qf?.shipTo || "");
+			setPendingFuzzyId(id);
+			setShowFuzzyCustomer(true);
 		}
 	};
 
@@ -1144,12 +1701,45 @@ export default function UploadPage() {
 		if (pendingFuzzyId) {
 			setQueue((prev) =>
 				prev.map((q) =>
-					q.id === pendingFuzzyId ? { ...q, destLabel: dealerName } : q,
+					q.id === pendingFuzzyId
+						? { ...q, destLabel: dealerName, pendingDealerCreation: undefined }
+						: q,
 				),
 			);
 		}
 		setShowFuzzy(false);
 		setPendingFuzzyId(null);
+	};
+
+	const handleFuzzyCustomerSelect = (customerName: string) => {
+		if (pendingFuzzyId) {
+			setQueue((prev) =>
+				prev.map((q) =>
+					q.id === pendingFuzzyId
+						? { ...q, destLabel: customerName, pendingCustomerCreation: undefined }
+						: q,
+				),
+			);
+		}
+		setShowFuzzyCustomer(false);
+		// Open purchase form after customer selection
+		setShowPurchaseForm(true);
+	};
+
+	const handleFuzzyCustomerCreateNew = () => {
+		setShowFuzzyCustomer(false);
+		setShowNewCustomer(true);
+	};
+
+	const handlePurchaseFormSave = (purchaseData: PurchaseData) => {
+		if (pendingFuzzyId) {
+			setQueue((prev) =>
+				prev.map((q) =>
+					q.id === pendingFuzzyId ? { ...q, purchaseData } : q,
+				),
+			);
+		}
+		setShowPurchaseForm(false);
 	};
 
 	const handleFuzzyNewDealer = () => {
@@ -1157,11 +1747,17 @@ export default function UploadPage() {
 		setShowNewDealer(true);
 	};
 
-	const handleNewDealerSave = (name: string, _email: string) => {
+	const handleNewDealerSave = (dealerData: PendingDealerCreation) => {
 		if (pendingFuzzyId) {
 			setQueue((prev) =>
 				prev.map((q) =>
-					q.id === pendingFuzzyId ? { ...q, destLabel: name } : q,
+					q.id === pendingFuzzyId
+						? {
+								...q,
+								destLabel: dealerData.name,
+								pendingDealerCreation: dealerData,
+							}
+						: q,
 				),
 			);
 		}
@@ -1169,33 +1765,23 @@ export default function UploadPage() {
 		setPendingFuzzyId(null);
 	};
 
-	const handleEndCustomerSave = (name: string) => {
-		if (pendingCustomerId) {
+	const handleNewCustomerSave = (customerData: PendingCustomerCreation) => {
+		if (pendingFuzzyId) {
 			setQueue((prev) =>
 				prev.map((q) =>
-					q.id === pendingCustomerId ? { ...q, destLabel: name } : q,
-				),
-			);
-		}
-		setShowEndCustomer(false);
-		setPendingCustomerId(null);
-	};
-
-	const handleEndCustomerCreateNew = () => {
-		setShowEndCustomer(false);
-		setShowNewCustomer(true);
-	};
-
-	const handleNewCustomerSave = (name: string, _email: string) => {
-		if (pendingCustomerId) {
-			setQueue((prev) =>
-				prev.map((q) =>
-					q.id === pendingCustomerId ? { ...q, destLabel: name } : q,
+					q.id === pendingFuzzyId
+						? {
+								...q,
+								destLabel: customerData.name,
+								pendingCustomerCreation: customerData,
+							}
+						: q,
 				),
 			);
 		}
 		setShowNewCustomer(false);
-		setPendingCustomerId(null);
+		// Open purchase form after customer creation
+		setShowPurchaseForm(true);
 	};
 
 	const handleOpenCreateItemCodes = (id: string) => {
@@ -1203,16 +1789,23 @@ export default function UploadPage() {
 		if (qf?.preview) {
 			const unknown = extractUnknownCodes(qf.preview);
 			setUnknownItemCodes(unknown);
+			setPendingParsedItems(qf.parsedItems);
 			setPendingItemCodesId(id);
 			setShowCreateItemCodes(true);
 		}
 	};
 
-	const handleItemCodesCreated = async () => {
+	const handleItemCodesCreated = (itemCodes: PendingItemCode[]) => {
 		if (pendingItemCodesId) {
-			// Re-process the file to refresh preview with new item codes
-			await processFile(pendingItemCodesId);
+			setQueue((prev) =>
+				prev.map((q) =>
+					q.id === pendingItemCodesId
+						? { ...q, pendingItemCodes: itemCodes, itemCodesHandled: true }
+						: q,
+				),
+			);
 			setPendingItemCodesId(null);
+			setPendingParsedItems(undefined);
 		}
 	};
 
@@ -1229,6 +1822,10 @@ export default function UploadPage() {
 				queueFile.file,
 				queueFile.destType as "dealer" | "customer",
 				queueFile.destLabel || "",
+				queueFile.pendingDealerCreation,
+				queueFile.pendingCustomerCreation,
+				queueFile.pendingItemCodes,
+				queueFile.purchaseData,
 			);
 
 			if (!result.success) {
@@ -1526,29 +2123,43 @@ export default function UploadPage() {
 				open={showNewDealer}
 				onClose={() => setShowNewDealer(false)}
 				onSave={handleNewDealerSave}
+				suggestedName={suggestedShipTo}
 			/>
-			<EndCustomerModal
-				open={showEndCustomer}
+			<FuzzyCustomerModal
+				open={showFuzzyCustomer}
+				shipTo={
+					pendingFuzzyId
+						? queue.find((q) => q.id === pendingFuzzyId)?.shipTo || "Unknown"
+						: "Unknown"
+				}
+				onSelect={handleFuzzyCustomerSelect}
+				onCreateNew={handleFuzzyCustomerCreateNew}
 				onClose={() => {
-					setShowEndCustomer(false);
-					setPendingCustomerId(null);
+					setShowFuzzyCustomer(false);
+					setPendingFuzzyId(null);
 				}}
-				onSave={handleEndCustomerSave}
-				onCreateNew={handleEndCustomerCreateNew}
 			/>
 			<NewCustomerModal
 				open={showNewCustomer}
 				onClose={() => setShowNewCustomer(false)}
 				onSave={handleNewCustomerSave}
+				suggestedName={suggestedShipTo}
 			/>
 			<CreateUnknownItemCodesModal
 				open={showCreateItemCodes}
 				unknownCodes={unknownItemCodes}
+				parsedItems={pendingParsedItems}
 				onClose={() => {
 					setShowCreateItemCodes(false);
 					setPendingItemCodesId(null);
+					setPendingParsedItems(undefined);
 				}}
 				onSuccess={handleItemCodesCreated}
+			/>
+			<PurchaseFormModal
+				open={showPurchaseForm}
+				onClose={() => setShowPurchaseForm(false)}
+				onSave={handlePurchaseFormSave}
 			/>
 		</div>
 	);

@@ -24,7 +24,7 @@ export const purchaseWithNestedSchema = purchaseSchema
 	.extend({ customer: customerSchema })
 	.extend({ dealer: dealerSchema.nullable() })
 	.extend({ registeredByUser: userSchema })
-	.extend({ invoice: invoiceSchema });
+	.extend({ invoice: invoiceSchema.nullable() });
 
 export type PurchaseWithNestedSchema = z.infer<typeof purchaseWithNestedSchema>;
 
@@ -191,17 +191,56 @@ export const purchaseService = {
 				.where(eq(product.id, productId));
 		}
 
-		for (const productId of data.addedProductIds) {
-			const productWithType = await db.query.product.findFirst({
-				where: eq(product.id, productId),
-				with: { productType: true },
-			});
-			if (!productWithType) continue;
+		// Get all products being added with their warranty durations
+		const productsToAdd = await Promise.all(
+			data.addedProductIds.map(async (productId) => {
+				const p = await db.query.product.findFirst({
+					where: eq(product.id, productId),
+					with: { productType: true },
+				});
+				return p;
+			}),
+		);
 
-			const warrantyEnd = addMonths(
-				currentPurchase.purchaseDate,
-				productWithType.productType.warrantyDurationMonths,
-			);
+		// Find max warranty duration among products being added AND existing items
+		let maxWarrantyMonths = 0;
+
+		// Check newly added products
+		for (const p of productsToAdd) {
+			if (p?.productType?.warrantyDurationMonths) {
+				maxWarrantyMonths = Math.max(
+					maxWarrantyMonths,
+					p.productType.warrantyDurationMonths,
+				);
+			}
+		}
+
+		// Check existing items in the purchase
+		const existingItems = await db.query.purchaseItem.findMany({
+			where: eq(purchaseItem.purchaseId, purchaseId),
+			with: { product: { with: { productType: true } } },
+		});
+		for (const item of existingItems) {
+			if (item.product?.productType?.warrantyDurationMonths) {
+				maxWarrantyMonths = Math.max(
+					maxWarrantyMonths,
+					item.product.productType.warrantyDurationMonths,
+				);
+			}
+		}
+
+		// Use default 12 months if no warranty duration found
+		if (maxWarrantyMonths === 0) maxWarrantyMonths = 12;
+
+		const warrantyEndDate = addMonths(
+			currentPurchase.purchaseDate,
+			maxWarrantyMonths,
+		);
+
+		// Add new items and update warranty for all items (new and existing)
+		for (const productId of data.addedProductIds) {
+			const p = productsToAdd.find((prod) => prod?.id === productId);
+			if (!p) continue;
 
 			await db.insert(purchaseItem).values({
 				id: crypto.randomUUID(),
@@ -214,10 +253,21 @@ export const purchaseService = {
 				.set({
 					status: "warranty_active",
 					warrantyStartDate: currentPurchase.purchaseDate,
-					warrantyEndDate: warrantyEnd,
+					warrantyEndDate: warrantyEndDate,
 					updatedAt: new Date(),
 				})
 				.where(eq(product.id, productId));
+		}
+
+		// Also update warranty end date for all existing items to match
+		for (const item of existingItems) {
+			await db
+				.update(product)
+				.set({
+					warrantyEndDate: warrantyEndDate,
+					updatedAt: new Date(),
+				})
+				.where(eq(product.id, item.productId));
 		}
 
 		const result = await db.query.purchaseItem.findMany({

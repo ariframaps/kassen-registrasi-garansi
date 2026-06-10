@@ -6,6 +6,8 @@ import {
 	customer,
 	productType,
 	itemCodeMapping,
+	user,
+	purchase,
 } from "@/db/schema";
 import {
 	parseExcelFile,
@@ -13,6 +15,7 @@ import {
 	ParsedDeliveryOrder,
 	PreviewRow,
 } from "@/lib/parser-accurate";
+import { normalizeSerialNumber } from "@/lib/utils";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -43,7 +46,7 @@ export async function getExistingSerialNumbers(): Promise<Set<string>> {
 	const products = await db
 		.select({ serialNumber: product.serialNumber })
 		.from(product);
-	return new Set(products.map((p) => p.serialNumber));
+	return new Set(products.map((p) => normalizeSerialNumber(p.serialNumber)));
 }
 
 export interface UploadValidationResult {
@@ -57,6 +60,21 @@ export interface UploadValidationResult {
 export async function validateAccurateFile(
 	file: File,
 ): Promise<UploadValidationResult> {
+	// Check if file has already been uploaded using hash
+	const buffer = await file.arrayBuffer();
+	const hash = crypto
+		.createHash("sha256")
+		.update(Buffer.from(buffer))
+		.digest("hex");
+
+	const existingFile = await db.query.deliveryOrders.findFirst({
+		where: eq(deliveryOrders.fileHash, hash),
+	});
+
+	if (existingFile) {
+		throw new Error("File ini sudah pernah diupload sebelumnya");
+	}
+
 	const [parsed, existingSerials, typeMap] = await Promise.all([
 		parseExcelFile(file),
 		getExistingSerialNumbers(),
@@ -85,6 +103,28 @@ export interface UploadSubmitOptions {
 	destLabel: string;
 	userId: string;
 	file: File;
+	pendingDealerCreation?: {
+		name: string;
+		email: string;
+		phone?: string;
+	};
+	pendingCustomerCreation?: {
+		name: string;
+		email?: string;
+		phone?: string;
+	};
+	pendingItemCodes?: Array<{
+		code: string;
+		productTypeName: string;
+		categoryId: string;
+		warrantyDurationMonths: number;
+	}>;
+	purchaseData?: {
+		purchaseDate: string;
+		notes?: string;
+		invoiceFile?: File;
+		dealerId?: string;
+	};
 }
 
 export async function submitAccurateFile(
@@ -93,14 +133,16 @@ export async function submitAccurateFile(
 	doNumber: string;
 	productsCreated: number;
 }> {
-	const { destType, destLabel, userId, file } = options;
-
-	const validation = await validateAccurateFile(file);
-	const { parsed, preview } = validation;
-
-	if (validation.validCount === 0) {
-		throw new Error("Tidak ada produk valid untuk disimpan");
-	}
+	const {
+		destType,
+		destLabel,
+		userId,
+		file,
+		pendingDealerCreation,
+		pendingCustomerCreation,
+		pendingItemCodes,
+		purchaseData,
+	} = options;
 
 	// Calculate file hash
 	const buffer = await file.arrayBuffer();
@@ -118,6 +160,74 @@ export async function submitAccurateFile(
 		throw new Error("File ini sudah pernah diupload sebelumnya");
 	}
 
+	// Create pending item codes FIRST (before validation)
+	if (pendingItemCodes && pendingItemCodes.length > 0) {
+		for (const itemCode of pendingItemCodes) {
+			await db.insert(productType).values({
+				id: crypto.randomUUID(),
+				name: itemCode.productTypeName,
+				categoryId: itemCode.categoryId,
+			});
+		}
+
+		for (const itemCode of pendingItemCodes) {
+			const createdType = await db.query.productType.findFirst({
+				where: eq(productType.name, itemCode.productTypeName),
+			});
+
+			if (createdType) {
+				await db.insert(itemCodeMapping).values({
+					id: crypto.randomUUID(),
+					itemCode: itemCode.code,
+					productTypeId: createdType.id,
+				});
+			}
+		}
+	}
+
+	// Now validate file AFTER item codes are created
+	const validation = await validateAccurateFile(file);
+	const { parsed, preview } = validation;
+
+	if (validation.validCount === 0) {
+		throw new Error("Tidak ada produk valid untuk disimpan");
+	}
+
+	// Create pending dealer if provided
+	if (pendingDealerCreation && destType === "dealer") {
+		const newUserId = crypto.randomUUID();
+		await db.insert(user).values({
+			id: newUserId,
+			name: pendingDealerCreation.name,
+			email: pendingDealerCreation.email,
+			emailVerified: false,
+			role: "dealer",
+			status: "active",
+		});
+
+		await db.insert(dealers).values({
+			id: crypto.randomUUID(),
+			userId: newUserId,
+			name: pendingDealerCreation.name,
+			email: pendingDealerCreation.email,
+			phone: pendingDealerCreation.phone ?? null,
+		});
+	}
+
+	// Create pending customer if provided
+	if (pendingCustomerCreation && destType === "customer") {
+		const email = pendingCustomerCreation.email?.trim()
+			? pendingCustomerCreation.email.trim()
+			: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`;
+
+		await db.insert(customer).values({
+			id: crypto.randomUUID(),
+			name: pendingCustomerCreation.name,
+			email,
+			phone: pendingCustomerCreation.phone ?? null,
+		});
+	}
+
 	// Get dealer or customer ID
 	let dealerId: string | null = null;
 	let customerId: string | null = null;
@@ -131,12 +241,27 @@ export async function submitAccurateFile(
 		}
 		dealerId = dealer.id;
 	} else {
-		const found = await db.query.customer.findFirst({
+		let found = await db.query.customer.findFirst({
 			where: eq(customer.name, destLabel),
 		});
+
 		if (!found) {
-			throw new Error(`Customer '${destLabel}' tidak ditemukan`);
+			// Auto-create customer if doesn't exist (fallback)
+			const result = await db
+				.insert(customer)
+				.values({
+					id: crypto.randomUUID(),
+					name: destLabel,
+					email: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`,
+				})
+				.returning();
+
+			if (!result[0]) {
+				throw new Error(`Gagal membuat customer '${destLabel}'`);
+			}
+			found = result[0];
 		}
+
 		customerId = found.id;
 	}
 
@@ -153,10 +278,11 @@ export async function submitAccurateFile(
 		}
 	}
 
-	// Create DO record
+	// Create DO record with explicit ID
 	const doRecord = await db
 		.insert(deliveryOrders)
 		.values({
+			id: crypto.randomUUID(),
 			doNumber: parsed.doNumber,
 			doDate,
 			shipToRaw: parsed.shipTo,
@@ -188,9 +314,11 @@ export async function submitAccurateFile(
 		if (!mapping) continue;
 
 		for (const sn of item.serialNumbers) {
-			if (validSerialNumbers.has(sn)) {
+			const normalizedSn = normalizeSerialNumber(sn);
+			if (validSerialNumbers.has(normalizedSn)) {
 				productsToCreate.push({
-					serialNumber: sn,
+					id: crypto.randomUUID(),
+					serialNumber: normalizedSn,
 					productTypeId: mapping.id,
 					deliveryOrderId: doId,
 					dealerId: dealerId,
@@ -202,6 +330,19 @@ export async function submitAccurateFile(
 
 	if (productsToCreate.length > 0) {
 		await db.insert(product).values(productsToCreate);
+	}
+
+	// Create purchase record if purchaseData is provided (for end customer)
+	if (purchaseData && customerId && destType === "customer") {
+		await db.insert(purchase).values({
+			id: crypto.randomUUID(),
+			purchaseDate: purchaseData.purchaseDate,
+			customerId,
+			dealerId: purchaseData.dealerId || null,
+			registeredBy: userId,
+			source: purchaseData.dealerId ? "dealer" : "direct_sales",
+			notes: purchaseData.notes || null,
+		});
 	}
 
 	return {
