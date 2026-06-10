@@ -70,6 +70,21 @@ export const productApi = {
 			method: "GET",
 		});
 	},
+
+	updateWarrantyStatus: async ({
+		productId,
+		condition,
+		reason,
+	}: {
+		productId: string;
+		condition: "valid" | "rejected";
+		reason?: string;
+	}) => {
+		return apiFetch(`/products/${productId}/warranty-status`, {
+			method: "PATCH",
+			body: JSON.stringify({ condition, reason: reason || "" }),
+		});
+	},
 };
 
 // export const productTypeApi = {
@@ -228,6 +243,17 @@ export const dealerApi = {
 		return apiFetch<DealerSchema[]>("/dealers", { method: "GET" });
 	},
 
+	validate: async (data: {
+		name: string;
+		email: string;
+		phone?: string;
+	}) => {
+		return apiFetch<{ isValid: boolean }>("/dealers/validate", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
 	add: async (data: {
 		name: string;
 		email: string;
@@ -265,6 +291,29 @@ export const customerApi = {
 		return apiFetch<CustomerSchema[]>("/customers", { method: "GET" });
 	},
 
+	validate: async (data: {
+		name: string;
+		email?: string;
+		phone?: string;
+	}) => {
+		return apiFetch<{ isValid: boolean }>("/customers/validate", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	add: async (data: {
+		name: string;
+		email?: string;
+		phone?: string;
+		address?: string;
+	}) => {
+		return apiFetch<CustomerSchema>("/customers", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
 	getById: async (id: string) => {
 		return apiFetch<{
 			customer: any;
@@ -296,9 +345,41 @@ export const customerApi = {
 	},
 };
 
+export const warrantyApi = {
+	check: async (sn: string) => {
+		return apiFetch<any>(`/warranty/check?sn=${encodeURIComponent(sn)}`, {
+			method: "GET",
+		});
+	},
+};
+
 export const waitingListApi = {
 	getAll: async () => {
 		return apiFetch<WaitingListSchema[]>("/waiting-lists", { method: "GET" });
+	},
+
+	createPublic: async (data: {
+		serialNumberRequested: string;
+		requesterType: "end_user" | "dealer";
+		requesterName: string;
+		requesterEmail: string;
+		requesterPhone: string;
+		dealerId?: string;
+	}) => {
+		return apiFetch<WaitingListSchema>("/waiting-lists", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	notify: async (
+		id: string,
+		notificationType: "check_sn" | "warranty_detail" | "dealer_ready",
+	) => {
+		return apiFetch<{ message: string }>(`/waiting-lists/${id}/notify`, {
+			method: "POST",
+			body: JSON.stringify({ notificationType }),
+		});
 	},
 };
 
@@ -369,6 +450,13 @@ export const uploadApi = {
 			unknownCount: number;
 			shipTo?: string;
 			doNumber?: string;
+			parsedItems?: Array<{
+				itemCode: string;
+				itemDescription: string;
+				qty: number;
+				unit: string;
+				serialNumbers: string[];
+			}>;
 		}>("/upload/validate", {
 			method: "POST",
 			body: formData,
@@ -379,11 +467,29 @@ export const uploadApi = {
 		file: File,
 		destType: "dealer" | "customer",
 		destLabel: string,
+		pendingDealerCreation?: any,
+		pendingCustomerCreation?: any,
+		pendingItemCodes?: any[],
+		purchaseData?: any,
 	) => {
 		const formData = new FormData();
 		formData.append("file", file);
 		formData.append("destType", destType);
 		formData.append("destLabel", destLabel);
+		if (pendingDealerCreation) {
+			formData.append("pendingDealerCreation", JSON.stringify(pendingDealerCreation));
+		}
+		if (pendingCustomerCreation) {
+			formData.append("pendingCustomerCreation", JSON.stringify(pendingCustomerCreation));
+		}
+		if (pendingItemCodes) {
+			formData.append("pendingItemCodes", JSON.stringify(pendingItemCodes));
+		}
+		if (purchaseData) {
+			// Remove invoiceFile since we can't send files in JSON
+			const { invoiceFile, ...purchaseDataWithoutFile } = purchaseData;
+			formData.append("purchaseData", JSON.stringify(purchaseDataWithoutFile));
+		}
 
 		return apiFetch<{
 			success: boolean;

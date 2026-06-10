@@ -20,7 +20,7 @@ import {
 	Clock,
 } from "lucide-react";
 import { Product } from "@/types";
-import { publicCheckWarranty } from "./_actions";
+import { publicCheckWarranty, publicWaitingList } from "./_actions";
 import { siteConfig } from "@/configs/site.config";
 
 export default function CheckPage() {
@@ -39,7 +39,8 @@ export default function CheckPage() {
 		setLoading(true);
 
 		try {
-			const normedSN = normalizeSerialNumber(sn);
+			const normedSN = sn;
+			// const normedSN = normalizeSerialNumber(sn);
 			const product = await publicCheckWarranty(normedSN);
 
 			if (product) {
@@ -65,7 +66,7 @@ export default function CheckPage() {
 
 		try {
 			const normedSN = normalizeSerialNumber(sn);
-			await publicWaitinglist(
+			await publicWaitingList(
 				normedSN,
 				contact.name,
 				contact.phone,
@@ -170,70 +171,69 @@ export default function CheckPage() {
 							</Button>
 						</div>
 
-						{state === "notfound" ||
-							(state === "error" && (
-								<div className="mt-5 pt-5 border-t border-zinc-100 animate-fade-up">
-									<div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4">
-										<AlertCircle
-											size={15}
-											className="text-amber-600 shrink-0 mt-0.5"
-										/>
-										<div>
-											<p className="text-xs font-semibold text-amber-800">
-												{state === "error"
-													? "Terjadi kesalahan"
-													: "Serial number tidak ditemukan"}
-											</p>
-											<p className="text-xs text-amber-700 mt-0.5">
-												Isi data kontak Anda. Kami akan menghubungi setelah data
-												tersedia.
-											</p>
-										</div>
-									</div>
-									<div className="space-y-3">
-										<Input
-											label="Nama Lengkap"
-											placeholder="Nama Anda"
-											value={contact.name}
-											onChange={(e) =>
-												setContact({ ...contact, name: e.target.value })
-											}
-											error={cErrors.name}
-											required
-										/>
-										<div className="grid grid-cols-2 gap-3">
-											<Input
-												label="No. HP"
-												type="tel"
-												placeholder="08xx-xxxx"
-												value={contact.phone}
-												onChange={(e) =>
-													setContact({ ...contact, phone: e.target.value })
-												}
-												error={cErrors.phone}
-												required
-											/>
-											<Input
-												label="Email"
-												type="email"
-												placeholder="email@contoh.com"
-												value={contact.email}
-												onChange={(e) =>
-													setContact({ ...contact, email: e.target.value })
-												}
-												error={cErrors.email}
-												required
-											/>
-										</div>
-										<Button
-											fullWidth
-											loading={submittingContact}
-											onClick={submitContact}>
-											Submit
-										</Button>
+						{(state === "notfound" || state === "error") && (
+							<div className="mt-5 pt-5 border-t border-zinc-100 animate-fade-up">
+								<div className="flex items-start gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+									<AlertCircle
+										size={15}
+										className="text-amber-600 shrink-0 mt-0.5"
+									/>
+									<div>
+										<p className="text-xs font-semibold text-amber-800">
+											{state === "error"
+												? "Terjadi kesalahan"
+												: "Serial number tidak ditemukan"}
+										</p>
+										<p className="text-xs text-amber-700 mt-0.5">
+											Isi data kontak Anda. Kami akan menghubungi setelah data
+											tersedia.
+										</p>
 									</div>
 								</div>
-							))}
+								<div className="space-y-3">
+									<Input
+										label="Nama Lengkap"
+										placeholder="Nama Anda"
+										value={contact.name}
+										onChange={(e) =>
+											setContact({ ...contact, name: e.target.value })
+										}
+										error={cErrors.name}
+										required
+									/>
+									<div className="grid grid-cols-2 gap-3">
+										<Input
+											label="No. HP"
+											type="tel"
+											placeholder="08xx-xxxx"
+											value={contact.phone}
+											onChange={(e) =>
+												setContact({ ...contact, phone: e.target.value })
+											}
+											error={cErrors.phone}
+											required
+										/>
+										<Input
+											label="Email"
+											type="email"
+											placeholder="email@contoh.com"
+											value={contact.email}
+											onChange={(e) =>
+												setContact({ ...contact, email: e.target.value })
+											}
+											error={cErrors.email}
+											required
+										/>
+									</div>
+									<Button
+										fullWidth
+										loading={submittingContact}
+										onClick={submitContact}>
+										Submit
+									</Button>
+								</div>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -359,12 +359,4 @@ export default function CheckPage() {
 			</div>
 		</div>
 	);
-}
-function publicWaitinglist(
-	normedSN: string,
-	name: string,
-	phone: string,
-	email: string,
-) {
-	throw new Error("Function not implemented.");
 }

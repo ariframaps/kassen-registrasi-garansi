@@ -5,7 +5,7 @@ export const customerAdapter = {
 	getById: async (id: string): Promise<CustomerDetail> => {
 		const response = await customerApi.getById(id);
 		if (!response.success || !response.data) {
-			throw new Error(response.error || "Failed to fetch customer detail");
+			throw new Error(response.message || "Failed to fetch customer detail");
 		}
 		return {
 			id: response.data.customer.id,
@@ -24,7 +24,7 @@ export const customerAdapter = {
 	getPurchaseHistory: async (id: string): Promise<PurchaseGroup[]> => {
 		const response = await customerApi.getById(id);
 		if (!response.success || !response.data) {
-			throw new Error(response.error || "Failed to fetch purchase history");
+			throw new Error(response.message || "Failed to fetch purchase history");
 		}
 		return response.data.purchases;
 	},

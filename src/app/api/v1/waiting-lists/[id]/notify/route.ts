@@ -9,19 +9,20 @@ import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { waitingListService } from "@/services/waiting-list.service";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 
-const createWaitingListSchema = z.object({
-	serialNumberRequested: z.string().min(1, "Serial number is required"),
-	requesterType: z.enum(["end_user", "dealer"]),
-	requesterName: z.string().min(1, "Name is required"),
-	requesterEmail: z.string().email("Invalid email"),
-	requesterPhone: z.string().min(1, "Phone number is required"),
-	dealerId: z.string().optional(),
+const notifySchema = z.object({
+	notificationType: z.enum(["check_sn", "warranty_detail", "dealer_ready"]),
 });
 
-export async function GET() {
+interface RouteContext {
+	params: Promise<{ id: string }>;
+}
+
+export async function POST(request: Request, context: RouteContext) {
+	const { id } = await context.params;
+
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
@@ -29,50 +30,22 @@ export async function GET() {
 			currentRole: session.user.role,
 		});
 
-		const data = await waitingListService.getAll();
+		const body = await request.json();
+		const validated = notifySchema.parse(body);
+
+		const data = await waitingListService.notify({
+			id,
+			notificationType: validated.notificationType,
+			notifiedBy: session.user.id,
+			userId: session.user.id,
+		});
 
 		return NextResponse.json(
 			successResponse({
-				message: "Success",
+				message: "Notification sent successfully",
 				data,
 			}),
 			{ status: HTTP_STATUS.OK.code },
-		);
-	} catch (error) {
-		if (error instanceof HttpError) {
-			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
-				{ status: error.statusCode },
-			);
-		}
-
-		const normalized = normalizeError(error);
-		return NextResponse.json(
-			errorResponse({
-				message: getSafeErrorMessage(normalized),
-				issues: normalized.issues,
-			}),
-			{ status: getHttpErrorStatus(normalized) },
-		);
-	}
-}
-
-export async function POST(request: NextRequest) {
-	try {
-		const body = await request.json();
-		const validated = createWaitingListSchema.parse(body);
-
-		const data = await waitingListService.create(validated);
-
-		return NextResponse.json(
-			successResponse({
-				message: "Waiting list entry created successfully",
-				data,
-			}),
-			{ status: HTTP_STATUS.CREATED.code },
 		);
 	} catch (error) {
 		if (error instanceof z.ZodError) {

@@ -29,6 +29,7 @@ export interface PreviewRow {
 	productType: string;
 	productCategory: string;
 	itemCodeOriginal?: string;
+	itemDescription?: string;
 	status: "valid" | "duplicate" | "invalid" | "unknown_type";
 	message?: string;
 }
@@ -246,6 +247,7 @@ export function validateAndPreview(
 					productType: "",
 					productCategory: "",
 					itemCodeOriginal: item.itemCode,
+					itemDescription: item.itemDescription,
 					status: "duplicate",
 					message: "SN sudah ada di sistem",
 				});
@@ -258,6 +260,7 @@ export function validateAndPreview(
 						serialNumber: normalized,
 						productType: mapping.name,
 						productCategory: mapping.category,
+						itemDescription: item.itemDescription,
 						status: "valid",
 					});
 					validCount++;
@@ -267,6 +270,7 @@ export function validateAndPreview(
 						productType: "",
 						productCategory: "",
 						itemCodeOriginal: item.itemCode,
+						itemDescription: item.itemDescription,
 						status: "unknown_type",
 						message: `Item code '${item.itemCode}' belum ada mapping`,
 					});

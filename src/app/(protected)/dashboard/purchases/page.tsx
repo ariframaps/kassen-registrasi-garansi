@@ -294,15 +294,30 @@ export default function AdminPurchasesPage() {
 
 	// Load items when a purchase is selected for detail view
 	useEffect(() => {
+		let isMounted = true;
+
 		if (selected) {
 			purchaseApi
 				.getAllPurchaseProductItems({ purchaseId: selected.id })
 				.then((res) => {
-					if (res.success) setSelectedPurchaseItems(res.data);
+					if (isMounted && res.success) {
+						setSelectedPurchaseItems(res.data);
+					}
+				})
+				.catch((err) => {
+					if (isMounted) {
+						console.error("Gagal load items:", err);
+					}
 				});
 		} else {
-			setSelectedPurchaseItems(null);
+			if (isMounted) {
+				setSelectedPurchaseItems(null);
+			}
 		}
+
+		return () => {
+			isMounted = false;
+		};
 	}, [selected]);
 
 	const filtered = useMemo(() => {
@@ -566,7 +581,7 @@ export default function AdminPurchasesPage() {
 									</span>
 									<span className="text-xs text-zinc-400">·</span>
 									<span className="text-xs text-zinc-500">
-										{formatDateShort(selected.invoice.createdAt)}
+										{selected.invoice?.createdAt ? formatDateShort(selected.invoice.createdAt) : "—"}
 									</span>
 								</div>
 								<p className="text-sm font-semibold text-zinc-900">
@@ -668,19 +683,25 @@ export default function AdminPurchasesPage() {
 						)}
 
 						{/* Invoice */}
-						<div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">
-							<div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-								<FileText size={14} className="text-blue-500" />
+						{selected.invoice ? (
+							<div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">
+								<div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+									<FileText size={14} className="text-blue-500" />
+								</div>
+								<div className="flex-1 min-w-0">
+									<p className="text-xs font-medium text-zinc-800">
+										{selected.invoice.originalFilename}
+									</p>
+									<p className="text-[11px] text-zinc-400">
+										Invoice · {selected.invoice.mimeType}
+									</p>
+								</div>
 							</div>
-							<div className="flex-1 min-w-0">
-								<p className="text-xs font-medium text-zinc-800">
-									{selected.invoice.originalFilename}
-								</p>
-								<p className="text-[11px] text-zinc-400">
-									Invoice · {selected.invoice.mimeType}
-								</p>
+						) : (
+							<div className="p-3 border border-amber-100 rounded-xl bg-amber-50">
+								<p className="text-xs text-amber-700">Tidak ada invoice untuk pembelian ini</p>
 							</div>
-						</div>
+						)}
 
 						<div className="flex gap-2 pt-1 border-t border-zinc-100">
 							<Button

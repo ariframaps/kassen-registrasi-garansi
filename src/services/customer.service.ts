@@ -14,8 +14,26 @@ import {
 import { HttpError } from "@/lib/api/http-error";
 import { eq } from "drizzle-orm";
 import z from "zod";
+import crypto from "crypto";
 import type { PurchaseGroup } from "@/types";
 import type { Customer } from "@/types";
+
+export const createCustomerSchema = z.object({
+	name: z.string().min(1, "Nama wajib diisi"),
+	email: z.string().email("Format email tidak valid").optional().or(z.literal("")),
+	phone: z
+		.string()
+		.max(50)
+		.nullable()
+		.optional()
+		.transform((v) => (v === "" ? null : v)),
+	address: z
+		.string()
+		.nullable()
+		.optional()
+		.transform((v) => (v === "" ? null : v)),
+});
+export type CreateCustomerPayload = z.infer<typeof createCustomerSchema>;
 
 export const updateCustomerSchema = z.object({
 	name: z.string().min(1, "Nama wajib diisi"),
@@ -44,6 +62,58 @@ export const customerService = {
 	getAll: async (): Promise<CustomerSchema[]> => {
 		const result = await db.query.customer.findMany({});
 		return customerSchema.array().parse(result);
+	},
+
+	create: async (
+		data: CreateCustomerPayload,
+		audit: AuditContext,
+	): Promise<CustomerSchema> => {
+		// Generate unique email if not provided
+		const email = data.email && data.email.trim()
+			? data.email.trim()
+			: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`;
+
+		const existingCustomer = await db.query.customer.findFirst({
+			where: eq(customer.email, email),
+		});
+		if (existingCustomer)
+			throw new HttpError(
+				"Email sudah terdaftar",
+				HTTP_STATUS.CONFLICT.code,
+			);
+
+		const result = await db
+			.insert(customer)
+			.values({
+				id: crypto.randomUUID(),
+				name: data.name.trim(),
+				email,
+				phone: data.phone ?? null,
+				address: data.address ?? null,
+			})
+			.returning();
+
+		if (!result[0])
+			throw new HttpError(
+				"Gagal membuat customer",
+				HTTP_STATUS.BAD_GATEWAY.code,
+			);
+
+		const parsed = customerSchema.parse(result[0]);
+
+		await db.insert(auditLog).values({
+			id: crypto.randomUUID(),
+			userId: audit.userId,
+			category: "PURCHASE",
+			event: "CUSTOMER_CREATED",
+			status: "success",
+			priority: "medium",
+			ipAddress: audit.ipAddress ?? undefined,
+			userAgent: audit.userAgent ?? undefined,
+			data: { customerId: parsed.id, name: parsed.name, email: parsed.email },
+		});
+
+		return parsed;
 	},
 
 	getById: async (id: string): Promise<CustomerSchema> => {
@@ -76,7 +146,7 @@ export const customerService = {
 		return result.map((p) => {
 			const warrantyDates = p.items
 				.map((item) => {
-					const endDate = item.product.warrantyEndDate;
+					const endDate = item.product.warrantyEndDate as string | Date | null | undefined;
 					if (!endDate) return null;
 					return typeof endDate === "string" ? endDate : endDate.toISOString().split("T")[0];
 				})

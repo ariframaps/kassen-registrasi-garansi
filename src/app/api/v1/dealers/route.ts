@@ -21,10 +21,9 @@ export async function GET() {
 
 		const data = await dealerService.getAll();
 
-		return NextResponse.json(
-			successResponse({ message: "Success", data }),
-			{ status: HTTP_STATUS.OK.code },
-		);
+		return NextResponse.json(successResponse({ message: "Success", data }), {
+			status: HTTP_STATUS.OK.code,
+		});
 	} catch (error) {
 		if (error instanceof HttpError) {
 			return NextResponse.json(
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
-			allowedRole: ["admin"],
+			allowedRole: ["admin", "sales"],
 			currentRole: session.user.role,
 		});
 

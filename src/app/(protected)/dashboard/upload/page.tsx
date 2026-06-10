@@ -1378,19 +1378,7 @@ function QueueItem({
 									</div>
 								</button>
 								<button
-									onClick={() => {
-											if (qf.destType === "dealer" && qf.destLabel) {
-												if (confirm("Mengganti ke End Customer akan membatalkan pilihan dealer. Lanjutkan?")) {
-													setQueue((prev) =>
-														prev.map((q) =>
-															q.id === qf.id ? { ...q, destType: "customer", destLabel: undefined, pendingDealerCreation: undefined } : q,
-														),
-													);
-												}
-											} else {
-												onDestSelect(qf.id, "customer");
-											}
-										}}
+									onClick={() => onDestSelect(qf.id, "customer")}
 									className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left ${qf.destType === "customer" ? "border-blue-400 bg-blue-50" : "border-zinc-200 hover:border-zinc-300"}`}>
 									<UserRound
 										size={14}
@@ -1671,6 +1659,16 @@ export default function UploadPage() {
 	};
 
 	const setDestType = (id: string, type: DestType) => {
+		const qf = queue.find((q) => q.id === id);
+
+		// If changing destination and there's already a selection, ask for confirmation
+		if (qf?.destType && qf.destType !== type && qf.destLabel) {
+			const confirmMsg = `Mengganti ke ${type === "dealer" ? "Dealer" : "End Customer"} akan membatalkan pilihan sebelumnya. Lanjutkan?`;
+			if (!confirm(confirmMsg)) {
+				return;
+			}
+		}
+
 		setQueue((prev) =>
 			prev.map((q) =>
 				q.id === id
@@ -1685,12 +1683,10 @@ export default function UploadPage() {
 			),
 		);
 		if (type === "dealer") {
-			const qf = queue.find((q) => q.id === id);
 			setSuggestedShipTo(qf?.shipTo || "");
 			setPendingFuzzyId(id);
 			setShowFuzzy(true);
 		} else if (type === "customer") {
-			const qf = queue.find((q) => q.id === id);
 			setSuggestedShipTo(qf?.shipTo || "");
 			setPendingFuzzyId(id);
 			setShowFuzzyCustomer(true);
@@ -1832,13 +1828,16 @@ export default function UploadPage() {
 				throw new Error(result.message || "Upload gagal");
 			}
 
+			const productsCreated = result.data?.productsCreated || 0;
 			setQueue((prev) =>
-				prev.map((q) => (q.id === id ? { ...q, state: "done" } : q)),
+				prev.map((q) =>
+					q.id === id ? { ...q, state: "done", validCount: productsCreated } : q,
+				),
 			);
 			advanceQueue(id);
 			success(
 				"File berhasil diupload",
-				`${queueFile.validCount} produk ditambahkan`,
+				`${productsCreated} produk ditambahkan`,
 			);
 		} catch (err) {
 			const message =

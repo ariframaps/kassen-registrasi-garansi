@@ -92,24 +92,35 @@ function AdminConditionModal({
 	const [note, setNote] = useState(current?.warrantyConditionNote ?? "");
 	const [confirmOpen, setConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
-	const { success } = useToast();
+	const { success, error } = useToast();
 
 	const handleSave = async () => {
 		setLoading(true);
-		await new Promise((r) => setTimeout(r, 700));
-		setLoading(false);
-		onSave({
-			warrantyCondition: status,
-			warrantyConditionNote: note.trim(),
-			warrantyConditionUpdatedAt: new Date().toISOString().slice(0, 10),
-			warrantyConditionUpdatedBy: "Admin",
-		});
-		setConfirm(false);
-		onClose();
-		success(
-			status === "valid" ? "Kondisi: Valid" : "Kondisi: Rejected",
-			`SN ${product.serialNumber}`,
-		);
+		try {
+			await productApi.updateWarrantyStatus({
+				productId: product.id,
+				condition: status,
+				reason: note.trim(),
+			});
+
+			onSave({
+				warrantyCondition: status,
+				warrantyConditionNote: note.trim(),
+				warrantyConditionUpdatedAt: new Date().toISOString().slice(0, 10),
+				warrantyConditionUpdatedBy: "Admin",
+			});
+			setConfirm(false);
+			onClose();
+			success(
+				status === "valid" ? "Kondisi: Valid" : "Kondisi: Rejected",
+				`SN ${product.serialNumber}`,
+			);
+		} catch (err) {
+			error("Gagal", "Terjadi kesalahan saat menyimpan kondisi");
+			console.error(err);
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	return (
@@ -609,6 +620,7 @@ export default function ProductsPage() {
 	const user = session?.user;
 	const canEdit = user?.role === "sales" || user?.role === "admin";
 	const isAdmin = user?.role === "admin";
+	const canUpdateWarrantyCondition = user?.role === "admin" || user?.role === "technical_support";
 	const [productPage, setProductPage] = useState(1);
 	const [productPageSize, setProductPageSize] = useState(20);
 	// const [reassignTarget, setReassignTarget] =
@@ -876,7 +888,7 @@ export default function ProductsPage() {
 													<div
 														className="flex items-center justify-end gap-1"
 														onClick={(e) => e.stopPropagation()}>
-														{isAdmin && hasWarranty && (
+														{canUpdateWarrantyCondition && hasWarranty && (
 															<button
 																onClick={() => setConditionTarget(p)}
 																className="p-1.5 rounded-md hover:bg-violet-50 text-zinc-400 hover:text-violet-600 transition-colors"
@@ -1040,7 +1052,7 @@ export default function ProductsPage() {
 											Re-assign Dealer
 										</Button>
 									)} */}
-									{isAdmin && hasWarranty && (
+									{canUpdateWarrantyCondition && hasWarranty && (
 										<Button
 											variant="secondary"
 											size="sm"

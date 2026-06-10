@@ -1,36 +1,35 @@
 import { HTTP_STATUS } from "@/constants/http-status.constant";
-// import { missingBodyError } from "@/lib/api/api-missing-body-error";
 import { errorResponse, successResponse } from "@/lib/api/api-response";
 import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import { authService } from "@/services/_auth.service";
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { warrantyService } from "@/services/warranty.service";
+import { NextRequest, NextResponse } from "next/server";
 
-const sendOtpBodySchema = z.object({
-	email: z.email({ error: "Email wajib diisi" }),
-});
-
-export type SendOtpResponseData = null;
-
-export async function POST(request: Request) {
+export async function GET(request: NextRequest) {
 	try {
-		const body = await request.json();
-		const { email } = sendOtpBodySchema.parse(body);
+		const sn = request.nextUrl.searchParams.get("sn");
+		if (!sn || !sn.trim()) {
+			return NextResponse.json(
+				errorResponse({
+					message: "Serial number is required",
+					issues: [],
+				}),
+				{ status: HTTP_STATUS.BAD_REQUEST.code },
+			);
+		}
 
-		// await authService.sendOtp({ email });
-
+		const data = await warrantyService.checkWarranty(sn.trim());
+    console.log(data)
 		return NextResponse.json(
 			successResponse({
 				message: "Success",
-				data: null as SendOtpResponseData,
+				data,
 			}),
 			{ status: HTTP_STATUS.OK.code },
 		);
 	} catch (error) {
 		const normalized = normalizeError(error);
-
 		return NextResponse.json(
 			errorResponse({
 				message: getSafeErrorMessage(normalized),

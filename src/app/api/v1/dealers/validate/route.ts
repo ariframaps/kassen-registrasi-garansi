@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { errorResponse, successResponse } from "@/lib/api/api-response";
 import {
@@ -9,7 +10,15 @@ import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import { validateAccurateFile } from "@/services/accurate.service";
+import { db } from "@/db";
+import { dealers, user } from "@/db/schema";
+import { eq } from "drizzle-orm";
+
+const validateDealerSchema = z.object({
+	name: z.string().min(1, "Nama wajib diisi"),
+	email: z.string().email("Format email tidak valid"),
+	phone: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
 	try {
@@ -19,27 +28,37 @@ export async function POST(req: NextRequest) {
 			currentRole: session.user.role,
 		});
 
-		const formData = await req.formData();
-		const file = formData.get("file") as File | null;
+		const body = await req.json();
+		const parsed = validateDealerSchema.parse(body);
 
-		if (!file) {
-			throw new Error("File diperlukan");
+		// Check if dealer already exists
+		const existingDealer = await db.query.dealers.findFirst({
+			where: eq(dealers.name, parsed.name),
+		});
+
+		if (existingDealer) {
+			throw new HttpError(
+				`Dealer '${parsed.name}' sudah terdaftar`,
+				HTTP_STATUS.CONFLICT.code,
+			);
 		}
 
-		const result = await validateAccurateFile(file);
+		// Check if email already exists
+		const existingUser = await db.query.user.findFirst({
+			where: eq(user.email, parsed.email),
+		});
+
+		if (existingUser) {
+			throw new HttpError(
+				"Email sudah terdaftar",
+				HTTP_STATUS.CONFLICT.code,
+			);
+		}
 
 		return NextResponse.json(
 			successResponse({
-				message: "Validasi berhasil",
-				data: {
-					preview: result.preview,
-					validCount: result.validCount,
-					dupCount: result.dupCount,
-					unknownCount: result.unknownCount,
-					shipTo: result.parsed.shipTo,
-					doNumber: result.parsed.doNumber,
-					parsedItems: result.parsed.items,
-				},
+				message: "Validasi berhasil - dealer dapat dibuat",
+				data: { isValid: true },
 			}),
 			{ status: HTTP_STATUS.OK.code },
 		);

@@ -8,32 +8,41 @@ import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import { waitingListService } from "@/services/waiting-list.service";
-import { NextRequest, NextResponse } from "next/server";
+import { productService } from "@/services/product.service";
 import { z } from "zod";
+import { NextResponse } from "next/server";
 
-const createWaitingListSchema = z.object({
-	serialNumberRequested: z.string().min(1, "Serial number is required"),
-	requesterType: z.enum(["end_user", "dealer"]),
-	requesterName: z.string().min(1, "Name is required"),
-	requesterEmail: z.string().email("Invalid email"),
-	requesterPhone: z.string().min(1, "Phone number is required"),
-	dealerId: z.string().optional(),
+const updateWarrantyStatusSchema = z.object({
+	condition: z.enum(["valid", "rejected"]),
+	reason: z.string().optional().default(""),
 });
 
-export async function GET() {
+export async function PATCH(
+	request: Request,
+	{ params }: { params: Promise<{ id: string }> },
+) {
+	const { id } = await params;
+
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
-			allowedRole: ["admin", "sales"],
+			allowedRole: ["admin", "technical_support"],
 			currentRole: session.user.role,
 		});
 
-		const data = await waitingListService.getAll();
+		const body = await request.json();
+		const validated = updateWarrantyStatusSchema.parse(body);
+
+		const data = await productService.updateWarrantyCondition({
+			productId: id,
+			condition: validated.condition,
+			reason: validated.reason,
+			userId: session.user.id,
+		});
 
 		return NextResponse.json(
 			successResponse({
-				message: "Success",
+				message: "Warranty condition updated successfully",
 				data,
 			}),
 			{ status: HTTP_STATUS.OK.code },
@@ -49,32 +58,6 @@ export async function GET() {
 			);
 		}
 
-		const normalized = normalizeError(error);
-		return NextResponse.json(
-			errorResponse({
-				message: getSafeErrorMessage(normalized),
-				issues: normalized.issues,
-			}),
-			{ status: getHttpErrorStatus(normalized) },
-		);
-	}
-}
-
-export async function POST(request: NextRequest) {
-	try {
-		const body = await request.json();
-		const validated = createWaitingListSchema.parse(body);
-
-		const data = await waitingListService.create(validated);
-
-		return NextResponse.json(
-			successResponse({
-				message: "Waiting list entry created successfully",
-				data,
-			}),
-			{ status: HTTP_STATUS.CREATED.code },
-		);
-	} catch (error) {
 		if (error instanceof z.ZodError) {
 			return NextResponse.json(
 				errorResponse({
@@ -82,16 +65,6 @@ export async function POST(request: NextRequest) {
 					issues: error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
 				}),
 				{ status: HTTP_STATUS.BAD_REQUEST.code },
-			);
-		}
-
-		if (error instanceof HttpError) {
-			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
-				{ status: error.statusCode },
 			);
 		}
 

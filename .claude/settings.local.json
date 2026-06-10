@@ -28,7 +28,16 @@
       "Bash(git restore *)",
       "Skill(update-config)",
       "Bash(taskkill /F /IM node.exe)",
-      "Bash(git commit -m 'docs: Add comprehensive testing and implementation documentation *)"
+      "Bash(git commit -m 'docs: Add comprehensive testing and implementation documentation *)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(git commit -m 'fix: Show destination buttons after item codes are created *)",
+      "Bash(Get-ChildItem -Recurse -Path \"D:\\\\Programming\\\\Web Programming\\\\Project\\\\kassen-registrasi-garansi\\\\src\\\\app\" -Directory)",
+      "Bash(Select-Object -First 30)",
+      "Bash(python /tmp/fix_upload.py)",
+      "Bash(pkill -f \"node.*next\")",
+      "Bash(taskkill *)",
+      "Bash(Get-Content *)",
+      "Bash(python3)"
     ]
   }
 }

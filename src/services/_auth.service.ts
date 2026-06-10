@@ -223,3 +223,5 @@
 // 		return token;
 // 	},
 // };
+
+export const authService = {};

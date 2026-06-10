@@ -36,26 +36,26 @@ export default function DealerDashboardPage() {
   const [lastPolled, setLastPolled] = useState<Date | null>(null);
 
   const fetchNotifications = useCallback(async () => {
-    const all = await notificationAdapter.getDealerNotifications(DEMO_DEALER_ID);
-    setNotifications(all);
+    // const all = await notificationAdapter.getDealerNotifications(DEMO_DEALER_ID);
+    // setNotifications(all);
     setLastPolled(new Date());
   }, []);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
-  usePolling(fetchNotifications, 30_000);
+  // usePolling(fetchNotifications, 30_000);
 
   const loadProducts = useCallback(async () => {
     setLoadingProducts(true);
-    const result = await productAdapter.getPaginated({
-      page, pageSize,
-      search: search || undefined,
-      dealerId: DEMO_DEALER_ID,
-    });
-    const statusFiltered = filter === "all"
-      ? result.items
-      : result.items.filter((p) => p.warrantyStatus === filter);
-    setProducts(statusFiltered);
-    setTotalProducts(filter === "all" ? result.total : statusFiltered.length);
+    // const result = await productAdapter.getPaginated({
+    //   page, pageSize,
+    //   search: search || undefined,
+    //   dealerId: DEMO_DEALER_ID,
+    // });
+    // const statusFiltered = filter === "all"
+    //   ? result.items
+    //   : result.items.filter((p) => p.warrantyStatus === filter);
+    // setProducts(statusFiltered);
+    // setTotalProducts(filter === "all" ? result.total : statusFiltered.length);
     setLoadingProducts(false);
   }, [page, pageSize, search, filter]);
 

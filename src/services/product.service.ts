@@ -12,6 +12,8 @@ import {
 	ProductTypeSchema,
 	productTypeSchema,
 	userSchema,
+	warrantyCondition,
+	auditLog,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import z from "zod";
@@ -80,5 +82,76 @@ export const productService = {
 
 		const parsed = productWithNestedSchema.array().parse(result);
 		return parsed;
+	},
+
+	updateWarrantyCondition: async ({
+		productId,
+		condition,
+		reason,
+		userId,
+	}: {
+		productId: string;
+		condition: "valid" | "rejected";
+		reason: string;
+		userId: string;
+	}) => {
+		const existingProduct = await db.query.product.findFirst({
+			where: eq(product.id, productId),
+		});
+
+		if (!existingProduct) throw new Error("Product not found");
+
+		const existingCondition = await db.query.warrantyCondition.findFirst({
+			where: eq(warrantyCondition.productId, productId),
+		});
+
+		let conditionData;
+		if (existingCondition) {
+			await db
+				.update(warrantyCondition)
+				.set({
+					condition,
+					reason: reason || null,
+					updatedBy: userId,
+					updatedAt: new Date(),
+				})
+				.where(eq(warrantyCondition.id, existingCondition.id));
+			conditionData = {
+				...existingCondition,
+				condition,
+				reason: reason || null,
+				updatedBy: userId,
+				updatedAt: new Date(),
+			};
+		} else {
+			const [newCondition] = await db
+				.insert(warrantyCondition)
+				.values({
+					productId,
+					condition,
+					reason: reason || null,
+					updatedBy: userId,
+				})
+				.returning();
+			conditionData = newCondition;
+		}
+
+		// Create audit log
+		await db.insert(auditLog).values({
+			userId,
+			category: "WARRANTY",
+			event: `Update warranty condition to ${condition}`,
+			status: "success",
+			priority: "high",
+			data: {
+				productId,
+				serialNumber: existingProduct.serialNumber,
+				previousCondition: existingCondition?.condition,
+				newCondition: condition,
+				reason: reason || null,
+			},
+		});
+
+		return conditionData;
 	},
 };

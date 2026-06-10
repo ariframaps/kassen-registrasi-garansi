@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		const { email, otp } = verifyOtpBodySchema.parse(body);
 
-		const token = await authService.verifyOtp({ email, otp });
+		// const token = await authService.verifyOtp({ email, otp });
 
 		const response = NextResponse.json(
 			successResponse({
@@ -31,15 +31,15 @@ export async function POST(request: Request) {
 			{ status: HTTP_STATUS.OK.code },
 		);
 
-		response.cookies.set("auth_token", token, {
-			httpOnly: true,
-			secure: envServer.NODE_ENV === "production",
-			sameSite: "lax",
-			path: "/",
-			maxAge: 60, // 1 menit
-		});
+		// response.cookies.set("auth_token", token, {
+		// 	httpOnly: true,
+		// 	secure: envServer.NODE_ENV === "production",
+		// 	sameSite: "lax",
+		// 	path: "/",
+		// 	maxAge: 60, // 1 menit
+		// });
 
-		console.log(token);
+		// console.log(token);
 
 		return response;
 	} catch (error) {

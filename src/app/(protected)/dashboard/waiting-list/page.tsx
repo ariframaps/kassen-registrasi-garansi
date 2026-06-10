@@ -104,12 +104,17 @@ function NotifModal({
 
 	const handleSend = async () => {
 		setLoading(true);
-		await new Promise((r) => setTimeout(r, 800));
-		setLoading(false);
-		setConfirmOpen(false);
-		onClose();
-		const optLabel = options.find((o) => o.key === selected)?.title;
-		success("Notifikasi terkirim", `${entry.requesterName} — ${optLabel}`);
+		try {
+			await waitingListApi.notify(entry.id, selected!);
+			setLoading(false);
+			setConfirmOpen(false);
+			onClose();
+			const optLabel = options.find((o) => o.key === selected)?.title;
+			success("Notifikasi terkirim", `${entry.requesterName} — ${optLabel}`);
+		} catch (error) {
+			setLoading(false);
+			console.error("Failed to send notification:", error);
+		}
 	};
 
 	useEffect(() => {

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="id">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Detail Status Garansi</title>
+
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				background-color: #f4f4f7;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+				color: #333333;
+			}
+
+			.container {
+				width: 100%;
+				padding: 40px 20px;
+				box-sizing: border-box;
+			}
+
+			.email-card {
+				max-width: 600px;
+				margin: 0 auto;
+				background-color: #ffffff;
+				border-radius: 12px;
+				padding: 40px;
+				box-sizing: border-box;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+			}
+
+			.logo {
+				text-align: center;
+				margin-bottom: 24px;
+			}
+
+			.logo h1 {
+				margin: 0;
+				font-size: 28px;
+				color: #2563eb;
+				font-weight: bold;
+			}
+
+			.icon-box {
+				text-align: center;
+				margin: 24px 0;
+			}
+
+			.icon-box p {
+				font-size: 48px;
+				margin: 0;
+			}
+
+			h2 {
+				margin-top: 0;
+				margin-bottom: 16px;
+				font-size: 24px;
+				text-align: center;
+				color: #111827;
+			}
+
+			p {
+				font-size: 16px;
+				line-height: 1.6;
+				color: #4b5563;
+				margin-bottom: 12px;
+			}
+
+			.status-active {
+				background: #dcfce7;
+				border-left: 4px solid #22c55e;
+				padding: 16px;
+				border-radius: 8px;
+				margin: 24px 0;
+				font-size: 16px;
+				color: #166534;
+			}
+
+			.status-expired {
+				background: #fee2e2;
+				border-left: 4px solid #ef4444;
+				padding: 16px;
+				border-radius: 8px;
+				margin: 24px 0;
+				font-size: 16px;
+				color: #7f1d1d;
+			}
+
+			.status-active strong,
+			.status-expired strong {
+				display: block;
+				font-size: 18px;
+				margin-bottom: 8px;
+			}
+
+			.info-table {
+				width: 100%;
+				border-collapse: collapse;
+				margin: 24px 0;
+				background: #f9fafb;
+				border-radius: 8px;
+				overflow: hidden;
+			}
+
+			.info-table tr {
+				border-bottom: 1px solid #e5e7eb;
+			}
+
+			.info-table tr:last-child {
+				border-bottom: none;
+			}
+
+			.info-table td {
+				padding: 14px 16px;
+				font-size: 15px;
+			}
+
+			.info-table td:first-child {
+				font-weight: bold;
+				color: #374151;
+				width: 40%;
+				background: #f3f4f6;
+			}
+
+			.info-table td:last-child {
+				color: #1f2937;
+				font-family: "Courier New", monospace;
+			}
+
+			.product-type {
+				display: inline-block;
+				background: #dbeafe;
+				color: #1e40af;
+				padding: 4px 8px;
+				border-radius: 4px;
+				font-size: 13px;
+				font-weight: bold;
+			}
+
+			.footer {
+				margin-top: 32px;
+				font-size: 13px;
+				text-align: center;
+				color: #9ca3af;
+				border-top: 1px solid #e5e7eb;
+				padding-top: 24px;
+			}
+
+			@media only screen and (max-width: 600px) {
+				.email-card {
+					padding: 24px;
+				}
+
+				h2 {
+					font-size: 22px;
+				}
+
+				p {
+					font-size: 15px;
+				}
+
+				.info-table {
+					font-size: 14px;
+				}
+
+				.info-table td {
+					padding: 12px;
+				}
+
+				.logo h1 {
+					font-size: 24px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="email-card">
+				<div class="logo">
+					<h1>Kassen Garansi</h1>
+				</div>
+
+				<div class="icon-box">
+					<p>{{statusIcon}}</p>
+				</div>
+
+				<h2>Status Garansi Produk Anda</h2>
+
+				<p>Halo {{requesterName}},</p>
+
+				<div class="{{statusClass}}">
+					<strong>{{statusText}}</strong>
+					Produk Anda {{statusDescription}}
+				</div>
+
+				<p>Berikut adalah detail informasi garansi produk Anda:</p>
+
+				<table class="info-table">
+					<tr>
+						<td>Serial Number</td>
+						<td>{{serialNumber}}</td>
+					</tr>
+					<tr>
+						<td>Tipe Produk</td>
+						<td><span class="product-type">{{productType}}</span></td>
+					</tr>
+					<tr>
+						<td>Kategori</td>
+						<td>{{productCategory}}</td>
+					</tr>
+					<tr>
+						<td>Mulai Garansi</td>
+						<td>{{startDate}}</td>
+					</tr>
+					<tr>
+						<td>Berakhir Garansi</td>
+						<td>{{endDate}}</td>
+					</tr>
+					<tr>
+						<td>Status</td>
+						<td><strong>{{status}}</strong></td>
+					</tr>
+				</table>
+
+				<p>
+					Jika Anda memiliki pertanyaan tentang garansi produk Anda atau membutuhkan bantuan, silakan
+					hubungi tim support kami.
+				</p>
+
+				<div class="footer">
+					<p style="margin: 0;">
+						<strong>Kassen Warranty Management System</strong><br />
+						Email: info@kassen.com.tw
+					</p>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>

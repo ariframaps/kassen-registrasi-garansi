@@ -8,6 +8,7 @@ import {
 	itemCodeMapping,
 	user,
 	purchase,
+	purchaseItem,
 } from "@/db/schema";
 import {
 	parseExcelFile,
@@ -303,11 +304,40 @@ export async function submitAccurateFile(
 	// Get product type mapping again for save
 	const typeMap = await getProductTypeMappings();
 
+	// Get all product types for warranty calculation
+	const allProductTypes = await db.query.productType.findMany();
+	const productTypeMap = new Map(allProductTypes.map((pt) => [pt.id, pt]));
+
 	// Create product records by matching preview with parsed items
 	const productsToCreate = [];
 	const validSerialNumbers = new Set(
 		preview.filter((p) => p.status === "valid").map((p) => p.serialNumber),
 	);
+
+	// For end customer, calculate warranty end date
+	let warrantyEndDate: string | null = null;
+	let maxWarrantyMonths = 0;
+
+	if (destType === "customer" && purchaseData) {
+		// Calculate max warranty duration from product types
+		for (const item of parsed.items) {
+			const mapping = typeMap.get(item.itemCode);
+			if (mapping) {
+				const pt = productTypeMap.get(mapping.id);
+				if (pt) {
+					maxWarrantyMonths = Math.max(maxWarrantyMonths, pt.warrantyDurationMonths);
+				}
+			}
+		}
+
+		// Default to 12 months if no product type found
+		if (maxWarrantyMonths === 0) maxWarrantyMonths = 12;
+
+		// Calculate warranty end date
+		const purchaseDateObj = new Date(purchaseData.purchaseDate);
+		purchaseDateObj.setMonth(purchaseDateObj.getMonth() + maxWarrantyMonths);
+		warrantyEndDate = purchaseDateObj.toISOString().split("T")[0];
+	}
 
 	for (const item of parsed.items) {
 		const mapping = typeMap.get(item.itemCode);
@@ -316,14 +346,23 @@ export async function submitAccurateFile(
 		for (const sn of item.serialNumbers) {
 			const normalizedSn = normalizeSerialNumber(sn);
 			if (validSerialNumbers.has(normalizedSn)) {
-				productsToCreate.push({
+				const productData: any = {
 					id: crypto.randomUUID(),
 					serialNumber: normalizedSn,
 					productTypeId: mapping.id,
 					deliveryOrderId: doId,
 					dealerId: dealerId,
 					status: "none" as const,
-				});
+				};
+
+				// Set warranty dates for end customer
+				if (destType === "customer" && purchaseData && warrantyEndDate) {
+					productData.status = "warranty_active";
+					productData.warrantyStartDate = purchaseData.purchaseDate;
+					productData.warrantyEndDate = warrantyEndDate;
+				}
+
+				productsToCreate.push(productData);
 			}
 		}
 	}
@@ -333,16 +372,35 @@ export async function submitAccurateFile(
 	}
 
 	// Create purchase record if purchaseData is provided (for end customer)
+	let purchaseId: string | null = null;
 	if (purchaseData && customerId && destType === "customer") {
-		await db.insert(purchase).values({
-			id: crypto.randomUUID(),
-			purchaseDate: purchaseData.purchaseDate,
-			customerId,
-			dealerId: purchaseData.dealerId || null,
-			registeredBy: userId,
-			source: purchaseData.dealerId ? "dealer" : "direct_sales",
-			notes: purchaseData.notes || null,
-		});
+		const purchaseRecord = await db
+			.insert(purchase)
+			.values({
+				id: crypto.randomUUID(),
+				purchaseDate: purchaseData.purchaseDate,
+				customerId,
+				dealerId: purchaseData.dealerId || null,
+				registeredBy: userId,
+				source: purchaseData.dealerId ? "dealer" : "direct_sales",
+				notes: purchaseData.notes || null,
+			})
+			.returning();
+
+		if (purchaseRecord[0]) {
+			purchaseId = purchaseRecord[0].id;
+
+			// Create purchase items for all products
+			const purchaseItemsToCreate = productsToCreate.map((prod) => ({
+				id: crypto.randomUUID(),
+				purchaseId: purchaseId!,
+				productId: prod.id,
+			}));
+
+			if (purchaseItemsToCreate.length > 0) {
+				await db.insert(purchaseItem).values(purchaseItemsToCreate);
+			}
+		}
 	}
 
 	return {

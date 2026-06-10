@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="id">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Produk Siap Didaftarkan</title>
+
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				background-color: #f4f4f7;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+				color: #333333;
+			}
+
+			.container {
+				width: 100%;
+				padding: 40px 20px;
+				box-sizing: border-box;
+			}
+
+			.email-card {
+				max-width: 600px;
+				margin: 0 auto;
+				background-color: #ffffff;
+				border-radius: 12px;
+				padding: 40px;
+				box-sizing: border-box;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+			}
+
+			.logo {
+				text-align: center;
+				margin-bottom: 24px;
+			}
+
+			.logo h1 {
+				margin: 0;
+				font-size: 28px;
+				color: #2563eb;
+				font-weight: bold;
+			}
+
+			.icon-box {
+				text-align: center;
+				margin: 24px 0;
+			}
+
+			.icon-box p {
+				font-size: 48px;
+				margin: 0;
+			}
+
+			h2 {
+				margin-top: 0;
+				margin-bottom: 16px;
+				font-size: 24px;
+				text-align: center;
+				color: #111827;
+			}
+
+			h3 {
+				font-size: 18px;
+				color: #1e40af;
+				margin-top: 0;
+				margin-bottom: 12px;
+			}
+
+			p {
+				font-size: 16px;
+				line-height: 1.6;
+				color: #4b5563;
+				margin-bottom: 12px;
+			}
+
+			.status-box {
+				background: #dcfce7;
+				border-left: 4px solid #22c55e;
+				padding: 16px;
+				border-radius: 8px;
+				margin: 24px 0;
+				font-size: 16px;
+				color: #166534;
+			}
+
+			.status-box strong {
+				display: block;
+				font-size: 18px;
+				margin-bottom: 8px;
+			}
+
+			.product-info {
+				background: #f0f9ff;
+				border: 2px solid #0284c7;
+				padding: 20px;
+				border-radius: 8px;
+				margin: 24px 0;
+			}
+
+			.product-info h3 {
+				margin-top: 0;
+				color: #0c4a6e;
+			}
+
+			.sn-display {
+				font-family: "Courier New", monospace;
+				font-size: 18px;
+				font-weight: bold;
+				color: #0f172a;
+				background: #f1f5f9;
+				padding: 12px;
+				border-radius: 6px;
+				margin: 12px 0;
+				word-break: break-all;
+			}
+
+			.info-list {
+				margin: 16px 0;
+				padding-left: 20px;
+			}
+
+			.info-list li {
+				margin-bottom: 8px;
+				color: #374151;
+				line-height: 1.6;
+			}
+
+			.action-box {
+				background: #fef3c7;
+				border: 2px solid #f59e0b;
+				padding: 20px;
+				border-radius: 8px;
+				margin: 24px 0;
+			}
+
+			.action-box h3 {
+				color: #92400e;
+				margin-top: 0;
+			}
+
+			.action-box p {
+				color: #78350f;
+				margin: 8px 0;
+			}
+
+			.step-number {
+				display: inline-block;
+				width: 28px;
+				height: 28px;
+				background: #f59e0b;
+				color: white;
+				border-radius: 50%;
+				text-align: center;
+				line-height: 28px;
+				font-weight: bold;
+				margin-right: 8px;
+			}
+
+			.footer {
+				margin-top: 32px;
+				font-size: 13px;
+				text-align: center;
+				color: #9ca3af;
+				border-top: 1px solid #e5e7eb;
+				padding-top: 24px;
+			}
+
+			@media only screen and (max-width: 600px) {
+				.email-card {
+					padding: 24px;
+				}
+
+				h2 {
+					font-size: 22px;
+				}
+
+				p {
+					font-size: 15px;
+				}
+
+				.logo h1 {
+					font-size: 24px;
+				}
+
+				.product-info,
+				.action-box {
+					padding: 16px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="email-card">
+				<div class="logo">
+					<h1>Kassen Garansi</h1>
+				</div>
+
+				<div class="icon-box">
+					<p>✅</p>
+				</div>
+
+				<h2>Produk Siap Didaftarkan</h2>
+
+				<p>Halo {{requesterName}},</p>
+
+				<div class="status-box">
+					<strong>Kabar Baik! 🎉</strong>
+					Produk dengan serial number Anda telah ditambahkan ke sistem Kassen Garansi.
+				</div>
+
+				<div class="product-info">
+					<h3>Informasi Produk</h3>
+					<p><strong>Serial Number:</strong></p>
+					<div class="sn-display">{{serialNumber}}</div>
+					<ul class="info-list">
+						<li><strong>Tipe Produk:</strong> {{productType}}</li>
+						<li><strong>Kategori:</strong> {{productCategory}}</li>
+						<li><strong>Status:</strong> Siap untuk Pendaftaran Garansi</li>
+					</ul>
+				</div>
+
+				<div class="action-box">
+					<h3>Langkah Selanjutnya</h3>
+					<p>
+						<span class="step-number">1</span>
+						<strong>Login ke Dashboard Dealer</strong><br />
+						<span style="margin-left: 36px;">Akses portal dealer Anda dengan kredensial login</span>
+					</p>
+					<p style="margin-bottom: 0;">
+						<span class="step-number">2</span>
+						<strong>Daftarkan Garansi Produk</strong><br />
+						<span style="margin-left: 36px;">Cari produk berdasarkan serial number dan selesaikan proses pendaftaran garansi</span>
+					</p>
+				</div>
+
+				<p>
+					Jika Anda memiliki pertanyaan atau membutuhkan bantuan dalam proses pendaftaran, silakan hubungi
+					tim support kami.
+				</p>
+
+				<div class="footer">
+					<p style="margin: 0;">
+						<strong>Kassen Warranty Management System</strong><br />
+						Email: info@kassen.com.tw
+					</p>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
