@@ -27,7 +27,8 @@
       "Bash(node /tmp/test-parser.mjs)",
       "Bash(git restore *)",
       "Skill(update-config)",
-      "Bash(taskkill /F /IM node.exe)"
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(git commit -m 'docs: Add comprehensive testing and implementation documentation *)"
     ]
   }
 }

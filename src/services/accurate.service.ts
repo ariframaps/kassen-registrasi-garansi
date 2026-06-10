@@ -1,6 +1,18 @@
 import { db } from "@/db";
-import { product, deliveryOrders, dealers, customer, productType, itemCodeMaps } from "@/db/schema";
-import { parseExcelFile, validateAndPreview, ParsedDeliveryOrder, PreviewRow } from "@/lib/parser-accurate";
+import {
+	product,
+	deliveryOrders,
+	dealers,
+	customer,
+	productType,
+	itemCodeMapping,
+} from "@/db/schema";
+import {
+	parseExcelFile,
+	validateAndPreview,
+	ParsedDeliveryOrder,
+	PreviewRow,
+} from "@/lib/parser-accurate";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -28,7 +40,9 @@ export async function getProductTypeMappings() {
 }
 
 export async function getExistingSerialNumbers(): Promise<Set<string>> {
-	const products = await db.select({ serialNumber: product.serialNumber }).from(product);
+	const products = await db
+		.select({ serialNumber: product.serialNumber })
+		.from(product);
 	return new Set(products.map((p) => p.serialNumber));
 }
 
@@ -48,6 +62,8 @@ export async function validateAccurateFile(
 		getExistingSerialNumbers(),
 		getProductTypeMappings(),
 	]);
+
+	console.log(parsed);
 
 	const { preview, validCount, dupCount, unknownCount } = validateAndPreview(
 		parsed,

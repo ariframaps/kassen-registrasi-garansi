@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
 			userId: session.user.id,
 		});
 
+		console.log(result);
+
 		return NextResponse.json(
 			successResponse({
 				message: "File berhasil diupload",

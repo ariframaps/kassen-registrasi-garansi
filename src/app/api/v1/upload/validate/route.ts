@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
 					validCount: result.validCount,
 					dupCount: result.dupCount,
 					unknownCount: result.unknownCount,
+					shipTo: result.parsed.shipTo,
+					doNumber: result.parsed.doNumber,
 				},
 			}),
 			{ status: HTTP_STATUS.OK.code },

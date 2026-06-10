@@ -1,6 +1,9 @@
 import * as XLSX from "xlsx";
 import { normalizeSerialNumber } from "@/lib/utils";
 
+// ==========================================
+// INTERFACES (Dipertahankan sesuai Claude)
+// ==========================================
 export interface ParsedItem {
 	itemCode: string;
 	itemDescription: string;
@@ -30,6 +33,9 @@ export interface PreviewRow {
 	message?: string;
 }
 
+// ==========================================
+// HELPER FUNCTIONS (Logika Asli Dikembalikan)
+// ==========================================
 function lastTextCell(row: any[]): string {
 	for (let i = row.length - 1; i >= 0; i--) {
 		const v = String(row[i] ?? "").trim();
@@ -38,30 +44,76 @@ function lastTextCell(row: any[]): string {
 	return "";
 }
 
+// Kembalikan fungsi pengecekan kolom kanan khusus SN dari kode asli
+function extractAndPushSerials(
+	row: any[],
+	currentItem: ParsedItem | null,
+	regex: RegExp,
+) {
+	if (!currentItem) return;
+
+	let serialRaw = "";
+
+	// DIKEMBALIKAN: Scan dari paling kanan maksimal sampai indeks 25 (setelah kolom Unit)
+	for (let i = row.length - 1; i > 24; i--) {
+		const val = String(row[i] ?? "").trim();
+		if (val) {
+			serialRaw = val;
+			break;
+		}
+	}
+
+	if (!serialRaw) return;
+
+	// DIKEMBALIKAN: Pecah dan validasi ketat menggunakan Regex asli
+	const parts = serialRaw
+		.split(",")
+		.map((s) => s.trim())
+		.filter((s) => regex.test(s));
+
+	currentItem.serialNumbers.push(...parts);
+}
+
+// ==========================================
+// MAIN PARSING LOGIC
+// ==========================================
 function parseItemsGlobal(rows: any[][]): ParsedItem[] {
 	const items: ParsedItem[] = [];
 	let currentItem: ParsedItem | null = null;
 	let inItemSection = false;
 
+	// DIKEMBALIKAN: Regex wajib kombinasi Huruf Besar DAN Angka (Min 8 karakter)
+	const serialNumberRegex = /^(?=.*[A-Z])(?=.*\d)[A-Z0-9]{8,}$/;
+
 	for (let j = 0; j < rows.length; j++) {
 		const r = rows[j];
 		const c1 = String(r[1] ?? "").trim();
 
-		if (c1 === "Item Code") {
+		// 1. Deteksi Header Tabel Utama / Berulang
+		if (c1 === "Item Code" || c1 === "Description") {
 			inItemSection = true;
 			continue;
 		}
 		if (!inItemSection) continue;
 
+		// 2. DIKEMBALIKAN: Filter Baris Hiasan / Syarat Pembayaran / Footer
+		if (
+			c1.length > 30 ||
+			c1.includes(" ") ||
+			c1.startsWith("SO Number") ||
+			c1.startsWith("SO Date")
+		) {
+			// Walaupun baris hiasan, tetap cek jika ada SN murni yang sejajar di kanan
+			extractAndPushSerials(r, currentItem, serialNumberRegex);
+			continue;
+		}
+
 		const itemCode = c1;
 		const desc = String(r[7] ?? "").trim();
 		const qtyVal = Number(r[18]) || 0;
 		const unit = String(r[24] ?? "").trim();
-		const serialRaw = lastTextCell(r);
-		const hasAnyData = itemCode || desc || qtyVal || unit || serialRaw;
 
-		if (!hasAnyData) continue;
-
+		// 3. Jika ini baris item code valid, buat objek item baru
 		if (itemCode) {
 			currentItem = {
 				itemCode,
@@ -73,13 +125,8 @@ function parseItemsGlobal(rows: any[][]): ParsedItem[] {
 			items.push(currentItem);
 		}
 
-		if (serialRaw && currentItem) {
-			const parts = serialRaw
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean);
-			currentItem.serialNumbers.push(...parts);
-		}
+		// 4. DIKEMBALIKAN: Ekstrak Serial Number dengan filter regex & batasan kolom
+		extractAndPushSerials(r, currentItem, serialNumberRegex);
 	}
 
 	return items;
@@ -94,7 +141,6 @@ function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
 	let area = "";
 
 	let afterShipMetaRow = -1;
-	let items: ParsedItem[] = [];
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
@@ -109,7 +155,7 @@ function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
 			continue;
 		}
 
-		if (afterShipMetaRow >= 0 && items.length === 0) {
+		if (afterShipMetaRow >= 0) {
 			if (!last) continue;
 
 			switch (afterShipMetaRow) {
@@ -137,10 +183,12 @@ function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
 		}
 
 		if (c1 === "Item Code") {
-			items = parseItemsGlobal(rows);
 			break;
 		}
 	}
+
+	// DIKEMBALIKAN: Panggil fungsi global yang sudah dipulihkan logikanya
+	const items = parseItemsGlobal(rows);
 
 	return {
 		doNumber,
@@ -155,9 +203,10 @@ function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
 	};
 }
 
-export async function parseExcelFile(
-	file: File,
-): Promise<ParsedDeliveryOrder> {
+// ==========================================
+// EXPORTED FUNCTIONS (Dipertahankan sesuai Claude)
+// ==========================================
+export async function parseExcelFile(file: File): Promise<ParsedDeliveryOrder> {
 	const buffer = Buffer.from(await file.arrayBuffer());
 	const workbook = XLSX.read(buffer, { type: "buffer" });
 

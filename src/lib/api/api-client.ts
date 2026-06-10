@@ -367,6 +367,8 @@ export const uploadApi = {
 			validCount: number;
 			dupCount: number;
 			unknownCount: number;
+			shipTo?: string;
+			doNumber?: string;
 		}>("/upload/validate", {
 			method: "POST",
 			body: formData,
