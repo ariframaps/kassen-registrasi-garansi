@@ -45,7 +45,10 @@
       "Bash(Sort-Object)",
       "Bash(Get-ChildItem -Path \"D:\\\\Programming\\\\Web Programming\\\\Project\\\\kassen-registrasi-garansi\\\\src\\\\app\" -Recurse -Directory)",
       "Bash(Select-Object FullName)",
-      "Bash(pkill -f \"npm run dev\")"
+      "Bash(pkill -f \"npm run dev\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\Programming\\\\Web Programming\\\\Project\\\\kassen-registrasi-garansi\\\\src\\\\app\\\\\\(protected\\)\\\\dealer\" -Recurse -Name)",
+      "Bash(Select-String \"customer|customers\")",
+      "Bash(git commit -m 'feat: Implement Dealer Role Features Stage 1 *)"
     ]
   }
 }

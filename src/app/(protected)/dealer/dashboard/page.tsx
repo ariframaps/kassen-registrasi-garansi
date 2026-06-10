@@ -15,6 +15,7 @@ import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell, EmptySta
 // import { notificationAdapter, productAdapter } from "@/lib/adapters";
 // import { usePolling } from "@/lib/hooks/use-polling";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
+import { dealerApi } from "@/lib/api/api-client";
 import { Package, ShieldCheck, ShieldOff, AlertCircle, Bell, Shield, ArrowRight, Search, X, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import type { DealerNotification, Product } from "@/types";
@@ -46,17 +47,28 @@ export default function DealerDashboardPage() {
 
   const loadProducts = useCallback(async () => {
     setLoadingProducts(true);
-    // const result = await productAdapter.getPaginated({
-    //   page, pageSize,
-    //   search: search || undefined,
-    //   dealerId: DEMO_DEALER_ID,
-    // });
-    // const statusFiltered = filter === "all"
-    //   ? result.items
-    //   : result.items.filter((p) => p.warrantyStatus === filter);
-    // setProducts(statusFiltered);
-    // setTotalProducts(filter === "all" ? result.total : statusFiltered.length);
-    setLoadingProducts(false);
+    try {
+      const response = await dealerApi.getProducts({
+        dealerId: DEMO_DEALER_ID,
+        page,
+        pageSize,
+        search: search || undefined,
+      });
+      if (!response.success) {
+        console.error("Failed to load dealer products:", response.message);
+        setLoadingProducts(false);
+        return;
+      }
+      const statusFiltered = filter === "all"
+        ? response.data.items
+        : response.data.items.filter((p: any) => p.warrantyStatus === filter);
+      setProducts(statusFiltered);
+      setTotalProducts(filter === "all" ? response.data.total : statusFiltered.length);
+    } catch (err) {
+      console.error("Error loading products:", err);
+    } finally {
+      setLoadingProducts(false);
+    }
   }, [page, pageSize, search, filter]);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);

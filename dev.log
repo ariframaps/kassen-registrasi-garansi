@@ -2,10 +2,10 @@
 > kassen-registrasi-garansi@0.1.0 dev
 > next dev
 
-⚠ Port 3000 is in use by process 15204, using available port 3001 instead.
+⚠ Port 3000 is in use by process 51152, using available port 3002 instead.
 ▲ Next.js 16.1.6 (Turbopack)
-- Local:         http://localhost:3001
-- Network:       http://100.100.112.108:3001
+- Local:         http://localhost:3002
+- Network:       http://100.100.112.108:3002
 - Environments: .env
 
 ✓ Starting...

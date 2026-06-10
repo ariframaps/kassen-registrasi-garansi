@@ -1,6 +1,6 @@
 "use client";
 // app/dealer/purchases/page.tsx — Dealer: view + edit purchase groups
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal, ConfirmModal } from "@/components/ui/modal";
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell, EmptyState } from "@/components/ui/table";
+import { dealerApi } from "@/lib/api/api-client";
 import { dealerPurchaseGroups, dealerProducts, mockProducts } from "@/mock/mock-data";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
 import { Search, Eye, Pencil, ShoppingBag, FileText, Package, Calendar, Trash2, Plus, X, Check, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import type { PurchaseGroup, Product } from "@/types";
+
+const DEMO_DEALER_ID = "d1";
 
 // ── Edit Purchase Modal ──
 function EditPurchaseModal({
@@ -160,27 +163,46 @@ export default function DealerPurchasesPage() {
   const [dateTo, setDateTo] = useState("");
   const [selectedDetail, setSelectedDetail] = useState<PurchaseGroup | null>(null);
   const [editTarget, setEditTarget] = useState<PurchaseGroup | null>(null);
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPurchases = async () => {
+      setLoading(true);
+      try {
+        const response = await dealerApi.getPurchases(DEMO_DEALER_ID);
+        if (!response.success) {
+          console.error("Failed to load purchases:", response.message);
+          setLoading(false);
+          return;
+        }
+        setPurchases(response.data);
+      } catch (err) {
+        console.error("Error loading purchases:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPurchases();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return dealerPurchaseGroups.filter(g => {
+    return purchases.filter(p => {
       const matchSearch =
-        g.customerName.toLowerCase().includes(q) ||
-        g.customerEmail.toLowerCase().includes(q) ||
-        g.serialNumbers.some(sn => sn.toLowerCase().includes(q));
-      const matchFrom = !dateFrom || g.purchaseDate >= dateFrom;
-      const matchTo   = !dateTo   || g.purchaseDate <= dateTo;
+        p.customerProfile.name.toLowerCase().includes(q) ||
+        p.customerProfile.email.toLowerCase().includes(q) ||
+        p.items.some((item: any) => item.serialNumber.toLowerCase().includes(q));
+      const matchFrom = !dateFrom || p.purchaseDate >= dateFrom;
+      const matchTo = !dateTo || p.purchaseDate <= dateTo;
       return matchSearch && matchFrom && matchTo;
     });
-  }, [search, dateFrom, dateTo]);
+  }, [search, dateFrom, dateTo, purchases]);
 
-  const getGroupProducts = (g: PurchaseGroup) =>
-    mockProducts.filter(p => g.serialNumbers.includes(p.serialNumber));
-
-  const getGroupStatus = (g: PurchaseGroup): "active" | "expired" | "none" => {
-    const ps = getGroupProducts(g);
-    if (ps.every(p => p.warrantyStatus === "active"))  return "active";
-    if (ps.every(p => p.warrantyStatus === "expired")) return "expired";
+  const getGroupStatus = (p: any): "active" | "expired" | "none" => {
+    if (p.items.every((item: any) => item.warrantyStatus === "active")) return "active";
+    if (p.items.every((item: any) => item.warrantyStatus === "expired")) return "expired";
     return "none";
   };
 
@@ -191,9 +213,9 @@ export default function DealerPurchasesPage() {
         {/* Summary */}
         <div className="grid grid-cols-3 gap-4 mb-5">
           {[
-            { l: "Total Pembelian", v: dealerPurchaseGroups.length, c: "text-zinc-900" },
-            { l: "Garansi Aktif",   v: dealerPurchaseGroups.filter(g => getGroupStatus(g) === "active").length,  c: "text-emerald-600" },
-            { l: "Garansi Berakhir",v: dealerPurchaseGroups.filter(g => getGroupStatus(g) === "expired").length, c: "text-red-600" },
+            { l: "Total Pembelian", v: purchases.length, c: "text-zinc-900" },
+            { l: "Garansi Aktif",   v: purchases.filter(p => getGroupStatus(p) === "active").length,  c: "text-emerald-600" },
+            { l: "Garansi Berakhir",v: purchases.filter(p => getGroupStatus(p) === "expired").length, c: "text-red-600" },
           ].map(s => (
             <div key={s.l} className="bg-white border border-zinc-200 rounded-xl px-4 py-3.5 shadow-sm">
               <p className="text-xs text-zinc-400 mb-1">{s.l}</p>
@@ -216,73 +238,108 @@ export default function DealerPurchasesPage() {
           </div>
 
           <CardContent className="p-0">
-            <Table>
-              <TableHead>
-                <TableHeader>ID Grup</TableHeader>
-                <TableHeader>Customer</TableHeader>
-                <TableHeader>Produk</TableHeader>
-                <TableHeader>Tgl Beli</TableHeader>
-                <TableHeader>Garansi s/d</TableHeader>
-                <TableHeader>Status</TableHeader>
-                <TableHeader className="text-right pr-5">Aksi</TableHeader>
-              </TableHead>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={7}><EmptyState icon={<ShoppingBag size={18} />} title="Tidak ada pembelian" description="Belum ada registrasi garansi" /></td></tr>
-                ) : filtered.map(g => {
-                  const status = getGroupStatus(g);
-                  const days = getDaysRemaining(g.warrantyEndDate);
-                  const products = getGroupProducts(g);
-                  return (
-                    <TableRow key={g.id}>
-                      <TableCell>
-                        <span className="font-mono text-xs bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">{g.id.toUpperCase()}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-xs font-medium text-zinc-900">{g.customerName}</p>
-                          <p className="text-[11px] text-zinc-400">{g.customerPhone}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold font-mono text-zinc-700">{g.serialNumbers.length}</span>
-                          <span className="text-xs text-zinc-400">unit</span>
-                          <button
-                            onClick={() => setSelectedDetail(g)}
-                            className="text-[11px] text-blue-500 hover:underline ml-1"
-                          >
-                            lihat
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-xs text-zinc-500">{formatDateShort(g.purchaseDate)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-xs text-zinc-500">{formatDateShort(g.warrantyEndDate)}</p>
-                          {days > 0 && days < 180 && (
-                            <p className="text-[11px] text-amber-600">{days} hari lagi</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={status === "active" ? "success" : status === "expired" ? "danger" : "neutral"} dot>
-                          {status === "active" ? "Aktif" : status === "expired" ? "Berakhir" : "—"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setSelectedDetail(g)} className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors" title="Detail"><Eye size={13} /></button>
-                          <button onClick={() => setEditTarget(g)} className="p-1.5 rounded-md hover:bg-blue-50 text-zinc-400 hover:text-blue-600 transition-colors" title="Edit"><Pencil size={13} /></button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            {loading ? (
+              <div className="py-14 text-center text-sm text-zinc-400">Memuat data…</div>
+            ) : (
+              <Table>
+                <TableHead>
+                  <TableHeader>ID Pembelian</TableHeader>
+                  <TableHeader>Customer</TableHeader>
+                  <TableHeader>Produk</TableHeader>
+                  <TableHeader>Tgl Beli</TableHeader>
+                  <TableHeader>Garansi s/d</TableHeader>
+                  <TableHeader>Status</TableHeader>
+                  <TableHeader className="text-right pr-5">Aksi</TableHeader>
+                </TableHead>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <tr><td colSpan={7}><EmptyState icon={<ShoppingBag size={18} />} title="Tidak ada pembelian" description="Belum ada registrasi garansi" /></td></tr>
+                  ) : filtered.map(p => {
+                    const status = getGroupStatus(p);
+                    const days = p.warrantyEndDate ? getDaysRemaining(p.warrantyEndDate) : 0;
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <span className="font-mono text-xs bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">{p.id.substring(0, 8)}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-xs font-medium text-zinc-900">{p.customerProfile.name}</p>
+                            <p className="text-[11px] text-zinc-400">{p.customerProfile.phone}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold font-mono text-zinc-700">{p.totalProducts}</span>
+                            <span className="text-xs text-zinc-400">unit</span>
+                            <button
+                              onClick={() => {
+                                const convertedGroup: PurchaseGroup = {
+                                  id: p.id,
+                                  customerName: p.customerProfile.name,
+                                  customerPhone: p.customerProfile.phone || "",
+                                  customerEmail: p.customerProfile.email,
+                                  purchaseDate: p.purchaseDate,
+                                  warrantyEndDate: p.warrantyEndDate || "",
+                                  serialNumbers: p.items.map((item: any) => item.serialNumber),
+                                  invoiceFileName: p.invoiceFile || "Tidak ada invoice",
+                                  invoiceUrl: "#",
+                                  registeredAt: new Date().toISOString(),
+                                };
+                                setSelectedDetail(convertedGroup);
+                              }}
+                              className="text-[11px] text-blue-500 hover:underline ml-1"
+                            >
+                              lihat
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs text-zinc-500">{formatDateShort(p.purchaseDate)}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-xs text-zinc-500">{p.warrantyEndDate ? formatDateShort(p.warrantyEndDate) : "—"}</p>
+                            {p.warrantyEndDate && days > 0 && days < 180 && (
+                              <p className="text-[11px] text-amber-600">{days} hari lagi</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={status === "active" ? "success" : status === "expired" ? "danger" : "neutral"} dot>
+                            {status === "active" ? "Aktif" : status === "expired" ? "Berakhir" : "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => {
+                                const convertedGroup: PurchaseGroup = {
+                                  id: p.id,
+                                  customerName: p.customerProfile.name,
+                                  customerPhone: p.customerProfile.phone || "",
+                                  customerEmail: p.customerProfile.email,
+                                  purchaseDate: p.purchaseDate,
+                                  warrantyEndDate: p.warrantyEndDate || "",
+                                  serialNumbers: p.items.map((item: any) => item.serialNumber),
+                                  invoiceFileName: p.invoiceFile || "Tidak ada invoice",
+                                  invoiceUrl: "#",
+                                  registeredAt: new Date().toISOString(),
+                                };
+                                setSelectedDetail(convertedGroup);
+                              }}
+                              className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors" title="Detail">
+                              <Eye size={13} />
+                            </button>
+                            <button onClick={() => alert("Edit functionality will be implemented soon")} className="p-1.5 rounded-md hover:bg-blue-50 text-zinc-400 hover:text-blue-600 transition-colors" title="Edit"><Pencil size={13} /></button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -290,8 +347,8 @@ export default function DealerPurchasesPage() {
       {/* Detail Modal */}
       <Modal open={!!selectedDetail} onClose={() => setSelectedDetail(null)} title="Detail Pembelian" size="lg">
         {selectedDetail && (() => {
-          const products = getGroupProducts(selectedDetail);
-          const days = getDaysRemaining(selectedDetail.warrantyEndDate);
+          const apiPurchase = purchases.find(p => p.id === selectedDetail.id);
+          const days = selectedDetail.warrantyEndDate ? getDaysRemaining(selectedDetail.warrantyEndDate) : 0;
           return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -314,17 +371,17 @@ export default function DealerPurchasesPage() {
 
               {/* Products */}
               <div>
-                <p className="text-xs font-semibold text-zinc-700 mb-2">{products.length} Produk</p>
+                <p className="text-xs font-semibold text-zinc-700 mb-2">{selectedDetail.serialNumbers.length} Produk</p>
                 <div className="space-y-1.5">
-                  {products.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 p-2.5 bg-zinc-50 border border-zinc-100 rounded-xl">
-                      <span className="font-mono text-xs bg-white border border-zinc-200 px-2 py-0.5 rounded-md text-zinc-700">{p.serialNumber}</span>
+                  {apiPurchase?.items.map((item: any) => (
+                    <div key={item.productId} className="flex items-center gap-3 p-2.5 bg-zinc-50 border border-zinc-100 rounded-xl">
+                      <span className="font-mono text-xs bg-white border border-zinc-200 px-2 py-0.5 rounded-md text-zinc-700">{item.serialNumber}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-zinc-800">{p.productType}</p>
-                        <p className="text-[11px] text-zinc-400">{p.productCategory}</p>
+                        <p className="text-xs font-medium text-zinc-800">{item.productType}</p>
+                        <p className="text-[11px] text-zinc-400">{item.productCategory}</p>
                       </div>
-                      <Badge variant={p.warrantyStatus === "active" ? "success" : p.warrantyStatus === "expired" ? "danger" : "neutral"} dot>
-                        {p.warrantyStatus === "active" ? "Aktif" : p.warrantyStatus === "expired" ? "Berakhir" : "—"}
+                      <Badge variant={item.warrantyStatus === "active" ? "success" : item.warrantyStatus === "expired" ? "danger" : "neutral"} dot>
+                        {item.warrantyStatus === "active" ? "Aktif" : item.warrantyStatus === "expired" ? "Berakhir" : "—"}
                       </Badge>
                     </div>
                   ))}
@@ -332,16 +389,18 @@ export default function DealerPurchasesPage() {
               </div>
 
               {/* Invoice */}
-              <div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                  <FileText size={14} className="text-blue-500" />
+              {selectedDetail.invoiceFileName && selectedDetail.invoiceFileName !== "Tidak ada invoice" && (
+                <div className="flex items-center gap-3 p-3 border border-zinc-100 rounded-xl">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <FileText size={14} className="text-blue-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-800">{selectedDetail.invoiceFileName}</p>
+                    <p className="text-[11px] text-zinc-400">Invoice</p>
+                  </div>
+                  <Button size="xs" variant="outline">Lihat</Button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-zinc-800">{selectedDetail.invoiceFileName}</p>
-                  <p className="text-[11px] text-zinc-400">Invoice</p>
-                </div>
-                <Button size="xs" variant="outline">Lihat</Button>
-              </div>
+              )}
 
               <div className="flex gap-2 pt-1">
                 <Button variant="outline" fullWidth onClick={() => setSelectedDetail(null)}>Tutup</Button>
@@ -349,7 +408,7 @@ export default function DealerPurchasesPage() {
                   variant="secondary"
                   fullWidth
                   icon={<Pencil size={13} />}
-                  onClick={() => { setSelectedDetail(null); setEditTarget(selectedDetail); }}
+                  onClick={() => alert("Edit functionality akan diimplementasikan di tahap berikutnya")}
                 >
                   Edit Pembelian
                 </Button>

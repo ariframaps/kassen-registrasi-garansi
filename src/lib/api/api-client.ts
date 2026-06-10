@@ -284,6 +284,84 @@ export const dealerApi = {
 	toggleStatus: async (id: string) => {
 		return apiFetch<DealerSchema>(`/dealers/${id}`, { method: "PATCH" });
 	},
+
+	getProducts: async ({
+		dealerId,
+		page = 1,
+		pageSize = 20,
+		search,
+		categoryId,
+	}: {
+		dealerId: string;
+		page?: number;
+		pageSize?: number;
+		search?: string;
+		categoryId?: string;
+	}) => {
+		const params = new URLSearchParams();
+		params.set("page", page.toString());
+		params.set("pageSize", pageSize.toString());
+		if (search) params.set("search", search);
+		if (categoryId) params.set("categoryId", categoryId);
+
+		return apiFetch<{
+			items: any[];
+			total: number;
+			page: number;
+			pageSize: number;
+		}>(`/dealers/${dealerId}/products?${params.toString()}`, { method: "GET" });
+	},
+
+	getCustomers: async ({
+		dealerId,
+		search,
+	}: {
+		dealerId: string;
+		search?: string;
+	}) => {
+		const params = new URLSearchParams();
+		if (search) params.set("search", search);
+
+		return apiFetch<
+			Array<{
+				id: string;
+				name: string;
+				email: string;
+				phone: string | null;
+			}>
+		>(`/dealers/${dealerId}/customers?${params.toString()}`, {
+			method: "GET",
+		});
+	},
+
+	getPurchases: async (dealerId: string) => {
+		return apiFetch<
+			Array<{
+				id: string;
+				customerProfile: {
+					id: string;
+					name: string;
+					email: string;
+					phone: string | null;
+					address: string | null;
+				};
+				purchaseDate: string;
+				warrantyEndDate: string | null;
+				items: Array<{
+					productId: string;
+					serialNumber: string;
+					productType: string;
+					productCategory: string;
+					warrantyStartDate: string | null;
+					warrantyEndDate: string | null;
+					warrantyStatus: "none" | "active" | "expired";
+					warrantyCondition: "valid" | "rejected" | null;
+				}>;
+				invoiceFile: string | null;
+				totalProducts: number;
+			}>
+		>(`/dealers/${dealerId}/purchases`, { method: "GET" });
+	},
 };
 
 export const customerApi = {
