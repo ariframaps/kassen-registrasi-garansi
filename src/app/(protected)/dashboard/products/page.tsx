@@ -98,7 +98,7 @@ function AdminConditionModal({
 		setLoading(true);
 		try {
 			await productApi.updateWarrantyStatus({
-				productId: product.id,
+				serialNumber: product.serialNumber,
 				condition: status,
 				reason: note.trim(),
 			});

@@ -37,7 +37,10 @@
       "Bash(pkill -f \"node.*next\")",
       "Bash(taskkill *)",
       "Bash(Get-Content *)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(cp -r src/app/api/v1/products/[id]/warranty-status src/app/api/v1/products/[sn]/)",
+      "Bash(rm -rf src/app/api/v1/products/[id])",
+      "Bash(git commit -m 'fix: Resolve dynamic route naming conflict - use consistent '\\\\''sn'\\\\'' parameter *)"
     ]
   }
 }

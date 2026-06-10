@@ -72,15 +72,15 @@ export const productApi = {
 	},
 
 	updateWarrantyStatus: async ({
-		productId,
+		serialNumber,
 		condition,
 		reason,
 	}: {
-		productId: string;
+		serialNumber: string;
 		condition: "valid" | "rejected";
 		reason?: string;
 	}) => {
-		return apiFetch(`/products/${productId}/warranty-status`, {
+		return apiFetch(`/products/${serialNumber}/warranty-status`, {
 			method: "PATCH",
 			body: JSON.stringify({ condition, reason: reason || "" }),
 		});

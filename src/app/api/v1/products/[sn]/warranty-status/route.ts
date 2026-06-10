@@ -19,9 +19,9 @@ const updateWarrantyStatusSchema = z.object({
 
 export async function PATCH(
 	request: Request,
-	{ params }: { params: Promise<{ id: string }> },
+	{ params }: { params: Promise<{ sn: string }> },
 ) {
-	const { id } = await params;
+	const { sn } = await params;
 
 	try {
 		const session = await authenticationMiddleware();
@@ -33,8 +33,20 @@ export async function PATCH(
 		const body = await request.json();
 		const validated = updateWarrantyStatusSchema.parse(body);
 
+		// Find product by serial number to get its ID
+		const product = await productService.findOneBySN({ SN: sn });
+		if (!product) {
+			return NextResponse.json(
+				errorResponse({
+					message: "Product not found",
+					issues: [],
+				}),
+				{ status: HTTP_STATUS.NOT_FOUND.code },
+			);
+		}
+
 		const data = await productService.updateWarrantyCondition({
-			productId: id,
+			productId: product.id,
 			condition: validated.condition,
 			reason: validated.reason,
 			userId: session.user.id,
