@@ -5,8 +5,8 @@ import { google } from "googleapis";
 import http from "http";
 import { URL } from "url";
 
-const CLIENT_ID = "133954216643-5g7u0tvsr4q0ckbrc1f4ftnmh6amlp6u.apps.googleusercontent.com";
-const CLIENT_SECRET = "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";
+const CLIENT_ID = process.env.google_drive_client_id;
+const CLIENT_SECRET = process.env.google_drive_client_secret;
 const REDIRECT_URI = "http://localhost:4321/oauth2callback";
 const SCOPES = ["https://www.googleapis.com/auth/drive.file"];
 
