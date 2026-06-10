@@ -1,8 +1,8 @@
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { db } from "@/db";
-import { dealers, product, productType, warrantyCondition, auditLog } from "@/db/schema";
+import { dealers, product, productType, warrantyCondition, auditLog, purchaseItem } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, or, inArray } from "drizzle-orm";
 import z from "zod";
 
 interface DealerProductFilterParams {
@@ -13,7 +13,7 @@ interface DealerProductFilterParams {
 	categoryId?: string;
 }
 
-interface DealerProductResponse {
+export interface DealerProductResponse {
 	id: string;
 	serialNumber: string;
 	productType: string;
@@ -22,6 +22,7 @@ interface DealerProductResponse {
 	customerName: null;
 	warrantyStartDate: string | null;
 	warrantyEndDate: string | null;
+	isRegistered: boolean;
 }
 
 export const dealerProductService = {
@@ -49,7 +50,7 @@ export const dealerProductService = {
 		const limit = Math.min(params.pageSize, 100);
 		const offset = (params.page - 1) * limit;
 
-		const filters: any[] = [eq(product.dealerId, dealer.id)];
+		const filters: unknown[] = [eq(product.dealerId, dealer.id)];
 
 		if (params.search) {
 			filters.push(
@@ -80,6 +81,14 @@ export const dealerProductService = {
 			where: whereClause,
 		});
 
+		// Check which products are already registered (linked to purchaseItem)
+		const registeredProductIds = await db
+			.select({ productId: purchaseItem.productId })
+			.from(purchaseItem)
+			.where(inArray(purchaseItem.productId, result.map((p) => p.id)));
+
+		const registeredIdSet = new Set(registeredProductIds.map((r) => r.productId));
+
 		const formatDate = (date: string | Date | null): string | null => {
 			if (!date) return null;
 			if (typeof date === "string") return date;
@@ -100,6 +109,7 @@ export const dealerProductService = {
 			customerName: null,
 			warrantyStartDate: formatDate(p.warrantyStartDate),
 			warrantyEndDate: formatDate(p.warrantyEndDate),
+			isRegistered: registeredIdSet.has(p.id),
 		}));
 
 		return {

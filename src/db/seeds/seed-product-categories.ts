@@ -1,10 +1,11 @@
 import { db } from "../";
 import { productCategory } from "../schemas/product_category.schema";
 import { productType } from "../schemas/product_type.schema";
+import { CategorySchema, ProductTypeSchema } from "../schema";
 
 // Mutable maps untuk store IDs yang di-generate saat seed dijalankan
-let _categoryIds: Record<string, string> = {};
-let _productTypeIds: Record<string, string> = {};
+const _categoryIds: Record<string, string> = {};
+const _productTypeIds: Record<string, string> = {};
 
 // Public interface untuk access generated IDs
 export const CATEGORY_IDS = {
@@ -82,7 +83,7 @@ export async function seedProductCategories() {
 
 	console.log(`📝 Attempting to insert ${categories.length} categories:`, categories.map((c) => c.name).join(", "));
 
-	let inserted: any[] = [];
+	let inserted: CategorySchema[] = [];
 	try {
 		inserted = await db
 			.insert(productCategory)
@@ -173,7 +174,7 @@ export async function seedProductTypes() {
 
 	console.log(`📝 Attempting to insert ${productTypeDefinitions.length} product types`);
 
-	let inserted: any[] = [];
+	let inserted: ProductTypeSchema[] = [];
 	try {
 		inserted = await db
 			.insert(productType)

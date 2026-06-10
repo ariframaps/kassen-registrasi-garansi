@@ -27,7 +27,7 @@ export function Modal({ open, onClose, title, description, children, size = "md"
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-fade-in" onClick={onClose} />
-      <div className={`relative w-full ${sizes[size]} bg-white rounded-2xl shadow-2xl border border-zinc-200 animate-scale-in`}>
+      <div className={`relative max-h-[80vh] overflow-scroll w-full ${sizes[size]} bg-white rounded-2xl shadow-2xl border border-zinc-200 animate-scale-in`}>
         {(title || description) && (
           <div className="flex items-start justify-between px-5 py-4 border-b border-zinc-100">
             <div>

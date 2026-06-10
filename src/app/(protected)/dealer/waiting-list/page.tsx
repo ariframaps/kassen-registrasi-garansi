@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/modal";
 import { Table, TableHead, TableHeader, TableBody, TableRow, TableCell, EmptyState } from "@/components/ui/table";
 import { mockWaitingList } from "@/mock/mock-data";
 import { formatDateShort, normalizeSerialNumber } from "@/lib/utils";
+import { waitingListApi } from "@/lib/api/api-client";
 import { Plus, Clock, CheckCircle, Search } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
@@ -26,10 +27,22 @@ export default function DealerWaitingListPage() {
   const handleRequest = async () => {
     if (!serialInput.trim()) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    setLoading(false);
-    setAddOpen(false); setSerialInput(""); setNote("");
-    success("Request berhasil dikirim", `SN ${normalizeSerialNumber(serialInput)} masuk ke waiting list.`);
+    try {
+      const res = await waitingListApi.createForDealer({
+        serialNumberRequested: normalizeSerialNumber(serialInput),
+        notes: note.trim() || undefined,
+      });
+      if (res.success) {
+        setAddOpen(false);
+        setSerialInput("");
+        setNote("");
+        success("Request berhasil dikirim", `SN ${normalizeSerialNumber(serialInput)} masuk ke waiting list.`);
+      }
+    } catch (error) {
+      console.error("Failed to create request:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

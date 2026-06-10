@@ -37,7 +37,7 @@ export interface PreviewRow {
 // ==========================================
 // HELPER FUNCTIONS (Logika Asli Dikembalikan)
 // ==========================================
-function lastTextCell(row: any[]): string {
+function lastTextCell(row: unknown[]): string {
 	for (let i = row.length - 1; i >= 0; i--) {
 		const v = String(row[i] ?? "").trim();
 		if (v) return v;
@@ -47,7 +47,7 @@ function lastTextCell(row: any[]): string {
 
 // Kembalikan fungsi pengecekan kolom kanan khusus SN dari kode asli
 function extractAndPushSerials(
-	row: any[],
+	row: unknown[],
 	currentItem: ParsedItem | null,
 	regex: RegExp,
 ) {
@@ -78,7 +78,7 @@ function extractAndPushSerials(
 // ==========================================
 // MAIN PARSING LOGIC
 // ==========================================
-function parseItemsGlobal(rows: any[][]): ParsedItem[] {
+function parseItemsGlobal(rows: unknown[][]): ParsedItem[] {
 	const items: ParsedItem[] = [];
 	let currentItem: ParsedItem | null = null;
 	let inItemSection = false;
@@ -133,7 +133,7 @@ function parseItemsGlobal(rows: any[][]): ParsedItem[] {
 	return items;
 }
 
-function parseDeliveryOrder(rows: any[][]): ParsedDeliveryOrder {
+function parseDeliveryOrder(rows: unknown[][]): ParsedDeliveryOrder {
 	let shipTo = "";
 	let doNumber = "";
 	let date = "";
@@ -214,7 +214,7 @@ export async function parseExcelFile(file: File): Promise<ParsedDeliveryOrder> {
 	const sheetName = workbook.SheetNames[0];
 	const sheet = workbook.Sheets[sheetName];
 
-	const rows: any[][] = XLSX.utils.sheet_to_json(sheet, {
+	const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
 		header: 1,
 		defval: "",
 	});

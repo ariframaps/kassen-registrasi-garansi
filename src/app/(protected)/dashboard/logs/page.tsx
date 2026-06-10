@@ -1,6 +1,6 @@
 "use client";
 // app/dashboard/logs/page.tsx — Admin only
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,18 @@ import { InferSelectModel } from "drizzle-orm";
 type AuditLog = InferSelectModel<typeof auditLogTable>;
 
 // Stub adapter for logs
+interface AuditLogQuery {
+	page: number;
+	pageSize: number;
+	search?: string;
+	category?: LogCategory;
+	priority?: LogPriority;
+	dateFrom?: string;
+	dateTo?: string;
+}
+
 const auditLogAdapter = {
-  getPaginated: async (_params: any) => ({ items: [] as AuditLog[], total: 0 }),
+	getPaginated: async (params: AuditLogQuery) => ({ items: [] as AuditLog[], total: 0 }),
 };
 
 // ── Helpers ──
@@ -139,23 +149,24 @@ export default function LogsPage() {
 
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const result = await auditLogAdapter.getPaginated({
-      page,
-      pageSize,
-      search: search || undefined,
-      category: category || undefined,
-      priority: priority || undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
-    });
-    setLogs(result.items);
-    setTotal(result.total);
-    setLoading(false);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const result = await auditLogAdapter.getPaginated({
+        page,
+        pageSize,
+        search: search || undefined,
+        category: category || undefined,
+        priority: priority || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      });
+      setLogs(result.items);
+      setTotal(result.total);
+      setLoading(false);
+    };
+    load();
   }, [page, pageSize, search, category, priority, dateFrom, dateTo]);
-
-  useEffect(() => { load(); }, [load]);
 
   const resetFilters = () => {
     setSearch("");

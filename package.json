@@ -24,6 +24,7 @@
 		"drizzle-orm": "^0.45.2",
 		"drizzle-seed": "^0.3.1",
 		"drizzle-zod": "^0.8.3",
+		"googleapis": "^173.0.0",
 		"jose": "^6.2.3",
 		"lucide-react": "^0.576.0",
 		"next": "16.1.6",

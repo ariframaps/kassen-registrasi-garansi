@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 // app/dashboard/users/page.tsx — Admin only: user management
 import { useState, useMemo, useEffect } from "react";

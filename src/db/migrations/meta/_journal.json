@@ -50,6 +50,13 @@
       "when": 1780850731825,
       "tag": "0006_real_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781083825129,
+      "tag": "0007_fixed_titania",
+      "breakpoints": true
     }
   ]
 }

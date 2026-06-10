@@ -1,11 +1,10 @@
 "use client";
 // app/dashboard/customers/page.tsx
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
 	Table,
 	TableHead,
@@ -15,7 +14,6 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
-import { Pagination } from "@/components/ui/pagination";
 // import { customerAdapter } from "@/lib/adapters";
 // import type { Customer } from "@/lib/adapters";
 import { Search, Users, ChevronRight } from "lucide-react";
@@ -26,14 +24,12 @@ import { customerApi } from "@/lib/api/api-client";
 export default function CustomersPage() {
 	const router = useRouter();
 	const [customers, setCustomers] = useState<CustomerSchema[]>([]);
-	const [total, setTotal] = useState(0);
 	// const [page, setPage] = useState(1);
 	// const [pageSize, setPageSize] = useState(20);
 	const [search, setSearch] = useState("");
 	const [loading, setLoading] = useState(true);
 
 	const filtered = useMemo(() => {
-		setLoading(true);
 		const result = customers.filter(
 			(c) =>
 				!search ||
@@ -41,7 +37,6 @@ export default function CustomersPage() {
 				c.email.toLowerCase().includes(search.toLowerCase()) ||
 				c.phone?.toLowerCase().includes(search.toLowerCase()),
 		);
-		setLoading(false);
 		return result;
 	}, [search, customers]);
 
@@ -56,8 +51,8 @@ export default function CustomersPage() {
 			const data = await customerApi.getAll();
 			if (data.success) {
 				setCustomers([...data.data]);
-				setTotal(data.data.length);
 			}
+			setLoading(false);
 		};
 
 		fetchData();

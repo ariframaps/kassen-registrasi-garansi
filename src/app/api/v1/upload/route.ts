@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
@@ -63,14 +64,11 @@ export async function POST(req: NextRequest) {
 		const pendingCustomerCreationStr = formData.get("pendingCustomerCreation") as string | null;
 		const pendingItemCodesStr = formData.get("pendingItemCodes") as string | null;
 		const purchaseDataStr = formData.get("purchaseData") as string | null;
+		const invoiceFile = formData.get("invoiceFile") as File | null;
 
 		let purchaseData: any = undefined;
 		if (purchaseDataStr) {
 			purchaseData = JSON.parse(purchaseDataStr);
-			// Remove invoiceFile from purchaseData if it exists, we'll handle it separately later
-			if (purchaseData.invoiceFile) {
-				delete purchaseData.invoiceFile;
-			}
 		}
 
 		const parsedData = uploadSchema.parse({
@@ -92,6 +90,7 @@ export async function POST(req: NextRequest) {
 			pendingCustomerCreation: parsedData.pendingCustomerCreation,
 			pendingItemCodes: parsedData.pendingItemCodes,
 			purchaseData: parsedData.purchaseData,
+			invoiceFile: invoiceFile ?? undefined,
 		});
 
 		console.log(result);

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react/no-unescaped-entities */
 "use client";
 // app/dashboard/upload/page.tsx
 // Updated: multi-file queue, antrian per file, hash duplicate detection, fuzzy dealer match,

@@ -10,6 +10,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { relations } from "drizzle-orm";
+import { createSelectSchema } from "drizzle-zod";
+import z from "zod";
 
 import { waitingList } from "./waiting_list.schema";
 import { user } from "./auth-schema";
@@ -75,3 +77,6 @@ export const notificationsRelations = relations(notification, ({ one }) => ({
 		references: [waitingList.id],
 	}),
 }));
+
+export const notificationSelectSchema = createSelectSchema(notification);
+export type NotificationSchema = z.infer<typeof notificationSelectSchema>;

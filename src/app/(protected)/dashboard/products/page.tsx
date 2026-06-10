@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ConfirmModal } from "@/components/ui/modal";
-// import { Pagination } from "@/components/ui/pagination";
 import { ReassignModal } from "@/components/ui/reassign-modal";
+// import { Pagination } from "@/components/ui/pagination";
 import {
 	Table,
 	TableHead,
@@ -40,17 +40,15 @@ import {
 	X,
 	Check,
 	Link2,
-	AlertTriangle,
 	CheckCircle2,
 	XCircle,
-	RotateCcw,
 	Wrench,
+	AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import { useAuth } from "@/lib/_auth-provider";
 // import type { Product } from "@/types";
 import { authClient } from "@/lib/auth-client";
-import { CategorySchema, DealerSchema, ProductSchema } from "@/db/schema";
+import { CategorySchema, DealerSchema } from "@/db/schema";
 import {
 	dealerApi,
 	productApi,
@@ -610,7 +608,6 @@ export default function ProductsPage() {
 	const [conditionTarget, setConditionTarget] =
 		useState<ProductWithNestedSchema | null>(null);
 	const [detailOpen, setDetailOpen] = useState(false);
-	const [bulkAssignOpen, setBulkAssign] = useState(false);
 	const [warrantySelectMode, setWarrantyMode] = useState(false);
 	const [warrantySelected, setWarrantySelected] = useState<string[]>([]);
 	const [warrantyModalOpen, setWarrantyModal] = useState(false);
@@ -618,11 +615,7 @@ export default function ProductsPage() {
 
 	const { data: session } = authClient.useSession();
 	const user = session?.user;
-	const canEdit = user?.role === "sales" || user?.role === "admin";
-	const isAdmin = user?.role === "admin";
 	const canUpdateWarrantyCondition = user?.role === "admin" || user?.role === "technical_support";
-	const [productPage, setProductPage] = useState(1);
-	const [productPageSize, setProductPageSize] = useState(20);
 	// const [reassignTarget, setReassignTarget] =
 	// 	useState<ProductWithNestedSchema | null>(null);
 

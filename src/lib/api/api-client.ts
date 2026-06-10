@@ -1,4 +1,3 @@
-import { SendOtpResponseData } from "@/app/api/v1/auth/_send-otp/route";
 import { ApiResponse } from "./api-response";
 import { authClient } from "../auth-client";
 import {
@@ -8,10 +7,9 @@ import {
 	ItemCodeInsertSchema,
 	ItemCodeMapsSchema,
 	ProductSchema,
-	ProductTypeInsertSchema,
-	ProductTypeSchema,
 	UserSchema,
 	WaitingListSchema,
+	WarrantyCondSelectSchemaType,
 } from "@/db/schema";
 import { ProductWithNestedSchema } from "@/services/product.service";
 import {
@@ -19,7 +17,8 @@ import {
 	PurchaseWithNestedSchema,
 } from "@/services/purchase.service";
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
-import type { PurchaseGroup } from "@/types";
+import { DealerProductResponse } from "@/services/dealer-product.service";
+import type { PurchaseGroup, Product } from "@/types";
 
 async function apiFetch<T>(
 	input: RequestInfo,
@@ -80,7 +79,7 @@ export const productApi = {
 		condition: "valid" | "rejected";
 		reason?: string;
 	}) => {
-		return apiFetch<any>(`/products/${serialNumber}/warranty-status`, {
+		return apiFetch<WarrantyCondSelectSchemaType>(`/products/${serialNumber}/warranty-status`, {
 			method: "PATCH",
 			body: JSON.stringify({ condition, reason: reason || "" }),
 		});
@@ -303,7 +302,7 @@ export const dealerApi = {
 		if (categoryId) params.set("categoryId", categoryId);
 
 		return apiFetch<{
-			items: any[];
+			items: DealerProductResponse[];
 			total: number;
 			page: number;
 			pageSize: number;
@@ -354,6 +353,73 @@ export const dealerApi = {
 			}>
 		>(`/dealers/current/purchases`, { method: "GET" });
 	},
+
+	requestProduct: async ({
+		productTypeId,
+		serialNumberRequested,
+		notes,
+	}: {
+		productTypeId: string;
+		serialNumberRequested?: string;
+		notes?: string;
+	}) => {
+		return apiFetch<WaitingListSchema>("/dealers/current/request-products", {
+			method: "POST",
+			body: JSON.stringify({
+				productTypeId,
+				serialNumberRequested,
+				notes,
+			}),
+		});
+	},
+
+	getNotifications: async () => {
+		return apiFetch<
+			Array<{
+				id: string;
+				type: "product_ready" | "warranty_expiring";
+				serialNumber: string;
+				productType: string;
+				message: string;
+				createdAt: string;
+				read: boolean;
+			}>
+		>("/dealers/current/notifications", { method: "GET" });
+	},
+
+	registerWarranty: async ({
+		selectedSNs,
+		customerName,
+		phone,
+		email,
+		purchaseDate,
+		invoiceFile,
+	}: {
+		selectedSNs: string[];
+		customerName: string;
+		phone: string;
+		email: string;
+		purchaseDate: string;
+		invoiceFile: File;
+	}) => {
+		const formData = new FormData();
+		formData.append("selectedSNs", JSON.stringify(selectedSNs));
+		formData.append("customerName", customerName);
+		formData.append("phone", phone);
+		formData.append("email", email);
+		formData.append("purchaseDate", purchaseDate);
+		formData.append("file", invoiceFile);
+
+		return apiFetch<{
+			purchaseId: string;
+			customerId: string;
+			productsCount: number;
+			groupId: string;
+		}>("/dealers/current/warranty-registrations", {
+			method: "POST",
+			body: formData,
+		});
+	},
 };
 
 export const customerApi = {
@@ -386,7 +452,7 @@ export const customerApi = {
 
 	getById: async (id: string) => {
 		return apiFetch<{
-			customer: any;
+			customer: CustomerSchema;
 			dealers: string[];
 			totalPurchases: number;
 			purchases: PurchaseGroup[];
@@ -417,7 +483,7 @@ export const customerApi = {
 
 export const warrantyApi = {
 	check: async (sn: string) => {
-		return apiFetch<any>(`/warranty/check?sn=${encodeURIComponent(sn)}`, {
+		return apiFetch<Product | null>(`/warranty/check?sn=${encodeURIComponent(sn)}`, {
 			method: "GET",
 		});
 	},
@@ -437,6 +503,16 @@ export const waitingListApi = {
 		dealerId?: string;
 	}) => {
 		return apiFetch<WaitingListSchema>("/waiting-lists", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	createForDealer: async (data: {
+		serialNumberRequested: string;
+		notes?: string;
+	}) => {
+		return apiFetch<WaitingListSchema>("/dealers/current/waiting-lists", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
@@ -514,7 +590,7 @@ export const uploadApi = {
 		formData.append("file", file);
 
 		return apiFetch<{
-			preview: any[];
+			preview: Array<Record<string, unknown>>;
 			validCount: number;
 			dupCount: number;
 			unknownCount: number;
@@ -537,10 +613,28 @@ export const uploadApi = {
 		file: File,
 		destType: "dealer" | "customer",
 		destLabel: string,
-		pendingDealerCreation?: any,
-		pendingCustomerCreation?: any,
-		pendingItemCodes?: any[],
-		purchaseData?: any,
+		pendingDealerCreation?: {
+			name: string;
+			email: string;
+			phone?: string;
+		},
+		pendingCustomerCreation?: {
+			name: string;
+			email?: string;
+			phone?: string;
+		},
+		pendingItemCodes?: Array<{
+			code: string;
+			productTypeName: string;
+			categoryId: string;
+			warrantyDurationMonths: number;
+		}>,
+		purchaseData?: {
+			purchaseDate: string;
+			notes?: string;
+			dealerId?: string;
+			invoiceFile?: File;
+		},
 	) => {
 		const formData = new FormData();
 		formData.append("file", file);
@@ -556,9 +650,11 @@ export const uploadApi = {
 			formData.append("pendingItemCodes", JSON.stringify(pendingItemCodes));
 		}
 		if (purchaseData) {
-			// Remove invoiceFile since we can't send files in JSON
 			const { invoiceFile, ...purchaseDataWithoutFile } = purchaseData;
 			formData.append("purchaseData", JSON.stringify(purchaseDataWithoutFile));
+			if (invoiceFile instanceof File) {
+				formData.append("invoiceFile", invoiceFile);
+			}
 		}
 
 		return apiFetch<{

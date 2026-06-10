@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react/no-unescaped-entities */
 "use client";
 // app/dealer/dashboard/page.tsx
-// Updated: polling notifikasi 30 detik + pagination + adapter
+// Updated: polling notifikasi 30 detik + pagination + adapter + request product
 
 import { useState, useCallback, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
@@ -20,10 +21,11 @@ import {
 	TableCell,
 	EmptyState,
 } from "@/components/ui/table";
+import { RequestProductForm } from "@/components/dealer/request-product-form";
 // import { notificationAdapter, productAdapter } from "@/lib/adapters";
 // import { usePolling } from "@/lib/hooks/use-polling";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
-import { dealerApi } from "@/lib/api/api-client";
+import { dealerApi, productApi, productTypeApi } from "@/lib/api/api-client";
 import {
 	Package,
 	ShieldCheck,
@@ -35,9 +37,11 @@ import {
 	Search,
 	X,
 	RefreshCw,
+	Plus,
 } from "lucide-react";
 import Link from "next/link";
 import type { DealerNotification, Product } from "@/types";
+import { ProductTypeSchema } from "@/db/schema";
 
 type FilterType = "all" | "none" | "active" | "expired";
 const DEMO_DEALER_ID = "d1";
@@ -55,16 +59,49 @@ export default function DealerDashboardPage() {
 	const [dismissedNotifs, setDismissedNotifs] = useState<string[]>([]);
 	const [lastPolled, setLastPolled] = useState<Date | null>(null);
 
+	const [isRequestFormOpen, setIsRequestFormOpen] = useState(false);
+	const [productTypes, setProductTypes] = useState<ProductTypeSchema[]>([]);
+	const [loadingProductTypes, setLoadingProductTypes] = useState(false);
+
 	const fetchNotifications = useCallback(async () => {
-		// const all = await notificationAdapter.getDealerNotifications(DEMO_DEALER_ID);
-		// setNotifications(all);
+		try {
+			const response = await dealerApi.getNotifications();
+			console.log(response);
+			if (response.success) {
+				setNotifications(response.data || []);
+			}
+		} catch (err) {
+			console.error("Error fetching notifications:", err);
+		}
 		setLastPolled(new Date());
 	}, []);
 
 	useEffect(() => {
 		fetchNotifications();
+		// Poll every 30 seconds
+		const interval = setInterval(fetchNotifications, 30_000);
+		return () => clearInterval(interval);
 	}, [fetchNotifications]);
-	// usePolling(fetchNotifications, 30_000);
+
+	useEffect(() => {
+		if (isRequestFormOpen && productTypes.length === 0) {
+			loadProductTypes();
+		}
+	}, [isRequestFormOpen]);
+
+	const loadProductTypes = useCallback(async () => {
+		setLoadingProductTypes(true);
+		try {
+			const response = await productTypeApi.getAllWithNested();
+			if (response.success) {
+				setProductTypes((response.data || []) as ProductTypeSchema[]);
+			}
+		} catch (err) {
+			console.error("Error loading product types:", err);
+		} finally {
+			setLoadingProductTypes(false);
+		}
+	}, []);
 
 	const loadProducts = useCallback(async () => {
 		setLoadingProducts(true);
@@ -108,6 +145,12 @@ export default function DealerDashboardPage() {
 	return (
 		<div>
 			<Topbar title="Dashboard" description="PT Maju Teknologi" />
+			<RequestProductForm
+				productTypes={productTypes}
+				isOpen={isRequestFormOpen}
+				onClose={() => setIsRequestFormOpen(false)}
+				onSuccess={loadProducts}
+			/>
 			<div className="p-6 space-y-5">
 				{activeNotifs.length > 0 && (
 					<div className="space-y-2 animate-fade-up">
@@ -219,11 +262,23 @@ export default function DealerDashboardPage() {
 						title="Produk Saya"
 						description="Semua produk yang di-assign ke toko Anda"
 						action={
-							<Link href="/dealer/register-warranty">
-								<Button size="sm" variant="outline" icon={<Shield size={13} />}>
-									Registrasi Garansi
+							<div className="flex gap-2">
+								<Button
+									size="sm"
+									variant="outline"
+									icon={<Plus size={13} />}
+									onClick={() => setIsRequestFormOpen(true)}>
+									Request Produk
 								</Button>
-							</Link>
+								<Link href="/dealer/register-warranty">
+									<Button
+										size="sm"
+										variant="outline"
+										icon={<Shield size={13} />}>
+										Registrasi Garansi
+									</Button>
+								</Link>
+							</div>
 						}
 					/>
 					<div className="px-5 pb-3.5 flex gap-3 border-b border-zinc-100">

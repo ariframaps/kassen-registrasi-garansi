@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 // app/dealer/purchases/page.tsx — Dealer: view + edit purchase groups
 import { useState, useEffect, useMemo } from "react";

@@ -443,7 +443,7 @@ export default function SupportProductsPage() {
 							: true;
 			return matchSearch && matchCategory && matchCondition;
 		});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		 
 	}, [search, categoryFilter, conditionFilter, products]);
 
 	const stats = {

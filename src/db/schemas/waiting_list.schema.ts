@@ -13,6 +13,7 @@ import { relations } from "drizzle-orm";
 import { dealers } from "./dealer.schema";
 import { product } from "./product.schema";
 import { user } from "./auth-schema";
+import { productType } from "./product_type.schema";
 import { createSelectSchema } from "drizzle-zod";
 import z from "zod";
 
@@ -59,6 +60,10 @@ export const waitingList = pgTable(
 			onDelete: "set null",
 		}),
 
+		productTypeId: text("product_type_id").references(() => productType.id, {
+			onDelete: "set null",
+		}),
+
 		status: waitingListStatusEnum("status").notNull().default("pending"),
 
 		notifiedAt: timestamp("notified_at", {
@@ -97,6 +102,11 @@ export const waitingListRelations = relations(waitingList, ({ one }) => ({
 	product: one(product, {
 		fields: [waitingList.productId],
 		references: [product.id],
+	}),
+
+	type: one(productType, {
+		fields: [waitingList.productTypeId],
+		references: [productType.id],
 	}),
 
 	notifiedByUser: one(user, {

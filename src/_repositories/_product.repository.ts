@@ -1,16 +1,3 @@
-import { db } from "@/db";
-import {
-	categorySchema,
-	customerSchema,
-	dealerSchema,
-	doSchema,
-	productSchema,
-	productTypeSchema,
-	userSchema,
-} from "@/db/schema";
-import { eq } from "drizzle-orm";
-import z from "zod";
-
 // export const productWithNestedSchema = productSchema
 // 	.extend({
 // 		productType: productTypeSchema.extend({

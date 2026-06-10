@@ -20,7 +20,7 @@ export async function GET() {
 	try {
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
-			allowedRole: ["admin", "sales"],
+			allowedRole: ["admin", "sales", "dealer"],
 			currentRole: session.user.role,
 		});
 

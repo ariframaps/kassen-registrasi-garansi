@@ -1,22 +1,15 @@
 "use client";
-// app/dealer/register-warranty/page.tsx
-// Revisions:
-// - Step 1: searchable by SN AND product type
-// - Warranty group: group ID for same customer+date+invoice = 1 pembelian
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/toast";
-import { dealerProducts } from "@/mock/mock-data";
-import { Check, ChevronRight, Package, X, Upload, CheckCircle2, Search, ArrowLeft } from "lucide-react";
+import { dealerApi } from "@/lib/api/api-client";
+import { Check, ChevronRight, Package, X, Upload, CheckCircle2, Search, ArrowLeft, User, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-
-const unregistered = dealerProducts.filter(p => p.warrantyStatus === "none");
 
 interface FormData {
   selectedSNs: string[];
@@ -31,6 +24,21 @@ const INIT: FormData = {
   selectedSNs: [], customerName: "", phone: "", email: "", purchaseDate: "", invoiceFile: null,
 };
 
+interface CustomerOption {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+}
+
+interface ProductItem {
+  id: string;
+  serialNumber: string;
+  productType: string;
+  warrantyStatus: string;
+  isRegistered: boolean;
+}
+
 export default function RegisterWarrantyPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState<FormData>(INIT);
@@ -39,17 +47,75 @@ export default function RegisterWarrantyPage() {
   const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const router = useRouter();
-  const { success: toast } = useToast();
+
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await dealerApi.getProducts({ pageSize: 200 });
+        if (res.success) {
+          const items = res.data.items as ProductItem[];
+          setProducts(items);
+        }
+      } catch (e) {
+        console.error("Failed to load products:", e);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    load();
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await dealerApi.getCustomers();
+        if (res.success) {
+          setCustomers(res.data || []);
+        }
+      } catch (e) {
+        console.error("Failed to load customers:", e);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+    load();
+  }, []);
 
   const toggle = (sn: string) => setForm(p => ({
     ...p,
     selectedSNs: p.selectedSNs.includes(sn) ? p.selectedSNs.filter(s => s !== sn) : [...p.selectedSNs, sn],
   }));
 
-  const filteredProducts = unregistered.filter(p => {
+  const filteredProducts = products.filter(p => {
     const q = search.toLowerCase();
     return p.serialNumber.toLowerCase().includes(q) || p.productType.toLowerCase().includes(q);
   });
+
+  const filteredCustomers = customerSearch
+    ? customers.filter(c =>
+        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        c.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        (c.phone && c.phone.includes(customerSearch)))
+    : customers;
+
+  const selectCustomer = (c: CustomerOption) => {
+    setSelectedCustomerId(c.id);
+    setForm(prev => ({ ...prev, customerName: c.name, email: c.email, phone: c.phone || "" }));
+  };
+
+  const handleCustomerModeChange = (mode: "existing" | "new") => {
+    setCustomerMode(mode);
+    setSelectedCustomerId(null);
+    if (mode === "new") setForm(prev => ({ ...prev, customerName: "", email: "", phone: "" }));
+  };
 
   const validate = () => {
     const e: Partial<Record<keyof FormData, string>> = {};
@@ -65,12 +131,29 @@ export default function RegisterWarrantyPage() {
   const handleSubmit = async () => {
     if (!validate()) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    setSuccess(true);
+    try {
+      const response = await dealerApi.registerWarranty({
+        selectedSNs: form.selectedSNs,
+        customerName: form.customerName,
+        phone: form.phone,
+        email: form.email,
+        purchaseDate: form.purchaseDate,
+        invoiceFile: form.invoiceFile!,
+      });
+
+      if (response.success) {
+        setSuccess(true);
+      } else {
+        setErrors({ customerName: response.message || "Gagal mendaftar garansi" });
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Terjadi kesalahan";
+      setErrors({ customerName: errorMsg });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Generates a group ID based on customer+date — for grouping purchases
   const groupId = form.customerName && form.purchaseDate
     ? `GRP-${form.customerName.slice(0,3).toUpperCase()}-${form.purchaseDate.replace(/-/g,"").slice(2)}`
     : null;
@@ -114,7 +197,11 @@ export default function RegisterWarrantyPage() {
                 />
               </div>
 
-              {filteredProducts.length === 0 ? (
+              {loadingProducts ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-zinc-400">Memuat data produk...</p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-10">
                   <p className="text-sm text-zinc-400">Tidak ada produk yang cocok</p>
                   {search && <button onClick={() => setSearch("")} className="text-xs text-blue-600 mt-1 hover:underline">Reset pencarian</button>}
@@ -123,24 +210,41 @@ export default function RegisterWarrantyPage() {
                 <div className="space-y-1.5 max-h-72 overflow-y-auto -mx-1 px-1">
                   {filteredProducts.map(p => {
                     const sel = form.selectedSNs.includes(p.serialNumber);
+                    const isDisabled = p.isRegistered;
                     return (
                       <button
                         key={p.id}
-                        onClick={() => toggle(p.serialNumber)}
+                        onClick={() => !isDisabled && toggle(p.serialNumber)}
+                        disabled={isDisabled}
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-100 ${
-                          sel ? "border-blue-400 bg-blue-50 shadow-sm" : "border-zinc-100 hover:border-zinc-200 hover:bg-zinc-50"
+                          isDisabled
+                            ? "border-zinc-100 bg-zinc-50 cursor-not-allowed opacity-60"
+                            : sel
+                              ? "border-blue-400 bg-blue-50 shadow-sm"
+                              : "border-zinc-100 hover:border-zinc-200 hover:bg-zinc-50"
                         }`}
                       >
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${sel ? "bg-blue-600 border-blue-600" : "border-zinc-300"}`}>
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                          isDisabled
+                            ? "border-zinc-200"
+                            : sel
+                              ? "bg-blue-600 border-blue-600"
+                              : "border-zinc-300"
+                        }`}>
                           {sel && <Check size={10} className="text-white" strokeWidth={3}/>}
                         </div>
                         <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center shrink-0">
-                          <Package size={14} className="text-zinc-400"/>
+                          <Package size={14} className={isDisabled ? "text-zinc-300" : "text-zinc-400"}/>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-mono text-xs font-semibold text-zinc-900">{p.serialNumber}</p>
                           <p className="text-[11px] text-zinc-400 truncate mt-0.5">{p.productType}</p>
                         </div>
+                        {isDisabled && (
+                          <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded-md whitespace-nowrap font-medium">
+                            Sudah terdaftar
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -196,6 +300,68 @@ export default function RegisterWarrantyPage() {
                   </div>
                 )}
               </div>
+
+              {/* Customer mode toggle */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => handleCustomerModeChange("existing")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${
+                    customerMode === "existing" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+                  }`}
+                >
+                  <User size={12}/>Pilih Customer Lama
+                </button>
+                <button
+                  onClick={() => handleCustomerModeChange("new")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${
+                    customerMode === "new" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+                  }`}
+                >
+                  <UserPlus size={12}/>Input Customer Baru
+                </button>
+              </div>
+
+              {/* Existing customer list */}
+              {customerMode === "existing" && (
+                <div className="mb-4">
+                  {loadingCustomers ? (
+                    <p className="text-xs text-zinc-400 text-center py-4">Memuat daftar customer...</p>
+                  ) : customers.length === 0 ? (
+                    <p className="text-xs text-zinc-400 text-center py-4">Belum ada customer terdaftar. Pilih &quot;Input Customer Baru&quot;.</p>
+                  ) : (
+                    <>
+                      <Input
+                        placeholder="Cari nama, email, atau no. HP..."
+                        value={customerSearch}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        leftIcon={<Search size={14}/>}
+                      />
+                      <div className="space-y-1 max-h-44 overflow-y-auto mt-2">
+                        {filteredCustomers.map(c => {
+                          const isSel = selectedCustomerId === c.id;
+                          return (
+                            <button
+                              key={c.id}
+                              onClick={() => selectCustomer(c)}
+                              className={`w-full flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all ${
+                                isSel ? "border-blue-400 bg-blue-50" : "border-zinc-100 hover:border-zinc-200 hover:bg-zinc-50"
+                              }`}
+                            >
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSel ? "bg-blue-600 border-blue-600" : "border-zinc-300"}`}>
+                                {isSel && <Check size={8} className="text-white" strokeWidth={3}/>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-zinc-800">{c.name}</p>
+                                <p className="text-[11px] text-zinc-400 truncate">{c.email}{c.phone ? ` · ${c.phone}` : ""}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-3">
                 <Input label="Nama Customer" placeholder="Nama lengkap pembeli" required value={form.customerName} onChange={e => setForm({...form,customerName:e.target.value})} error={errors.customerName}/>

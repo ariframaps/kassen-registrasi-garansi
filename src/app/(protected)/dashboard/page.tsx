@@ -16,7 +16,6 @@ import {
 	ShieldOff,
 	Clock,
 	TrendingUp,
-	Bell,
 	Circle,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";

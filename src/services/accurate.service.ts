@@ -9,7 +9,10 @@ import {
 	user,
 	purchase,
 	purchaseItem,
+	invoice,
+	ProductInsertSchema,
 } from "@/db/schema";
+import { uploadInvoiceToDrive } from "@/lib/google-drive";
 import {
 	parseExcelFile,
 	validateAndPreview,
@@ -18,6 +21,7 @@ import {
 } from "@/lib/parser-accurate";
 import { normalizeSerialNumber } from "@/lib/utils";
 import { eq } from "drizzle-orm";
+import { notificationService } from "./notification.service";
 import crypto from "crypto";
 
 export async function getProductTypeMappings() {
@@ -126,6 +130,7 @@ export interface UploadSubmitOptions {
 		invoiceFile?: File;
 		dealerId?: string;
 	};
+	invoiceFile?: File;
 }
 
 export async function submitAccurateFile(
@@ -143,6 +148,7 @@ export async function submitAccurateFile(
 		pendingCustomerCreation,
 		pendingItemCodes,
 		purchaseData,
+		invoiceFile,
 	} = options;
 
 	// Calculate file hash
@@ -346,7 +352,7 @@ export async function submitAccurateFile(
 		for (const sn of item.serialNumbers) {
 			const normalizedSn = normalizeSerialNumber(sn);
 			if (validSerialNumbers.has(normalizedSn)) {
-				const productData: any = {
+				const productData: ProductInsertSchema = {
 					id: crypto.randomUUID(),
 					serialNumber: normalizedSn,
 					productTypeId: mapping.id,
@@ -369,6 +375,23 @@ export async function submitAccurateFile(
 
 	if (productsToCreate.length > 0) {
 		await db.insert(product).values(productsToCreate);
+
+		// Trigger notification check for dealer product requests
+		if (destType === "dealer" && dealerId) {
+			try {
+				await notificationService.checkAndNotifyProductMatch({
+					dealerId,
+					productsCreated: productsToCreate.map((p) => ({
+						id: p.id,
+						serialNumber: p.serialNumber,
+						productTypeId: p.productTypeId,
+					})),
+					uploadedBy: userId,
+				});
+			} catch (error) {
+				console.error("Failed to check and notify product match:", error);
+			}
+		}
 	}
 
 	// Create purchase record if purchaseData is provided (for end customer)
@@ -399,6 +422,31 @@ export async function submitAccurateFile(
 
 			if (purchaseItemsToCreate.length > 0) {
 				await db.insert(purchaseItem).values(purchaseItemsToCreate);
+			}
+
+			// Upload invoice to Google Drive and save record
+			const invoiceFileToUse = invoiceFile ?? purchaseData.invoiceFile;
+			if (invoiceFileToUse) {
+				try {
+					const fileBuffer = Buffer.from(await invoiceFileToUse.arrayBuffer());
+					const mimeType = invoiceFileToUse.type || "application/octet-stream";
+					const driveUrl = await uploadInvoiceToDrive(
+						fileBuffer,
+						invoiceFileToUse.name,
+						mimeType,
+					);
+					await db.insert(invoice).values({
+						id: crypto.randomUUID(),
+						purchaseId: purchaseId!,
+						storagePath: driveUrl,
+						originalFilename: invoiceFileToUse.name,
+						mimeType,
+						fileSizeBytes: invoiceFileToUse.size,
+						uploadedBy: userId,
+					});
+				} catch (err) {
+					console.error("Gagal upload invoice ke Google Drive:", err);
+				}
 			}
 		}
 	}
