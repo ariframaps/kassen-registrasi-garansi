@@ -460,7 +460,7 @@ export default function AdminPurchasesPage() {
 								...Array.from(
 									new Map(
 										purchases
-											.filter((d) => d.dealerId)
+											.filter((d): d is typeof d & { dealerId: string } => !!d.dealerId)
 											.map((d) => [
 												d.dealerId,
 												{ value: d.dealerId, label: d.dealer?.name ?? "Unknown" },

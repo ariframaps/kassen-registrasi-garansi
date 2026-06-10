@@ -61,7 +61,7 @@ export const dealerProductService = {
 			);
 		}
 
-		const whereClause = filters.length > 1 ? and(...filters) : filters[0];
+		const whereClause = filters.length > 1 ? and(...(filters as any[])) : (filters[0] as any);
 
 		const result = await db.query.product.findMany({
 			where: whereClause,

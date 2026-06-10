@@ -120,7 +120,7 @@ export default function DealerDashboardPage() {
 				filter === "all"
 					? response.data.items
 					: response.data.items.filter((p: any) => p.warrantyStatus === filter);
-			setProducts(statusFiltered);
+			setProducts((statusFiltered as unknown) as Product[]);
 			setTotalProducts(
 				filter === "all" ? response.data.total : statusFiltered.length,
 			);

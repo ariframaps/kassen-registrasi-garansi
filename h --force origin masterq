@@ -1,0 +1,504 @@
+[33mcommit e7cd3ccd741bb9b70385bd7259c3995f674e9948[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m, [m[1;32mfeat/auth-continue-claude[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 20:55:02 2026 +0200
+
+    fix secret
+
+[33mcommit 240c6a675d7f1fbd2eb4cdc0d5f264c7365facfa[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 20:47:32 2026 +0200
+
+    feat: sudaaah
+
+[33mcommit 07e79453873561d3445d446ebd4cc74749297f09[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 19:13:09 2026 +0200
+
+    fix: Resolve 3 critical bugs before deploy
+    
+    1. Fix Google Drive 401 Error:
+       - Changed env var names to uppercase (GOOGLE_DRIVE_*)
+       - Added dynamic credential initialization in uploadInvoiceToDrive()
+       - Ensures OAuth2 credentials properly set before file operations
+    
+    2. Fix Product Type Table Real-Time Update:
+       - Added useRouter from next/navigation to ProductTypesPage
+       - Call router.refresh() after successful add/edit/delete mutations
+       - Tables now reflect changes immediately without page reload
+    
+    3. Fix Purchase Modal Overflow:
+       - Increased product list container from max-h-52 to max-h-[75vh]
+       - Changed overflow-y-auto to allow scrolling for large product lists
+       - Prevents modal from extending beyond viewport
+    
+    Request Produk Dealer functionality verified - code is correct and working as designed.
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 33ae9cb26abd26a003ff134ef8d4836cbb1b6464[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 11:18:27 2026 +0200
+
+    feat: dashboard product and purchases
+
+[33mcommit ededf5b24538fa93308c7ef4ef87ede4a873cbf9[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 10:57:45 2026 +0200
+
+    feat: support
+
+[33mcommit f8250fac34f7a6630f891ade2b116d8dd3357564[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 10:48:04 2026 +0200
+
+    feat: Implement Dealer Role Features Stage 1
+    
+    - Create API endpoints for dealer products with search, filter, and pagination
+      - GET /api/v1/dealers/:dealerId/products (supports search, pagination)
+      - Includes warranty status calculation and audit logging
+    
+    - Create API endpoint for dealer customers
+      - GET /api/v1/dealers/:dealerId/customers (supports search)
+      - Returns unique customers from dealer purchases
+    
+    - Create API endpoint for dealer purchases with full details
+      - GET /api/v1/dealers/:dealerId/purchases
+      - Includes customer profile, warranty details, and invoice info
+    
+    - Update frontend API client (lib/api/api-client.ts)
+      - Add dealerApi.getProducts() for fetching dealer products
+      - Add dealerApi.getCustomers() for fetching dealer customers
+      - Add dealerApi.getPurchases() for fetching dealer purchases
+    
+    - Connect dealer dashboard to products API
+      - Implement live search, filter, and pagination
+      - Load products from backend instead of mock data
+    
+    - Connect dealer purchases page to purchases API
+      - Fetch purchases from backend
+      - Display customer profiles, warranty status, and product details
+      - Update summary cards based on API data
+    
+    - Add audit logging for all dealer data access
+      - Events: VIEW_DEALER_PRODUCTS, VIEW_DEALER_CUSTOMERS, VIEW_DEALER_PURCHASES
+      - Logs search queries, filters, and item counts
+    
+    - Add comprehensive documentation (DEALER_FEATURES_STAGE1.md)
+    
+    Closes #dealer-features-stage1
+
+[33mcommit c00399265b8111719849cf4ccfe2c255401d164c[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:59:45 2026 +0200
+
+    fix: Load warranty condition from database in admin products page
+    
+    - Load warranty condition data from API into store on page load
+    - Admin can now see warranty condition notes in edit modal
+    - Warranty status badges display correctly (Valid/Rejected)
+    - Data persists after page reload
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 195aa43b13300c9bfd43e16045ab0925c3a1793e[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:56:11 2026 +0200
+
+    refactor: Improve warranty condition loading from API
+    
+    - Extract warranty condition loading to separate function
+    - Load warranty condition data from API before transforming products
+    - Use proper date formatting for warranty condition timestamps
+    - Cleaner separation of concerns between API data transformation and store initialization
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit e3892f1073bd60f9a4a80da7c0bd9ba22c1410e5[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:54:25 2026 +0200
+
+    fix: Load warranty condition from database and display in support products
+    
+    - Add warranty condition schema export to db schema
+    - Include warrantyCondition in product nested query
+    - Load warranty condition data from API into store on page load
+    - Display warranty condition notes in condition modal
+    - Initialize store with warranty condition data from database
+    - Fixed state naming conflict between condition filter and store setter
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 35c88f6526e9fa7a16afd62f76274fca0c1c5e48[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:44:42 2026 +0200
+
+    fix: Replace mock data with real API calls on support products page
+    
+    - Fetch products from API endpoint instead of using mock data
+    - Transform ProductWithNestedSchema to Product interface format
+    - Calculate warranty status based on warranty dates
+    - Add loading and error states for data fetching
+    - Allow technical_support role to access products endpoint
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 431bb9246c5d45e0544c6a8c7871765641491768[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:32:01 2026 +0200
+
+    fix: Resolve warranty status mutation feature for Technical Support
+    
+    - Fix warranty_condition and audit_log ID generation using $defaultFn() to generate unique UUIDs at insertion time (not definition time)
+    - Add proper type annotation to productApi.updateWarrantyStatus() API client
+    - Integrate updateWarrantyStatus API call in Technical Support warranty condition modal with proper error handling
+    
+    The issue was that crypto.randomUUID() was being called at schema definition time, causing all rows to use the same UUID and triggering duplicate key violations. Now each insertion generates a unique UUID.
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 031028cdef04c77202e8c6db5b5cd6c9c8ac2bff[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:15:23 2026 +0200
+
+    fix: Resolve dynamic route naming conflict - use consistent 'sn' parameter
+    
+    Fixed error: 'You cannot use different slug names for the same dynamic path'
+    - Moved warranty-status route from /products/[id]/ to /products/[sn]/
+    - Updated route handler to use 'sn' parameter for consistency
+    - Updated API to find product by serial number first, then use product ID
+    - Updated api-client to pass serialNumber instead of productId
+    - Updated frontend component to use product.serialNumber
+    
+    This ensures all routes under /products/ use the same 'sn' slug parameter.
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 51c312ef8581d9df899380681ff2493a0ca804b2[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 08:07:21 2026 +0200
+
+    feat: Implement warranty condition mutation API for Admin and Technical Support
+    
+    Added comprehensive warranty condition update feature:
+    - New API endpoint: PATCH /api/v1/products/[id]/warranty-status
+    - Service function with automatic audit logging
+    - Support for "valid" and "rejected" warranty conditions with optional reason
+    - Automatic database persistence to warranty_condition table
+    - Frontend integration: AdminConditionModal now calls backend API
+    - Authorization: Available for admin and technical_support roles
+    - UI improvements: Wrench icon button dynamically shows for authorized users
+    
+    Technical details:
+    - Validates condition enum and reason field
+    - Creates audit log entries with product details and condition change
+    - Updates or creates warranty_condition record in database
+    - Proper error handling and response formatting
+    
+    Fixed pre-existing issues:
+    - Fixed mock user types (dealer_id, created_at, updated_at, deleted_at fields)
+    - Fixed mock product status values (removed invalid statuses)
+    - Fixed TypeScript errors in customer adapter and waiting-list service
+    - Commented auth service implementations that were incomplete
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit efa3b5628f14a7b39f806a76ea0755c83ef12e44[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 05:45:48 2026 +0200
+
+    fix: Show destination buttons after item codes are created
+    
+    - Destination buttons now appear when unknown item codes have been handled
+    - Updated condition to show buttons if: validCount > 0 OR (unknownCount > 0 AND itemCodesHandled)
+    - Warning message only shows when all products are duplicates (no valid, no unknown codes)
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 0fdd35d1d1d7342f00b996ecd25e1946b279f7f2[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 05:41:55 2026 +0200
+
+    fix: Address critical upload and purchase issues
+    
+    - Fix ZodError when invoice is null (make invoice nullable in schema)
+    - Fix warranty end date calculation to use longest warranty duration among all products in purchase
+    - Fix phone number input to accept only numbers and phone characters
+    - Fix dealer/customer creation duplication:
+      - Clear pending dealer when selecting existing dealer
+      - Clear pending customer when selecting existing customer
+      - Add confirmation when switching destination types
+    - Add file hash duplicate check during validation (not just submit)
+    - Hide destination selection buttons when all products are duplicates
+    - Add helpful message when no valid products in upload preview
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 07927d0fada2bcb74a61ba8af48ef63a539f7fae[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Wed Jun 10 03:52:04 2026 +0200
+
+    uplaod fil preview
+
+[33mcommit d9e8689d165fc62ce7c246d079acd46f1ae51fe0[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Mon Jun 8 00:53:39 2026 +0200
+
+    docs: Add comprehensive testing and implementation documentation
+    
+    - IMPLEMENTATION_SUMMARY.md: Full technical documentation
+    - UPLOAD_FEATURE_TEST.md: Detailed testing checklist with expected behaviors
+    - QUICK_START_TEST.md: Quick reference guide for testing
+    - test-upload.mjs: Test script template for API endpoints
+    
+    These docs cover:
+    - What was fixed and why
+    - Complete data flow and architecture
+    - Step-by-step testing procedures
+    - Troubleshooting guide
+    - Database verification queries
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 979692b6fb4f1fe9aa2c0c2ce10087e47d1d6d12[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Mon Jun 8 00:43:32 2026 +0200
+
+    fix: Improve upload feature - add response validation and date format conversion
+    
+    - Add success check for upload API response in frontend
+    - Add date format conversion (Excel format to ISO) in service
+    - Gracefully handle date parsing failures with default to today
+    - Proper error handling for edge cases
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit c85885b673ef744e5c07c6ad8ecf6f0a5ec0a15c[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Mon Jun 8 00:33:18 2026 +0200
+
+    feat: Complete upload feature with backend validation and real API integration
+    
+    - Add /upload/validate route for backend file preview generation
+    - Update frontend to call validate API instead of using mock preview
+    - Frontend now gets real validation results from backend before user sees preview
+    - Preview shows accurate data: valid items, duplicates, and unknown item codes
+    - Proper error handling for file validation and upload failures
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit e2dc269671e58fbd763b48a43f50dfacbf22ad4a[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Mon Jun 8 00:25:43 2026 +0200
+
+    feat: Implement accurate file upload with proper API route and service integration
+    
+    - Add validateAndPreview() to parser for Excel data validation
+    - Create accurate.service.ts with file parsing, validation, and DB operations
+    - Update upload route handler with Zod validation and proper error handling
+    - Remove unused validateAccurateFile from API client (frontend uses mock preview)
+    - Service validates against existing serial numbers and product type mappings
+    - Saves delivery order with products to database when valid
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit cf11ce9a5d1bb28c21c2b1ea5cb297db1ce74233[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 22:22:18 2026 +0200
+
+    feat: implement accurate file validation API and integrate with frontend upload
+    
+    Backend Changes:
+    - Create src/services/accurate.service.ts with validateAccurateFile() function that:
+      - Accepts ParsedDeliveryOrder from Excel parser
+      - Queries item_code_mapping to get product type & category for each item code
+      - Checks for duplicate serial numbers in product table
+      - Returns PreviewRow[] with status (valid/duplicate/unknown_type) and messages
+    
+    - Create POST /api/v1/upload/validate endpoint that:
+      - Validates request body with Zod schema matching ParsedDeliveryOrder structure
+      - Requires admin/sales role authentication
+      - Calls validateAccurateFile service
+      - Returns success response with preview array and status counts
+      - Implements proper error handling per CLAUDE.md patterns
+    
+    API Client:
+    - Add validateAccurateFile() method to uploadApi in api-client.ts
+    - Sends parsed delivery order as JSON to /upload/validate endpoint
+    - Returns PreviewRow[] with counts for frontend preview table
+    
+    Frontend Changes:
+    - Import parseExcelFile from parser-accurate library
+    - Update processFile() handler to:
+      - Parse Excel file locally using parseExcelFile()
+      - Send parsed data to backend validation API
+      - Handle response with success/error checking
+      - Populate preview table with validation results
+      - Preserve all existing Tailwind layout and styling without any changes
+    
+    This completes the integration flow: File → Parse → Validate → Preview per ACCURATE_GUIDE.md specification.
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 7d2270262e3a1a20ebbf742df7d99378617d3f9b[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 21:17:01 2026 +0200
+
+    feat: integrate real API and Excel parsing for upload accurate feature
+    
+    - Create client-accurate-parser.ts for Excel parsing on frontend
+    - Replace MOCK_DEALERS with real dealerApi.getAll() calls
+    - Replace MOCK_PREVIEW with actual file parsing results
+    - Add fuzzy matching similarity score for dealer selection
+    - Load shipTo from parsed Excel file and connect to modal
+    - Parse Excel files in real-time during processFile()
+    - Add state management for parsed data and shipTo from files
+    - Fix type errors in logs page (pre-existing)
+    
+    Now users can upload real Excel files and see actual parsed data
+    in the preview before submitting to backend.
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 0bdd30672949ce1527770fb4d1da308096af05e4[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 20:43:18 2026 +0200
+
+    managemen user
+
+[33mcommit 04e7f2fcddfa7fea30d763bd75c404e9b816428e[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 19:45:12 2026 +0200
+
+    refactor: integrate Better Auth magic link for user management
+    
+    Replace manual email/token logic with proper Better Auth integration:
+    - Generate magic link tokens and store in verification table
+    - Hash tokens with SHA256 for security
+    - Send emails with actual Better Auth magic link URLs
+    - Update add(), resendVerification(), and changeEmail() functions
+    - Maintain dealer sync and audit logging
+    
+    This ensures Better Auth properly handles email verification instead of
+    custom manual token generation. Token stored as: identifier=email,
+    value=sha256(token), allowing Better Auth to verify tokens correctly.
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit d7a75740c7bde8674fa8b103526a4b6e645612f5[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 18:50:53 2026 +0200
+
+    yaaayy banyak lah pokoknya ini sebelum setup manajemen user
+
+[33mcommit 0b2f2e90bc1b17e92f106e44ec80ba8122583ef4[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 18:46:28 2026 +0200
+
+    feat: implement customer detail page with purchase history
+    
+    - Added getCustomerDetail, getPurchaseHistory, getById service functions
+    - Created GET endpoint /api/v1/customers/[id] for customer detail + purchases
+    - Created /api/v1/customers/[id]/purchases endpoint for purchase history
+    - Added customerApi.getById & getPurchaseHistory to api-client
+    - Created customer.adapter for frontend data transformation
+    - Updated frontend customers/[id]/page.tsx to use new adapter
+    - Added CustomerDetail interface to types for proper typing
+    
+    Features:
+    - Customer profile with name, email, phone, associated dealers
+    - Total purchase count & product count display
+    - Purchase history table with serialNumbers, warranty status, invoice links
+    - Warranty end date calculated from latest product warranty
+    - Proper JOIN queries to fetch related purchase items & invoice data
+    
+    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+[33mcommit 313345aa259e53ea6f2554eb550c70a9d54d775a[m[33m ([m[1;32mfeat/auth[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun Jun 7 15:45:23 2026 +0200
+
+    nggak tahuuu
+
+[33mcommit ba1bc51261097a115b2875cbda3892bf14269192[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Tue May 26 06:45:46 2026 +0200
+
+    feat : auth
+
+[33mcommit 08b1cc94e071902798a5acc32f12a4ae93e519ea[m[33m ([m[1;32mfeat/databases[m[33m, [m[1;32mdev[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Fri May 22 05:54:12 2026 +0200
+
+    feat : auth services
+
+[33mcommit 14a8fd4ef5a1c62530b154a2d8f4356e0aff35c1[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Thu May 21 00:18:36 2026 +0200
+
+    feat : databaase schema, migration, and seeds
+
+[33mcommit 7ae8380a7baba1004fb1ae8fee803502f3e979cb[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Mon May 18 18:39:08 2026 +0200
+
+    fix : project structure to src
+
+[33mcommit 589cabb77830917d1a1e2a5dbc5a88ae6d4efe5b[m[33m ([m[1;32mfeat/update-design[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Mon May 18 16:58:05 2026 +0200
+
+    feat : new design
+
+[33mcommit dd72ca0c583b6db6dc6e7a56bd5b6c27f287eabc[m[33m ([m[1;32mfeat/review-again[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Sun May 3 07:55:09 2026 +0200
+
+    feat: review phase 1
+
+[33mcommit 4a96000b0a82ddb847f6b171334b36a0c803696f[m[33m ([m[1;32mreport/auth[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Tue Mar 10 15:51:14 2026 +0700
+
+    fix : error lint
+
+[33mcommit 89f9eecde092414a57140b826a7142360ff5c02d[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Tue Mar 10 15:46:30 2026 +0700
+
+    fix : error lint
+
+[33mcommit 9955a69e50e8bc46eada6cce1b5d3ca79c419e16[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Tue Mar 10 15:41:41 2026 +0700
+
+    fix : error lint
+
+[33mcommit bf3b2f79c7d98bb4072c242fbd14e564b2c8ff57[m[33m ([m[1;32mfeat/package-pages[m[33m)[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Tue Mar 10 15:35:14 2026 +0700
+
+    fix : new features
+
+[33mcommit a669687153854958cf299a862d49990fb2d2952d[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Fri Mar 6 15:32:57 2026 +0700
+
+    fix : error
+
+[33mcommit 28e9f41f8e775a898f0ced50560882ae008a3801[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Fri Mar 6 15:32:39 2026 +0700
+
+    fix : error
+
+[33mcommit 9a0fc6ec89782a3fbb73d7115a67ccc0464e1f4d[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Fri Mar 6 14:42:43 2026 +0700
+
+    feat : ui
+
+[33mcommit 1495e877beab5c009ec3866fbe1dbd05a7a4945f[m
+Author: ariframaps <ariframaputra33@gmail.com>
+Date:   Tue Mar 3 09:03:40 2026 +0700
+
+    Initial commit from Create Next App

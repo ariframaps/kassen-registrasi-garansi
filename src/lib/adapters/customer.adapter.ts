@@ -13,9 +13,7 @@ export const customerAdapter = {
 			email: response.data.customer.email,
 			phone: response.data.customer.phone || "",
 			address: response.data.customer.address || "",
-			created_at: response.data.customer.created_at,
-			updated_at: response.data.customer.updated_at,
-			createdAt: response.data.customer.created_at,
+			createdAt: response.data.customer.createdAt.toISOString(),
 			dealers: response.data.dealers,
 			totalPurchases: response.data.totalPurchases,
 		};

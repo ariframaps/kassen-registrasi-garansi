@@ -315,7 +315,7 @@ export async function submitAccurateFile(
 	const productTypeMap = new Map(allProductTypes.map((pt) => [pt.id, pt]));
 
 	// Create product records by matching preview with parsed items
-	const productsToCreate = [];
+	const productsToCreate: ProductInsertSchema[] = [];
 	const validSerialNumbers = new Set(
 		preview.filter((p) => p.status === "valid").map((p) => p.serialNumber),
 	);
@@ -382,7 +382,7 @@ export async function submitAccurateFile(
 				await notificationService.checkAndNotifyProductMatch({
 					dealerId,
 					productsCreated: productsToCreate.map((p) => ({
-						id: p.id,
+						id: p.id!,
 						serialNumber: p.serialNumber,
 						productTypeId: p.productTypeId,
 					})),
@@ -417,7 +417,7 @@ export async function submitAccurateFile(
 			const purchaseItemsToCreate = productsToCreate.map((prod) => ({
 				id: crypto.randomUUID(),
 				purchaseId: purchaseId!,
-				productId: prod.id,
+				productId: prod.id!,
 			}));
 
 			if (purchaseItemsToCreate.length > 0) {

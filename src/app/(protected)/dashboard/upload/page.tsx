@@ -1621,7 +1621,7 @@ export default function UploadPage() {
 						? {
 								...q,
 								state: "previewing",
-								preview: data.preview,
+								preview: (data.preview as unknown) as PreviewRow[],
 								parsedItems: data.parsedItems,
 								validCount: data.validCount,
 								dupCount: data.dupCount,
