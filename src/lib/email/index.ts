@@ -1,8 +1,7 @@
   import fs from "fs";
   import path from "path";
   import { fileURLToPath } from "url";
-  import { SentMessageInfo } from "nodemailer";
-  import { siteConfig } from "@/configs/site.config";
+=  import { siteConfig } from "@/configs/site.config";
   import { envServer } from "../env-server";
   import { Resend } from 'resend';
 
@@ -55,10 +54,9 @@
       }),
     };
 
-    const info: SentMessageInfo = await resend.emails.send(message);
+    const info = await resend.emails.send(message);
 
-    if (info.rejected && info.rejected.includes(email))
-      throw new Error("Email ditolak oleh server tujuan.");
+    console.log("resend", info)
 
     console.log("✅ Email sent successfully : ");
 

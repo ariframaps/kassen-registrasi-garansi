@@ -116,7 +116,7 @@ export const auth = betterAuth({
 
 				if (type === "sign-in") {
 					console.log("📧 Attempting to send email via sendEmail...");
-					void sendEmail({
+					await sendEmail({
 						to: email,
 						subject: "Your OTP Code",
 						templateFileName: "otp",
@@ -146,7 +146,7 @@ export const auth = betterAuth({
 
 					if (result[0]) {
 						const userData = userSchema.parse(result[0]);
-						void sendEmail({
+						await sendEmail({
 							to: email,
 							subject: "Verifikasi Email - Akun Anda di Kassen Warranty",
 							templateFileName: "user-invitation",
@@ -165,7 +165,7 @@ export const auth = betterAuth({
 				}
 
 				// Fallback ke template generic
-				void sendEmail({
+				await sendEmail({
 					to: email,
 					subject: "Verifikasi Email Anda",
 					templateFileName: "email-verification",
