@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { SentMessageInfo } from "nodemailer";
 import { siteConfig } from "@/configs/site.config";
 import { transporter } from "../nodemailer";
+import { envServer } from "../env-server";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,7 +42,7 @@ export async function sendEmail({
 	templateVariables: TemplateVariables;
 }): Promise<void> {
 	const message = {
-		from: '"Kassen Warranty" <info@kassen.com.tw>',
+		from: `${siteConfig.SITE_NAME} <${envServer.SMTP_USER}`,
 		to: email,
 		subject: `${siteConfig.SITE_NAME} - ${subject}`,
 		html: renderEmailTemplate({
