@@ -36,10 +36,6 @@ export function normalizeError(error: unknown): NormalizedError {
 		return drizzleAdapter(error);
 	}
 
-	if (error instanceof Error && "code" in error) {
-		return nodemailerAdapter(error as NodemailerError);
-	}
-
 	// if (error instanceof Error) {
 	// 	const name = error.constructor?.name;
 
