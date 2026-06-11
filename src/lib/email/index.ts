@@ -1,7 +1,7 @@
   import fs from "fs";
   import path from "path";
   import { fileURLToPath } from "url";
-=  import { siteConfig } from "@/configs/site.config";
+  import { siteConfig } from "@/configs/site.config";
   import { envServer } from "../env-server";
   import { Resend } from 'resend';
 
