@@ -18,6 +18,7 @@ const serverEnvSchema = z.object({
   google_drive_access_token: z.string().min(1),
 	google_drive_folder_id: z.string().min(1),
 	google_drive_refresh_token: z.string().min(1),
+	RESEND_API_KEY: z.string().min(1),
 });
 
 expand(config());
