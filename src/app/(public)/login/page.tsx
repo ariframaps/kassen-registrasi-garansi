@@ -89,7 +89,10 @@ export default function LoginPage() {
 		try {
 			if (otp.length !== 6) throw new Error("Masukkan 6 digit kode OTP");
 			await authApi.verifyOtp({ email, otp });
-			refetch();
+      if(session){
+        const redirectUrl = getLoginRedirect(session.user.role);
+        router.push(redirectUrl);
+      }
 		} catch (error) {
 			if (error instanceof Error) setError(error.message);
 			else setError("Terrjadi kesalahan, silahkan coba lagi.");
