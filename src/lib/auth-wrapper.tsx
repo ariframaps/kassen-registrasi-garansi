@@ -19,7 +19,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
 		if (!isPending && !session && !isPublicPage) {
 			router.replace("/login");
 		}
-	}, [isPending, session, router, pathName]);
+	}, [isPending, session, router, isPublicPage]);
 
 	if (isPending) {
 		return (
