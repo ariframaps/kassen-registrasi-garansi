@@ -196,6 +196,26 @@ export const productCateogoryApi = {
 			method: "GET",
 		});
 	},
+
+	addNew: async (data: { name: string }) => {
+		return apiFetch<CategorySchema>("/product-categories", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	update: async (id: string, data: { name: string }) => {
+		return apiFetch<CategorySchema>(`/product-categories/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		});
+	},
+
+	delete: async (id: string) => {
+		return apiFetch<{ message: string }>(`/product-categories/${id}`, {
+			method: "DELETE",
+		});
+	},
 };
 
 export const purchaseApi = {

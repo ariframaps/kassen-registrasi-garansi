@@ -1,5 +1,10 @@
+import { NextResponse } from "next/server";
+import {
+	productCategoryService,
+	updateCategorySchema,
+} from "@/services/product-category.service";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
-import { errorResponse, successResponse } from "@/lib/api/api-response";
+import { successResponse, errorResponse } from "@/lib/api/api-response";
 import {
 	authenticationMiddleware,
 	authorizationMiddleware,
@@ -8,57 +13,16 @@ import { getHttpErrorStatus } from "@/lib/api/get-http-error-status";
 import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
-import { productService } from "@/services/product.service";
-import { productTypeService } from "@/services/product-type.service";
-import { NextResponse } from "next/server";
-import {
-	addCategorySchema,
-	productCategoryService,
-} from "@/services/product-category.service";
 
-export async function GET() {
-	try {
-		const session = await authenticationMiddleware();
-		await authorizationMiddleware({
-			allowedRole: ["admin", "sales"],
-			currentRole: session.user.role,
-		});
-
-		const data = await productCategoryService.getAll();
-
-		return NextResponse.json(
-			successResponse({
-				message: "Success",
-				data,
-			}),
-			{ status: HTTP_STATUS.OK.code },
-		);
-	} catch (error) {
-		if (error instanceof HttpError) {
-			return NextResponse.json(
-				errorResponse({
-					message: error.message,
-					issues: [],
-				}),
-				{ status: error.statusCode },
-			);
-		}
-
-		const normalized = normalizeError(error);
-		return NextResponse.json(
-			errorResponse({
-				message: getSafeErrorMessage(normalized),
-				issues: normalized.issues,
-			}),
-			{ status: getHttpErrorStatus(normalized) },
-		);
-	}
+interface RouteContext {
+	params: Promise<{ id: string }>;
 }
 
-export async function POST(request: Request) {
+export async function PUT(request: Request, context: RouteContext) {
 	try {
+		const { id } = await context.params;
 		const body = await request.json();
-		const parsedBody = addCategorySchema.parse(body);
+		const parsedBody = updateCategorySchema.parse(body);
 
 		const session = await authenticationMiddleware();
 		await authorizationMiddleware({
@@ -70,7 +34,7 @@ export async function POST(request: Request) {
 			request.headers.get("x-real-ip");
 		const userAgent = request.headers.get("user-agent");
 
-		const data = await productCategoryService.add(parsedBody, {
+		const data = await productCategoryService.update(id, parsedBody, {
 			userId: session.user.id,
 			ipAddress,
 			userAgent,
@@ -79,6 +43,48 @@ export async function POST(request: Request) {
 		return NextResponse.json(successResponse({ message: "Success", data }), {
 			status: HTTP_STATUS.OK.code,
 		});
+	} catch (error) {
+		if (error instanceof HttpError) {
+			return NextResponse.json(
+				errorResponse({ message: error.message, issues: [] }),
+				{ status: error.statusCode },
+			);
+		}
+		const normalized = normalizeError(error);
+		return NextResponse.json(
+			errorResponse({
+				message: getSafeErrorMessage(normalized),
+				issues: normalized.issues,
+			}),
+			{ status: getHttpErrorStatus(normalized) },
+		);
+	}
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+	try {
+		const { id } = await context.params;
+
+		const session = await authenticationMiddleware();
+		await authorizationMiddleware({
+			allowedRole: ["admin", "sales"],
+			currentRole: session.user.role,
+		});
+
+		const ipAddress = request.headers.get("x-forwarded-for") ||
+			request.headers.get("x-real-ip");
+		const userAgent = request.headers.get("user-agent");
+
+		await productCategoryService.delete(id, {
+			userId: session.user.id,
+			ipAddress,
+			userAgent,
+		});
+
+		return NextResponse.json(
+			successResponse({ message: "Success deleted", data: undefined }),
+			{ status: HTTP_STATUS.OK.code },
+		);
 	} catch (error) {
 		if (error instanceof HttpError) {
 			return NextResponse.json(
