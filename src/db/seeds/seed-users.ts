@@ -26,7 +26,7 @@ export async function seedUsers() {
 		{
 			id: USER_IDS.admin,
 			name: "Admin Utama",
-			email: "admin@company.com",
+			email: "ariframaps@gmail.com",
 			emailVerified: true,
 			role: "admin" as const,
 			status: "active" as const,
