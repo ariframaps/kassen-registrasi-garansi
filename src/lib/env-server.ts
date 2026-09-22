@@ -12,7 +12,6 @@ const serverEnvSchema = z.object({
 	SMTP_PASS: z.string().min(1),
 	SMTP_SECURE: z.string(),
 	SMTP_PORT: z.string().min(1),
-	JWT_SECRET: z.string().min(1),
 	google_drive_client_id: z.string().min(1),
 	google_drive_client_secret: z.string().min(1),
   google_drive_access_token: z.string().min(1),

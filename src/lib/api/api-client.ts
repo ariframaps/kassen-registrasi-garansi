@@ -41,19 +41,33 @@ async function apiFetch<T>(
 }
 
 export const authApi = {
-	sendOtp: async ({ email }: { email: string }) => {
-		const { error } = await authClient.emailOtp.sendVerificationOtp({
+	signIn: async ({ email, password }: { email: string; password: string }) => {
+		const { data, error } = await authClient.signIn.email({
 			email,
-			type: "sign-in",
+			password,
 		});
-		if (error) throw new Error(error.statusText);
+		if (error) throw new Error(error.message || error.statusText);
+		return data;
 	},
-	verifyOtp: async ({ email, otp }: { email: string; otp: string }) => {
-		const { error } = await authClient.signIn.emailOtp({
+	requestPasswordReset: async ({ email }: { email: string }) => {
+		const { error } = await authClient.requestPasswordReset({
 			email,
-			otp,
+			redirectTo: "/reset-password",
 		});
-		if (error) throw new Error(error.statusText);
+		if (error) throw new Error(error.message || error.statusText);
+	},
+	resetPassword: async ({
+		newPassword,
+		token,
+	}: {
+		newPassword: string;
+		token: string;
+	}) => {
+		const { error } = await authClient.resetPassword({
+			newPassword,
+			token,
+		});
+		if (error) throw new Error(error.message || error.statusText);
 	},
 };
 

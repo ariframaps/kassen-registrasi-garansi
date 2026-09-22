@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { hashPassword } from "better-auth/crypto";
 import { db } from "../";
 import { user, account } from "../schemas/auth-schema";
 
@@ -17,9 +17,7 @@ export const USER_IDS = {
 export async function seedUsers() {
 	console.log("🌱 Seeding users...");
 
-	const passwordHash = createHash("sha256")
-		.update("Password123!", "utf-8")
-		.digest("hex");
+	const passwordHash = await hashPassword("Password123!");
 	const now = new Date();
 
 	const users = [
@@ -130,7 +128,13 @@ export async function seedUsers() {
 		updatedAt: now,
 	}));
 
-	await db.insert(account).values(accounts).onConflictDoNothing();
+	await db
+		.insert(account)
+		.values(accounts)
+		.onConflictDoUpdate({
+			target: account.id,
+			set: { password: passwordHash, updatedAt: now },
+		});
 
 	console.log(`✅ Seeded ${users.length} users`);
 }
