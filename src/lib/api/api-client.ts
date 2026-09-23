@@ -2,6 +2,7 @@ import { ApiResponse } from "./api-response";
 import { authClient } from "../auth-client";
 import {
 	CategorySchema,
+	CustomerCategorySchema,
 	CustomerSchema,
 	DealerSchema,
 	ItemCodeInsertSchema,
@@ -18,7 +19,7 @@ import {
 } from "@/services/purchase.service";
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
 import { DealerProductResponse } from "@/services/dealer-product.service";
-import type { PurchaseGroup, Product } from "@/types";
+import type { PurchaseGroup, Product, Customer } from "@/types";
 
 async function apiFetch<T>(
 	input: RequestInfo,
@@ -473,10 +474,12 @@ export const customerApi = {
 	},
 
 	add: async (data: {
+		customId: string;
 		name: string;
 		email?: string;
 		phone?: string;
 		address?: string;
+		categoryId?: string | null;
 	}) => {
 		return apiFetch<CustomerSchema>("/customers", {
 			method: "POST",
@@ -484,9 +487,25 @@ export const customerApi = {
 		});
 	},
 
+	import: async (file: File) => {
+		const formData = new FormData();
+		formData.append("file", file);
+
+		return apiFetch<{
+			totalRows: number;
+			created: number;
+			updated: number;
+			skipped: number;
+			errors: { row: number; message: string }[];
+		}>("/customers/import", {
+			method: "POST",
+			body: formData,
+		});
+	},
+
 	getById: async (id: string) => {
 		return apiFetch<{
-			customer: CustomerSchema;
+			customer: Customer;
 			dealers: string[];
 			totalPurchases: number;
 			purchases: PurchaseGroup[];
@@ -506,11 +525,44 @@ export const customerApi = {
 			email: string;
 			phone?: string | null;
 			address?: string | null;
+			categoryId?: string | null;
 		},
 	) => {
 		return apiFetch<CustomerSchema>(`/customers/${id}`, {
 			method: "PUT",
 			body: JSON.stringify(data),
+		});
+	},
+
+	delete: async (id: string) => {
+		return apiFetch<undefined>(`/customers/${id}`, { method: "DELETE" });
+	},
+};
+
+export const customerCategoryApi = {
+	getAll: async () => {
+		return apiFetch<CustomerCategorySchema[]>("/customer-categories", {
+			method: "GET",
+		});
+	},
+
+	add: async (data: { name: string }) => {
+		return apiFetch<CustomerCategorySchema>("/customer-categories", {
+			method: "POST",
+			body: JSON.stringify(data),
+		});
+	},
+
+	update: async (id: string, data: { name: string }) => {
+		return apiFetch<CustomerCategorySchema>(`/customer-categories/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		});
+	},
+
+	delete: async (id: string) => {
+		return apiFetch<undefined>(`/customer-categories/${id}`, {
+			method: "DELETE",
 		});
 	},
 };

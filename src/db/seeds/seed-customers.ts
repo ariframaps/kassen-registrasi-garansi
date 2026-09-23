@@ -27,6 +27,7 @@ export async function seedCustomers() {
 	const customers = [
 		{
 			id: "cust_001",
+			customId: "cust_001",
 			name: "PT Bangun Jaya Abadi",
 			email: "procurement@bangunjaya.co.id",
 			phone: "021-55501234",
@@ -36,6 +37,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_002",
+			customId: "cust_002",
 			name: "CV Karya Mandiri Sejahtera",
 			email: "info@karyamandiri.com",
 			phone: "031-87654321",
@@ -45,6 +47,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_003",
+			customId: "cust_003",
 			name: "Toko Bangunan Sumber Makmur",
 			email: "sumbermakmur@gmail.com",
 			phone: "0274-345678",
@@ -54,6 +57,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_004",
+			customId: "cust_004",
 			name: "PT Konstruksi Nusantara",
 			email: "ops@konstruksinus.id",
 			phone: "022-76543210",
@@ -63,6 +67,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_005",
+			customId: "cust_005",
 			name: "Bapak Eko Prasetyo",
 			email: "eko.prasetyo@personal.com",
 			phone: "0812-3456-7890",
@@ -72,6 +77,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_006",
+			customId: "cust_006",
 			name: "UD Teknik Abadi",
 			email: "teknikabadi@yahoo.com",
 			phone: "0341-556677",
@@ -81,6 +87,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_007",
+			customId: "cust_007",
 			name: "PT Wahana Cipta Reksa",
 			email: "purchasing@wahanacipta.co.id",
 			phone: "024-89012345",
@@ -90,6 +97,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_008",
+			customId: "cust_008",
 			name: "Ibu Ratna Dewi",
 			email: "ratna.dewi@email.com",
 			phone: "0856-7890-1234",
@@ -99,6 +107,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_009",
+			customId: "cust_009",
 			name: "CV Mitra Teknik Perkasa",
 			email: "admin@mitrateknik.net",
 			phone: "0751-234567",
@@ -108,6 +117,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_010",
+			customId: "cust_010",
 			name: "PT Mega Konstruksi Utama",
 			email: "hrd@megakonstruksi.com",
 			phone: "061-99887766",
@@ -117,6 +127,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_011",
+			customId: "cust_011",
 			name: "Toko Alat Listrik Cahaya",
 			email: "alatlistrikcahaya@gmail.com",
 			phone: "0411-445566",
@@ -126,6 +137,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_012",
+			customId: "cust_012",
 			name: "Bapak Dian Nugroho",
 			email: "dian.nugroho@work.co.id",
 			phone: "0821-4567-8901",
@@ -135,6 +147,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_013",
+			customId: "cust_013",
 			name: "PT Fajar Indah Gemilang",
 			email: "info@fajarindah.co.id",
 			phone: "0561-778899",
@@ -144,6 +157,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_014",
+			customId: "cust_014",
 			name: "UD Alat Teknik Maju",
 			email: "alatteknikmaju@mail.com",
 			phone: "0370-123456",
@@ -153,6 +167,7 @@ export async function seedCustomers() {
 		},
 		{
 			id: "cust_015",
+			customId: "cust_015",
 			name: "CV Sentosa Karya Utama",
 			email: "sentosakarya@business.id",
 			phone: "0431-334455",

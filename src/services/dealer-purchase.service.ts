@@ -24,7 +24,7 @@ interface DealerPurchaseResponse {
 	customerProfile: {
 		id: string;
 		name: string;
-		email: string;
+		email: string | null;
 		phone: string | null;
 		address: string | null;
 	};
