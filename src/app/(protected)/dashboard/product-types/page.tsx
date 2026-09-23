@@ -125,6 +125,75 @@ function ItemCodeTag({
 	);
 }
 
+// ── Category Form Modal ──
+function CategoryModal({
+	open,
+	onClose,
+	onSave,
+	initial,
+}: {
+	open: boolean;
+	onClose: () => void;
+	onSave: (name: string) => Promise<void>;
+	initial?: CategorySchema;
+}) {
+	const [name, setName] = useState(initial?.name ?? "");
+	const [error, setError] = useState("");
+	const [loading, setLoading] = useState(false);
+
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	useLayoutEffect(() => {
+		if (!open) return;
+		setName(initial?.name ?? "");
+		setError("");
+	}, [open, initial]);
+
+	const handleSave = async () => {
+		if (!name.trim()) {
+			setError("Nama kategori wajib diisi");
+			return;
+		}
+		setLoading(true);
+		await onSave(name.trim());
+		setLoading(false);
+		onClose();
+	};
+
+	return (
+		<Modal
+			open={open}
+			onClose={onClose}
+			title={initial ? "Edit Kategori" : "Tambah Kategori"}
+			size="sm">
+			<div className="space-y-4">
+				<Input
+					label="Nama Kategori"
+					placeholder="Contoh: POS System"
+					value={name}
+					onChange={(e) => {
+						setName(e.target.value);
+						setError("");
+					}}
+					error={error}
+					required
+				/>
+				<div className="flex justify-end gap-2 pt-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={onClose}
+						disabled={loading}>
+						Batal
+					</Button>
+					<Button size="sm" onClick={handleSave} loading={loading}>
+						{initial ? "Simpan Perubahan" : "Tambah Kategori"}
+					</Button>
+				</div>
+			</div>
+		</Modal>
+	);
+}
+
 // ── Form Modal ──
 function ProductTypeModal({
 	open,
@@ -328,6 +397,15 @@ export default function ProductTypesPage() {
 	>();
 	const [deleteLoading, setDeleteLoading] = useState(false);
 
+	const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+	const [editingCategory, setEditingCategory] = useState<
+		CategorySchema | undefined
+	>();
+	const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<
+		CategorySchema | undefined
+	>();
+	const [deleteCategoryLoading, setDeleteCategoryLoading] = useState(false);
+
 	const { success, error: toastError } = useToast();
 
 	useEffect(() => {
@@ -418,6 +496,51 @@ export default function ProductTypesPage() {
 			router.refresh();
 		} else {
 			toastError("Gagal menghapus tipe produk", response.message);
+		}
+	};
+
+	const handleSaveCategory = async (name: string) => {
+		if (editingCategory) {
+			const response = await productCateogoryApi.update(editingCategory.id, {
+				name,
+			});
+			if (response.success && response.data) {
+				setCategories((prev) =>
+					prev.map((c) => (c.id === editingCategory.id ? response.data! : c)),
+				);
+				success("Kategori diperbarui", name);
+				router.refresh();
+			} else {
+				toastError("Gagal memperbarui kategori", response.message);
+			}
+		} else {
+			const response = await productCateogoryApi.addNew({ name });
+			if (response.success && response.data) {
+				setCategories((prev) => [...prev, response.data!]);
+				success("Kategori ditambahkan", name);
+				router.refresh();
+			} else {
+				toastError("Gagal menambahkan kategori", response.message);
+			}
+		}
+	};
+
+	const handleDeleteCategory = async () => {
+		if (!deleteCategoryTarget) return;
+		setDeleteCategoryLoading(true);
+
+		const response = await productCateogoryApi.delete(deleteCategoryTarget.id);
+		setDeleteCategoryLoading(false);
+
+		if (response.success) {
+			setCategories((prev) =>
+				prev.filter((c) => c.id !== deleteCategoryTarget.id),
+			);
+			setDeleteCategoryTarget(undefined);
+			success("Kategori berhasil dihapus");
+			router.refresh();
+		} else {
+			toastError("Gagal menghapus kategori", response.message);
 		}
 	};
 
@@ -573,6 +696,83 @@ export default function ProductTypesPage() {
 						);
 					})}
 				</div>
+
+				{/* Category management */}
+				<Card>
+					<CardHeader
+						title="Kategori Produk"
+						description="Kelola kategori yang digunakan untuk mengelompokkan tipe produk"
+						action={
+							<Button
+								size="sm"
+								variant="outline"
+								icon={<Plus size={13} />}
+								onClick={() => {
+									setEditingCategory(undefined);
+									setCategoryModalOpen(true);
+								}}>
+								Tambah Kategori
+							</Button>
+						}
+					/>
+					<Table>
+						<TableHead>
+							<TableHeader>Nama Kategori</TableHeader>
+							<TableHeader>Jumlah Tipe</TableHeader>
+							<TableHeader className="w-20"></TableHeader>
+						</TableHead>
+						<TableBody>
+							{categories.length === 0 ? (
+								<tr>
+									<td colSpan={3}>
+										<EmptyState
+											icon={<Tag size={18} />}
+											title="Belum ada kategori"
+											description="Tambahkan kategori produk pertama Anda"
+										/>
+									</td>
+								</tr>
+							) : (
+								categories.map((cat) => {
+									const count = types.filter(
+										(t) => t.categoryId === cat.id,
+									).length;
+									return (
+										<TableRow key={cat.id}>
+											<TableCell>
+												<span className="font-medium text-zinc-900">
+													{cat.name}
+												</span>
+											</TableCell>
+											<TableCell className="text-zinc-500 text-xs">
+												{count} tipe
+											</TableCell>
+											<TableCell>
+												<div className="flex gap-1">
+													<button
+														onClick={() => {
+															setEditingCategory(cat);
+															setCategoryModalOpen(true);
+														}}
+														className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+														title="Edit">
+														<Pencil size={13} />
+													</button>
+													<button
+														onClick={() => setDeleteCategoryTarget(cat)}
+														className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+														title="Hapus">
+														<Trash2 size={13} />
+													</button>
+												</div>
+											</TableCell>
+										</TableRow>
+									);
+								})
+							)}
+						</TableBody>
+					</Table>
+				</Card>
 
 				{/* Info box */}
 				<div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4">
@@ -737,6 +937,24 @@ export default function ProductTypesPage() {
 				confirmLabel="Hapus"
 				variant="danger"
 				loading={deleteLoading}
+			/>
+
+			<CategoryModal
+				open={categoryModalOpen}
+				onClose={() => setCategoryModalOpen(false)}
+				onSave={handleSaveCategory}
+				initial={editingCategory}
+			/>
+
+			<ConfirmModal
+				open={!!deleteCategoryTarget}
+				onClose={() => setDeleteCategoryTarget(undefined)}
+				onConfirm={handleDeleteCategory}
+				title="Hapus Kategori"
+				description={`Yakin ingin menghapus kategori "${deleteCategoryTarget?.name}"? Kategori yang masih memiliki tipe produk tidak dapat dihapus.`}
+				confirmLabel="Hapus"
+				variant="danger"
+				loading={deleteCategoryLoading}
 			/>
 		</div>
 	);

@@ -109,32 +109,30 @@
 			<p class="greeting">Halo {{name}},</p>
 
 			<p class="message">
-				Anda telah ditambahkan sebagai pengguna baru di sistem Kassen Warranty oleh Administrator.
-				Untuk mengaktifkan akun Anda dan melakukan login, silakan verifikasi alamat email Anda dengan mengklik tautan di bawah.
+				Untuk masuk ke sistem Kassen Warranty, silakan atur password akun Anda dengan mengklik tautan di bawah.
 			</p>
 
 			<div class="info-box">
 				<p><span class="info-label">Email:</span> <span class="info-value">{{email}}</span></p>
-				<p><span class="info-label">Role:</span> <span class="info-value">{{role}}</span></p>
 			</div>
 
 			<div class="button-container">
-				<a href="{{verificationLink}}" class="button">Verifikasi Email & Aktifkan Akun</a>
+				<a href="{{resetLink}}" class="button">Atur Password</a>
 			</div>
 
 			<div class="expiry">
-				⏱️ <strong>Tautan ini berlaku selama {{expiresIn}} menit.</strong> Setelah itu, Anda perlu meminta tautan baru dari Administrator.
+				⏱️ <strong>Tautan ini berlaku selama {{expiresIn}} menit.</strong> Setelah itu, Anda perlu meminta tautan baru.
 			</div>
 
 			<p class="message">
 				Jika tautan di atas tidak bekerja, salin dan buka URL berikut di browser Anda:
 			</p>
 			<p style="font-size: 12px; word-break: break-all; background-color: #f9fafb; padding: 10px; border-radius: 4px; color: #666;">
-				{{verificationLink}}
+				{{resetLink}}
 			</p>
 
 			<p class="message" style="margin-top: 30px; color: #999;">
-				Jika Anda tidak meminta akun ini, silakan hubungi Administrator sistem.
+				Jika Anda tidak meminta ini, abaikan email ini atau hubungi Administrator sistem.
 			</p>
 		</div>
 

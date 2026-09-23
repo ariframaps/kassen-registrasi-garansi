@@ -2,7 +2,6 @@
 // components/layout/sidebar.tsx
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-// import { useAuth } from "@/lib/auth-context";
 import {
 	LayoutDashboard,
 	Package,
@@ -20,7 +19,6 @@ import {
 	ScrollText,
 } from "lucide-react";
 import { siteConfig } from "@/configs/site.config";
-import { useAuth } from "@/lib/_auth-provider";
 import { authClient } from "@/lib/auth-client";
 
 interface NavItem {

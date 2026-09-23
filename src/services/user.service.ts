@@ -150,19 +150,19 @@ export const userService = {
 
 		const parsed = userSchema.parse(result);
 
-		// Trigger magic link via Better Auth API Server
+		// Kirim email undangan set password via Better Auth API Server
 		try {
-			await auth.api.signInMagicLink({
+			await auth.api.requestPasswordReset({
 				body: {
 					email: data.email,
-					callbackURL: "/",
+					redirectTo: "/reset-password",
 				},
 				headers: await headers(),
 			});
-		} catch (magicLinkError) {
+		} catch (passwordResetError) {
 			console.warn(
-				"⚠️ Magic link gagal dikirim, tapi user sudah dibuat:",
-				magicLinkError,
+				"⚠️ Email set password gagal dikirim, tapi user sudah dibuat:",
+				passwordResetError,
 			);
 		}
 
@@ -366,11 +366,11 @@ export const userService = {
 			throw new HttpError("User tidak ditemukan", HTTP_STATUS.NOT_FOUND.code);
 
 		try {
-			// Trigger magic link via Better Auth API Server
-			await auth.api.signInMagicLink({
+			// Kirim ulang email set password via Better Auth API Server
+			await auth.api.requestPasswordReset({
 				body: {
 					email: existing.email,
-					callbackURL: "/",
+					redirectTo: "/reset-password",
 				},
 				headers: await headers(),
 			});
@@ -457,16 +457,16 @@ export const userService = {
 		});
 
 		try {
-			// Trigger magic link via Better Auth API Server untuk email baru
-			await auth.api.signInMagicLink({
+			// Kirim email set password via Better Auth API Server untuk email baru
+			await auth.api.requestPasswordReset({
 				body: {
 					email: data.newEmail,
-					callbackURL: "/",
+					redirectTo: "/reset-password",
 				},
 				headers: await headers(),
 			});
-		} catch (magicLinkError) {
-			console.warn("⚠️ Magic link gagal dikirim:", magicLinkError);
+		} catch (passwordResetError) {
+			console.warn("⚠️ Email set password gagal dikirim:", passwordResetError);
 		}
 
 		const parsed = userSchema.parse(result[0]);
