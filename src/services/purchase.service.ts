@@ -4,7 +4,6 @@ import {
 	auditLog,
 	categorySchema,
 	customerSchema,
-	dealerSchema,
 	invoiceSchema,
 	product,
 	productSchema,
@@ -19,10 +18,11 @@ import {
 import { HttpError } from "@/lib/api/http-error";
 import { and, eq } from "drizzle-orm";
 import z from "zod";
+import { resolveDealersByRegisteredBy } from "./customer.service";
 
 export const purchaseWithNestedSchema = purchaseSchema
 	.extend({ customer: customerSchema })
-	.extend({ dealer: dealerSchema.nullable() })
+	.extend({ dealer: customerSchema.nullable() })
 	.extend({ registeredByUser: userSchema })
 	.extend({ invoice: invoiceSchema.nullable() });
 
@@ -76,12 +76,21 @@ export const purchaseService = {
 		const result = await db.query.purchase.findMany({
 			with: {
 				customer: true,
-				dealer: true,
 				registeredByUser: true,
 				invoice: true,
 			},
 		});
-		return purchaseWithNestedSchema.array().parse(result);
+
+		const dealerByUserId = await resolveDealersByRegisteredBy(
+			Array.from(new Set(result.map((p) => p.registeredBy))),
+		);
+
+		const withDealer = result.map((p) => ({
+			...p,
+			dealer: dealerByUserId.get(p.registeredBy) ?? null,
+		}));
+
+		return purchaseWithNestedSchema.array().parse(withDealer);
 	},
 
 	getAllPurchaseProductItem: async ({
@@ -129,7 +138,6 @@ export const purchaseService = {
 			where: eq(purchase.id, id),
 			with: {
 				customer: true,
-				dealer: true,
 				registeredByUser: true,
 				invoice: true,
 			},
@@ -140,7 +148,14 @@ export const purchaseService = {
 				HTTP_STATUS.BAD_GATEWAY.code,
 			);
 
-		const parsed = purchaseWithNestedSchema.parse(updated);
+		const dealerByUserId = await resolveDealersByRegisteredBy([
+			updated.registeredBy,
+		]);
+
+		const parsed = purchaseWithNestedSchema.parse({
+			...updated,
+			dealer: dealerByUserId.get(updated.registeredBy) ?? null,
+		});
 
 		await db.insert(auditLog).values({
 			id: crypto.randomUUID(),

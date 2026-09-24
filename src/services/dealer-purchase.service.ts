@@ -1,6 +1,6 @@
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { db } from "@/db";
-import { dealers, purchase } from "@/db/schema";
+import { customer, purchase } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
 import { eq } from "drizzle-orm";
 
@@ -42,9 +42,9 @@ export const dealerPurchaseService = {
 		items: DealerPurchaseResponse[];
 		dealerId: string;
 	}> => {
-		// Get dealer by userId
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, params.userId),
+		// Get dealer's own customer profile (a dealer is a customer with a linked user)
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, params.userId),
 		});
 
 		if (!dealer) {
@@ -54,9 +54,10 @@ export const dealerPurchaseService = {
 			);
 		}
 
-		// Get all purchases for this dealer
+		// Get all purchases registered by this dealer (purchase.customerId is always
+		// the end customer; the dealer who processed it is tracked via registeredBy)
 		const purchases = await db.query.purchase.findMany({
-			where: eq(purchase.dealerId, dealer.id),
+			where: eq(purchase.registeredBy, params.userId),
 			with: {
 				customer: true,
 				items: {

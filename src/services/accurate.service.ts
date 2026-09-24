@@ -2,7 +2,6 @@ import { db } from "@/db";
 import {
 	product,
 	deliveryOrders,
-	dealers,
 	customer,
 	productType,
 	itemCodeMapping,
@@ -20,7 +19,7 @@ import {
 	PreviewRow,
 } from "@/lib/parser-accurate";
 import { normalizeSerialNumber } from "@/lib/utils";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { notificationService } from "./notification.service";
 import { generateAutoCustomId } from "./customer.service";
 import crypto from "crypto";
@@ -213,8 +212,9 @@ export async function submitAccurateFile(
 			status: "active",
 		});
 
-		await db.insert(dealers).values({
+		await db.insert(customer).values({
 			id: crypto.randomUUID(),
+			customId: generateAutoCustomId(),
 			userId: newUserId,
 			name: pendingDealerCreation.name,
 			email: pendingDealerCreation.email,
@@ -237,13 +237,13 @@ export async function submitAccurateFile(
 		});
 	}
 
-	// Get dealer or customer ID
+	// Get dealer or customer ID (a dealer is a `customer` row with a linked user)
 	let dealerId: string | null = null;
 	let customerId: string | null = null;
 
 	if (destType === "dealer") {
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.name, destLabel),
+		const dealer = await db.query.customer.findFirst({
+			where: and(eq(customer.name, destLabel), isNotNull(customer.userId)),
 		});
 		if (!dealer) {
 			throw new Error(`Dealer '${destLabel}' tidak ditemukan`);
@@ -299,8 +299,7 @@ export async function submitAccurateFile(
 			orderRef: parsed.orderRef || null,
 			dcRef: parsed.area || null,
 			destinationType: destType,
-			destinationDealerId: dealerId,
-			destinationCustomerId: customerId,
+			destinationCustomerId: dealerId ?? customerId,
 			uploadedBy: userId,
 			fileHash: hash,
 			originalFilename: file.name,
@@ -359,7 +358,7 @@ export async function submitAccurateFile(
 					serialNumber: normalizedSn,
 					productTypeId: mapping.id,
 					deliveryOrderId: doId,
-					dealerId: dealerId,
+					customerId: dealerId,
 					status: "none" as const,
 				};
 
@@ -399,16 +398,30 @@ export async function submitAccurateFile(
 	// Create purchase record if purchaseData is provided (for end customer)
 	let purchaseId: string | null = null;
 	if (purchaseData && customerId && destType === "customer") {
+		// `purchase` no longer has a dealerId column (dealers are now customer rows).
+		// Best-effort: record which dealer facilitated the sale as a note, since
+		// there is currently no structured column to persist that link.
+		let notes = purchaseData.notes || null;
+		if (purchaseData.dealerId) {
+			const facilitatingDealer = await db.query.customer.findFirst({
+				where: eq(customer.id, purchaseData.dealerId),
+			});
+			if (facilitatingDealer) {
+				notes = [`Dijual melalui dealer: ${facilitatingDealer.name}`, notes]
+					.filter(Boolean)
+					.join(" — ");
+			}
+		}
+
 		const purchaseRecord = await db
 			.insert(purchase)
 			.values({
 				id: crypto.randomUUID(),
 				purchaseDate: purchaseData.purchaseDate,
 				customerId,
-				dealerId: purchaseData.dealerId || null,
 				registeredBy: userId,
 				source: purchaseData.dealerId ? "dealer" : "direct_sales",
-				notes: purchaseData.notes || null,
+				notes,
 			})
 			.returning();
 

@@ -2,7 +2,6 @@ import { db } from "@/db";
 import {
 	categorySchema,
 	customerSchema,
-	dealerSchema,
 	doSchema,
 	product,
 	ProductSchema,
@@ -27,7 +26,7 @@ export const productWithNestedSchema = productSchema
 		}),
 	})
 	.extend({
-		dealer: dealerSchema.nullable(),
+		customer: customerSchema.nullable(),
 	})
 	.extend({
 		deliveryOrder: doSchema.extend({
@@ -74,7 +73,7 @@ export const productService = {
 						category: true,
 					},
 				},
-				dealer: true,
+				customer: true,
 				deliveryOrder: {
 					with: {
 						customer: true,

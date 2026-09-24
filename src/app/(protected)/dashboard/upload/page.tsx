@@ -39,7 +39,8 @@ import {
 } from "lucide-react";
 import { normalizeSerialNumber } from "@/lib/utils";
 import { productCateogoryApi, productTypeApi, dealerApi, customerApi } from "@/lib/api/api-client";
-import { CategorySchema, DealerSchema, CustomerSchema } from "@/db/schema";
+import { CategorySchema, CustomerSchema } from "@/db/schema";
+import type { Dealer } from "@/types";
 
 // Simple fuzzy matching function
 function fuzzyMatch(searchText: string, targetText: string): number {
@@ -205,9 +206,9 @@ function FuzzyDealerModal({
 	onCreateNew: () => void;
 	onClose: () => void;
 }) {
-	const [allDealers, setAllDealers] = React.useState<DealerSchema[]>([]);
+	const [allDealers, setAllDealers] = React.useState<Dealer[]>([]);
 	const [displayedDealers, setDisplayedDealers] = React.useState<
-		(DealerSchema & { score: number })[]
+		(Dealer & { score: number })[]
 	>([]);
 	const [search, setSearch] = React.useState("");
 	const [loading, setLoading] = React.useState(true);

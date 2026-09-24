@@ -1,6 +1,6 @@
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { db } from "@/db";
-import { dealers, product, productType, warrantyCondition, auditLog, purchaseItem } from "@/db/schema";
+import { customer, product, productType, warrantyCondition, auditLog, purchaseItem } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
 import { and, eq, ilike, or, inArray } from "drizzle-orm";
 import z from "zod";
@@ -35,9 +35,9 @@ export const dealerProductService = {
 		pageSize: number;
 		dealerId: string;
 	}> => {
-		// Get dealer by userId
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, params.userId),
+		// Get dealer's own customer profile (a dealer is a customer with a linked user)
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, params.userId),
 		});
 
 		if (!dealer) {
@@ -50,7 +50,7 @@ export const dealerProductService = {
 		const limit = Math.min(params.pageSize, 100);
 		const offset = (params.page - 1) * limit;
 
-		const filters: unknown[] = [eq(product.dealerId, dealer.id)];
+		const filters: unknown[] = [eq(product.customerId, dealer.id)];
 
 		if (params.search) {
 			filters.push(

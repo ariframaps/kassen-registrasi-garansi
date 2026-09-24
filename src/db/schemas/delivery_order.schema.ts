@@ -9,7 +9,6 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { relations } from "drizzle-orm";
-import { dealers } from "./dealer.schema";
 import { customer } from "./customer.schema";
 import { timestamps } from "../utils/column.helper";
 import { product } from "./product.schema";
@@ -43,11 +42,6 @@ export const deliveryOrders = pgTable(
 
 		destinationType: destinationTypeEnum("destination_type").notNull(),
 
-		destinationDealerId: text("destination_dealer_id").references(
-			() => dealers.id,
-			{ onDelete: "set null" },
-		),
-
 		destinationCustomerId: text("destination_customer_id").references(
 			() => customer.id,
 			{ onDelete: "set null" },
@@ -80,11 +74,6 @@ export const deliveryOrdersRelations = relations(
 		uploadedByUser: one(user, {
 			fields: [deliveryOrders.uploadedBy],
 			references: [user.id],
-		}),
-
-		dealer: one(dealers, {
-			fields: [deliveryOrders.destinationDealerId],
-			references: [dealers.id],
 		}),
 
 		customer: one(customer, {

@@ -162,7 +162,7 @@ export async function seedProducts() {
 			serialNumber: generateSerialNumber(typeKey, i + 1),
 			productTypeId,
 			deliveryOrderId,
-			dealerId,
+			customerId: dealerId,
 			status,
 			warrantyStartDate,
 			warrantyEndDate,

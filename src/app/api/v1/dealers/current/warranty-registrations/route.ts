@@ -11,7 +11,6 @@ import { uploadInvoiceToDrive } from "@/lib/google-drive";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
-import { dealers } from "@/db/schema";
 import { generateAutoCustomId } from "@/services/customer.service";
 import { eq, inArray } from "drizzle-orm";
 
@@ -33,8 +32,8 @@ export async function POST(req: NextRequest) {
 		});
 
 		// Get dealer
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, session.user.id),
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, session.user.id),
 		});
 
 		if (!dealer) {
@@ -95,7 +94,7 @@ export async function POST(req: NextRequest) {
 		// Get products and validate they exist and belong to dealer
 		const products = await db.query.product.findMany({
 			where: (p, { and, inArray, eq: eqFn }) =>
-				and(inArray(p.serialNumber, selectedSNs), eqFn(p.dealerId, dealer.id)),
+				and(inArray(p.serialNumber, selectedSNs), eqFn(p.customerId, dealer.id)),
 			with: { productType: true },
 		});
 
@@ -135,7 +134,6 @@ export async function POST(req: NextRequest) {
 			id: purchaseId,
 			purchaseDate,
 			customerId: cust.id,
-			dealerId: dealer.id,
 			registeredBy: session.user.id,
 			source: "dealer",
 		});

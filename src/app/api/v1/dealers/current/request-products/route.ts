@@ -12,7 +12,7 @@ import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { notificationService } from "@/services/notification.service";
 import { db } from "@/db";
-import { dealers } from "@/db/schema";
+import { customer } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const requestProductSchema = z.object({
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
 		});
 
 		// Get dealer by userId
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, session.user.id),
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, session.user.id),
 		});
 
 		if (!dealer) {

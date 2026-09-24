@@ -1,6 +1,6 @@
 {
-  "id": "c69c28b7-92e4-408f-a2af-89b472734983",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "2faa5ccd-ad4b-4744-bb61-5b46d2154cd6",
+  "prevId": "80a60a4a-30c3-47a9-828a-6827a03d1e53",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -396,7 +396,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'ecfc6591-9c00-4a2e-b6ed-ceb9588ef055'"
+          "default": "'51911719-b4dc-4f1f-a8cb-64a9462a626e'"
         },
         "custom_id": {
           "name": "custom_id",
@@ -527,7 +527,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'90e23789-62ff-4959-9b80-9e1d748ad85f'"
+          "default": "'82bf1ba7-56f7-476d-90c7-5636d9cb748a'"
         },
         "name": {
           "name": "name",
@@ -581,7 +581,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'2cfe302e-aa02-4026-b526-474c9ce17433'"
+          "default": "'3dd2ade3-ebe5-4431-a523-619428702cac'"
         },
         "name": {
           "name": "name",
@@ -635,7 +635,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'c5a9f1ed-4957-499f-a687-2d043cef43a1'"
+          "default": "'31916039-ca8b-4aa8-ac9c-df99a60e7b7e'"
         },
         "category_id": {
           "name": "category_id",
@@ -724,7 +724,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'898f5097-1a8a-427c-acb9-ad1d61962830'"
+          "default": "'5a2426dc-2df1-4b96-afce-79b0040a6ff5'"
         },
         "item_code": {
           "name": "item_code",
@@ -798,7 +798,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'eb603233-6889-4107-8050-f5e63a906329'"
+          "default": "'7578c62f-1c63-466f-917e-141dc97c9a80'"
         },
         "do_number": {
           "name": "do_number",
@@ -956,7 +956,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'0beea556-1ed2-41a4-a23a-c95642da19c9'"
+          "default": "'fd5d5df1-0e27-4988-8d4f-a8000240a1f4'"
         },
         "serial_number": {
           "name": "serial_number",
@@ -1134,7 +1134,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'b75c6371-34f9-49fe-b5e0-0ab05ff7d758'"
+          "default": "'ba8e8096-b4f0-4406-a193-9863c58680d0'"
         },
         "purchase_date": {
           "name": "purchase_date",
@@ -1248,7 +1248,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'f67ca7cc-d5ef-40da-a93f-dd1ef6b52b72'"
+          "default": "'f5e51533-b034-422d-95b8-20d26e6ec8f5'"
         },
         "purchase_id": {
           "name": "purchase_id",
@@ -1338,7 +1338,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'3160188c-dbf4-48dd-ac04-071904b1e566'"
+          "default": "'c5c955a5-a965-4bbf-956b-7c095d708795'"
         },
         "purchase_id": {
           "name": "purchase_id",
@@ -1536,7 +1536,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'29448740-544d-44f4-bb45-af4eebea8706'"
+          "default": "'6dba1561-0110-462b-9051-3efd2ff07654'"
         },
         "serial_number_requested": {
           "name": "serial_number_requested",
@@ -1743,7 +1743,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'48b35b36-e0b0-4205-9890-2574310538c2'"
+          "default": "'78d221cb-91b7-477c-945f-5ef949fe0e95'"
         },
         "user_id": {
           "name": "user_id",

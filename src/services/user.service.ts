@@ -4,8 +4,7 @@ import {
 	user,
 	userSchema,
 	UserSchema,
-	dealers,
-	dealerSchema,
+	customer,
 	auditLog,
 } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
@@ -21,28 +20,9 @@ const userFormFields = {
 	role: z.enum(["admin", "sales", "dealer", "technical_support"]),
 };
 
-const dealerFields = {
-	dealerName: z
-		.string()
-		.min(1, "Nama perusahaan wajib diisi")
-		.nullable()
-		.optional(),
-	dealerPhone: z
-		.string()
-		.max(50)
-		.nullable()
-		.optional()
-		.transform((v) => (v === "" ? null : v)),
-	dealerAddress: z
-		.string()
-		.nullable()
-		.optional()
-		.transform((v) => (v === "" ? null : v)),
-};
-
 export const addUserSchema = z.object({
 	...userFormFields,
-	...dealerFields,
+	customerId: z.string().trim().min(1).optional().nullable(),
 });
 export type AddUserPayload = z.infer<typeof addUserSchema>;
 
@@ -105,22 +85,31 @@ export const userService = {
 			});
 
 			if (data.role === "dealer") {
-				if (!data.dealerName) {
+				if (!data.customerId) {
 					throw new HttpError(
-						"Nama perusahaan wajib diisi untuk dealer",
+						"Pilih dealer yang akan ditautkan",
 						HTTP_STATUS.BAD_REQUEST.code,
 					);
 				}
 
-				await tx.insert(dealers).values({
-					id: crypto.randomUUID(),
-					userId: newUserId,
-					name: data.dealerName,
-					email: data.email,
-					phone: data.dealerPhone ?? null,
-					address: data.dealerAddress ?? null,
-					status: "active",
+				const existingCustomer = await tx.query.customer.findFirst({
+					where: eq(customer.id, data.customerId),
 				});
+				if (!existingCustomer)
+					throw new HttpError(
+						"Dealer tidak ditemukan",
+						HTTP_STATUS.NOT_FOUND.code,
+					);
+				if (existingCustomer.userId)
+					throw new HttpError(
+						"Dealer ini sudah ditautkan ke user lain",
+						HTTP_STATUS.CONFLICT.code,
+					);
+
+				await tx
+					.update(customer)
+					.set({ userId: newUserId, updatedAt: new Date() })
+					.where(eq(customer.id, data.customerId));
 			}
 
 			await tx.insert(auditLog).values({
@@ -203,22 +192,6 @@ export const userService = {
 				HTTP_STATUS.BAD_GATEWAY.code,
 			);
 
-		if (existing.role === "dealer" || data.role === "dealer") {
-			const dealerRecord = await db.query.dealers.findFirst({
-				where: eq(dealers.userId, id),
-			});
-
-			if (dealerRecord) {
-				await db
-					.update(dealers)
-					.set({
-						status: data.status === "active" ? "active" : "inactive",
-						updatedAt: new Date(),
-					})
-					.where(eq(dealers.userId, id));
-			}
-		}
-
 		await db.insert(auditLog).values({
 			id: crypto.randomUUID(),
 			userId: audit.userId,
@@ -257,21 +230,6 @@ export const userService = {
 
 		if (!result[0])
 			throw new HttpError("Gagal menghapus user", HTTP_STATUS.BAD_GATEWAY.code);
-
-		if (existing.role === "dealer") {
-			const dealerRecord = await db.query.dealers.findFirst({
-				where: eq(dealers.userId, id),
-			});
-			if (dealerRecord) {
-				await db
-					.update(dealers)
-					.set({
-						status: "inactive",
-						updatedAt: new Date(),
-					})
-					.where(eq(dealers.userId, id));
-			}
-		}
 
 		await db.insert(auditLog).values({
 			id: crypto.randomUUID(),
@@ -324,16 +282,6 @@ export const userService = {
 				"Gagal mengubah status user",
 				HTTP_STATUS.BAD_GATEWAY.code,
 			);
-
-		if (existing.role === "dealer") {
-			await db
-				.update(dealers)
-				.set({
-					status: newStatus === "active" ? "active" : "inactive",
-					updatedAt: new Date(),
-				})
-				.where(eq(dealers.userId, id));
-		}
 
 		await db.insert(auditLog).values({
 			id: crypto.randomUUID(),
@@ -405,6 +353,12 @@ export const userService = {
 		if (!existing)
 			throw new HttpError("User tidak ditemukan", HTTP_STATUS.NOT_FOUND.code);
 
+		if (data.newEmail === existing.email)
+			throw new HttpError(
+				"Email baru harus berbeda dari email saat ini",
+				HTTP_STATUS.BAD_REQUEST.code,
+			);
+
 		const existingEmail = await db.query.user.findFirst({
 			where: eq(user.email, data.newEmail),
 		});
@@ -426,17 +380,17 @@ export const userService = {
 			throw new HttpError("Gagal mengubah email", HTTP_STATUS.BAD_GATEWAY.code);
 
 		if (existing.role === "dealer") {
-			const dealerRecord = await db.query.dealers.findFirst({
-				where: eq(dealers.userId, id),
+			const dealerRecord = await db.query.customer.findFirst({
+				where: eq(customer.userId, id),
 			});
 			if (dealerRecord) {
 				await db
-					.update(dealers)
+					.update(customer)
 					.set({
 						email: data.newEmail,
 						updatedAt: new Date(),
 					})
-					.where(eq(dealers.userId, id));
+					.where(eq(customer.userId, id));
 			}
 		}
 
@@ -457,16 +411,16 @@ export const userService = {
 		});
 
 		try {
-			// Kirim email set password via Better Auth API Server untuk email baru
-			await auth.api.requestPasswordReset({
+			// Kirim email verifikasi untuk email baru (tanpa headers, agar tidak
+			// terdeteksi sebagai sesi admin yang mengubah email user lain)
+			await auth.api.sendVerificationEmail({
 				body: {
 					email: data.newEmail,
-					redirectTo: "/reset-password",
+					callbackURL: "/login",
 				},
-				headers: await headers(),
 			});
-		} catch (passwordResetError) {
-			console.warn("⚠️ Email set password gagal dikirim:", passwordResetError);
+		} catch (verificationError) {
+			console.warn("⚠️ Email verifikasi gagal dikirim:", verificationError);
 		}
 
 		const parsed = userSchema.parse(result[0]);

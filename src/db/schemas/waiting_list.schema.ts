@@ -10,7 +10,7 @@ import {
 
 import { relations } from "drizzle-orm";
 
-import { dealers } from "./dealer.schema";
+import { customer } from "./customer.schema";
 import { product } from "./product.schema";
 import { user } from "./auth-schema";
 import { productType } from "./product_type.schema";
@@ -52,7 +52,7 @@ export const waitingList = pgTable(
 			length: 50,
 		}),
 
-		dealerId: text("dealer_id").references(() => dealers.id, {
+		customerId: text("customer_id").references(() => customer.id, {
 			onDelete: "set null",
 		}),
 
@@ -89,14 +89,14 @@ export const waitingList = pgTable(
 
 		index().on(table.status, table.createdAt),
 
-		index().on(table.dealerId),
+		index().on(table.customerId),
 	],
 );
 
 export const waitingListRelations = relations(waitingList, ({ one }) => ({
-	dealer: one(dealers, {
-		fields: [waitingList.dealerId],
-		references: [dealers.id],
+	customer: one(customer, {
+		fields: [waitingList.customerId],
+		references: [customer.id],
 	}),
 
 	product: one(product, {

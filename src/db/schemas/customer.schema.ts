@@ -5,6 +5,9 @@ import { timestamps } from "../utils/column.helper";
 
 import { purchase } from "./purchase.schema";
 import { customerCategory } from "./customer_category.schema";
+import { product } from "./product.schema";
+import { waitingList } from "./waiting_list.schema";
+import { user } from "./auth-schema";
 import { createSelectSchema } from "drizzle-zod";
 import z from "zod";
 
@@ -13,6 +16,8 @@ export const customer = pgTable("customer", {
 	id: text("id").default(crypto.randomUUID()).primaryKey(),
 
 	customId: varchar("custom_id", { length: 100 }).notNull().unique(),
+
+	userId: text("user_id").references(() => user.id).unique(),
 
 	categoryId: text("category_id").references(() => customerCategory.id, {
 		onDelete: "set null",
@@ -43,5 +48,14 @@ export const customersRelations = relations(customer, ({ one, many }) => ({
 		references: [customerCategory.id],
 	}),
 
+	user: one(user, {
+		fields: [customer.userId],
+		references: [user.id],
+	}),
+
 	purchases: many(purchase),
+
+	products: many(product),
+
+	waitingList: many(waitingList),
 }));

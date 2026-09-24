@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779531391241,
+      "tag": "0000_friendly_caretaker",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779531476422,
+      "tag": "0001_rapid_vulture",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779531510874,
+      "tag": "0002_perpetual_sabretooth",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779531580592,
+      "tag": "0003_calm_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779629876122,
+      "tag": "0004_lowly_angel",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779716237916,
+      "tag": "0005_lying_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780850731825,
+      "tag": "0006_real_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781083825129,
+      "tag": "0007_fixed_titania",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790116279385,
+      "tag": "0008_chubby_mach_iv",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790238786393,
+      "tag": "0009_brown_reavers",
+      "breakpoints": true
+    }
+  ]
+}

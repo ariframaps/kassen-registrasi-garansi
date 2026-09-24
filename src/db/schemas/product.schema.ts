@@ -17,7 +17,7 @@ import {
 
 import { productType } from "./product_type.schema";
 import { deliveryOrders } from "./delivery_order.schema";
-import { dealers } from "./dealer.schema";
+import { customer } from "./customer.schema";
 import { timestamps } from "../utils/column.helper";
 import { purchaseItem } from "./purchase_item.schema";
 import { warrantyCondition } from "./warranty_condition.schema";
@@ -47,7 +47,7 @@ export const product = pgTable(
 				onDelete: "restrict",
 			}),
 
-		dealerId: text("dealer_id").references(() => dealers.id, {
+		customerId: text("customer_id").references(() => customer.id, {
 			onDelete: "set null",
 		}),
 
@@ -60,7 +60,7 @@ export const product = pgTable(
 		...timestamps,
 	},
 	(table) => [
-		index().on(table.dealerId),
+		index().on(table.customerId),
 
 		index().on(table.productTypeId),
 
@@ -88,9 +88,9 @@ export const productsRelations = relations(product, ({ one, many }) => ({
 		references: [deliveryOrders.id],
 	}),
 
-	dealer: one(dealers, {
-		fields: [product.dealerId],
-		references: [dealers.id],
+	customer: one(customer, {
+		fields: [product.customerId],
+		references: [customer.id],
 	}),
 
 	purchaseItem: one(purchaseItem),

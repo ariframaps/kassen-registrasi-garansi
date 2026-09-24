@@ -10,10 +10,9 @@ import {
 	purchaseItem,
 	product,
 	invoice,
-	dealers,
 } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
-import { eq } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import z from "zod";
 import crypto from "crypto";
 import * as XLSX from "xlsx";
@@ -94,6 +93,25 @@ const IMPORT_HEADER_MAP: Record<string, string[]> = {
 	address: ["alamat"],
 };
 
+// `purchase.customerId` is always the end customer; the dealer who processed
+// a purchase (if any) is only recoverable via registeredBy -> customer.userId,
+// which only resolves when the purchase was self-registered by a dealer account.
+export async function resolveDealersByRegisteredBy(
+	registeredByIds: string[],
+): Promise<Map<string, CustomerSchema>> {
+	if (registeredByIds.length === 0) return new Map();
+
+	const dealerCustomers = await db.query.customer.findMany({
+		where: inArray(customer.userId, registeredByIds),
+	});
+
+	return new Map(
+		dealerCustomers
+			.filter((c) => c.userId)
+			.map((c) => [c.userId as string, customerSchema.parse(c)]),
+	);
+}
+
 function getRowValue(
 	row: Record<string, unknown>,
 	candidates: string[],
@@ -111,6 +129,23 @@ function getRowValue(
 export const customerService = {
 	getAll: async (): Promise<CustomerSchema[]> => {
 		const result = await db.query.customer.findMany({});
+		return customerSchema.array().parse(result);
+	},
+
+	// Customers not yet linked to a dashboard login — eligible to become a dealer.
+	getAvailableForDealer: async (search?: string): Promise<CustomerSchema[]> => {
+		const conditions = [isNull(customer.userId)];
+		if (search && search.trim()) {
+			const term = `%${search.trim()}%`;
+			conditions.push(
+				or(ilike(customer.name, term), ilike(customer.customId, term))!,
+			);
+		}
+
+		const result = await db.query.customer.findMany({
+			where: and(...conditions),
+			limit: 20,
+		});
 		return customerSchema.array().parse(result);
 	},
 
@@ -190,7 +225,6 @@ export const customerService = {
 		const result = await db.query.purchase.findMany({
 			where: eq(purchase.customerId, customerId),
 			with: {
-				dealer: true,
 				items: {
 					with: {
 						product: true,
@@ -201,7 +235,12 @@ export const customerService = {
 			orderBy: (purchase, { desc }) => [desc(purchase.purchaseDate)],
 		});
 
+		const dealerByUserId = await resolveDealersByRegisteredBy(
+			Array.from(new Set(result.map((p) => p.registeredBy))),
+		);
+
 		return result.map((p) => {
+			const dealer = dealerByUserId.get(p.registeredBy) ?? null;
 			const warrantyDates = p.items
 				.map((item) => {
 					const endDate = item.product.warrantyEndDate as string | Date | null | undefined;
@@ -217,8 +256,8 @@ export const customerService = {
 			return {
 				id: p.id,
 				serialNumbers: p.items.map((item) => item.product.serialNumber),
-				dealerName: p.dealer?.name ?? null,
-				dealerId: p.dealerId ?? undefined,
+				dealerName: dealer?.name ?? null,
+				dealerId: dealer?.id ?? undefined,
 				purchaseDate: p.purchaseDate,
 				warrantyEndDate: latestWarrantyDate,
 				invoiceUrl: p.invoice?.storagePath ?? null,
@@ -248,12 +287,16 @@ export const customerService = {
 
 		const purchases = await db.query.purchase.findMany({
 			where: eq(purchase.customerId, customerId),
-			with: { dealer: true },
 		});
+
+		const dealerByUserId = await resolveDealersByRegisteredBy(
+			Array.from(new Set(purchases.map((p) => p.registeredBy))),
+		);
 
 		const dealerSet = new Set<string>();
 		purchases.forEach((p) => {
-			if (p.dealer?.name) dealerSet.add(p.dealer.name);
+			const dealer = dealerByUserId.get(p.registeredBy);
+			if (dealer?.name) dealerSet.add(dealer.name);
 		});
 
 		return {

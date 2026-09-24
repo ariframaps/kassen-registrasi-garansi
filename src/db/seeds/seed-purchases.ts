@@ -3,7 +3,6 @@ import { purchase } from "../schemas/purchase.schema";
 import { purchaseItem } from "../schemas/purchase_item.schema";
 import { invoice } from "../schemas/invoice.schema";
 import { USER_IDS } from "./seed-users";
-import { DEALER_IDS } from "./seed-dealers";
 import { CUSTOMER_IDS } from "./seed-customers";
 import { ASSIGNED_PRODUCT_IDS, WARRANTY_PRODUCT_IDS } from "./seed-products";
 
@@ -33,7 +32,13 @@ export async function seedPurchasesAndInvoices() {
 	];
 
 	const registeredByUsers = [USER_IDS.sales1, USER_IDS.sales2, USER_IDS.admin];
-	const dealerList = [DEALER_IDS.pratama, DEALER_IDS.maju, DEALER_IDS.sakti];
+	// Dealer-sourced purchases are self-registered by the dealer's own user account
+	// (purchase.registeredBy = customer.userId), since purchase no longer has a dealerId FK.
+	const dealerRegisteredByUsers = [
+		USER_IDS.dealer1,
+		USER_IDS.dealer2,
+		USER_IDS.dealer3,
+	];
 
 	const purchaseDates = [
 		"2024-01-20",
@@ -92,16 +97,16 @@ export async function seedPurchasesAndInvoices() {
 		PURCHASE_IDS.push(purchaseId);
 
 		const source = purchaseSources[i];
-		const dealerId =
-			source === "dealer" ? dealerList[i % dealerList.length] : null;
 		const customerId = CUSTOMER_IDS[i % CUSTOMER_IDS.length];
-		const registeredBy = registeredByUsers[i % registeredByUsers.length];
+		const registeredBy =
+			source === "dealer"
+				? dealerRegisteredByUsers[i % dealerRegisteredByUsers.length]
+				: registeredByUsers[i % registeredByUsers.length];
 
 		purchases.push({
 			id: purchaseId,
 			purchaseDate: purchaseDates[i],
 			customerId,
-			dealerId,
 			registeredBy,
 			source,
 			notes: purchaseNotes[i % purchaseNotes.length],

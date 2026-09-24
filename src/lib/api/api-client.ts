@@ -4,7 +4,6 @@ import {
 	CategorySchema,
 	CustomerCategorySchema,
 	CustomerSchema,
-	DealerSchema,
 	ItemCodeInsertSchema,
 	ItemCodeMapsSchema,
 	ProductSchema,
@@ -19,7 +18,7 @@ import {
 } from "@/services/purchase.service";
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
 import { DealerProductResponse } from "@/services/dealer-product.service";
-import type { PurchaseGroup, Product, Customer } from "@/types";
+import type { PurchaseGroup, Product, Customer, Dealer } from "@/types";
 
 async function apiFetch<T>(
 	input: RequestInfo,
@@ -47,7 +46,14 @@ export const authApi = {
 			email,
 			password,
 		});
-		if (error) throw new Error(error.message || error.statusText);
+		if (error) {
+			// Selalu tampilkan pesan generik agar email yang tidak terdaftar
+			// dan password yang salah tidak bisa dibedakan oleh pengguna.
+			if (error.code === "INVALID_EMAIL_OR_PASSWORD") {
+				throw new Error("Email atau password salah");
+			}
+			throw new Error(error.message || error.statusText);
+		}
 		return data;
 	},
 	requestPasswordReset: async ({ email }: { email: string }) => {
@@ -274,7 +280,7 @@ export const purchaseApi = {
 
 export const dealerApi = {
 	getAll: async () => {
-		return apiFetch<DealerSchema[]>("/dealers", { method: "GET" });
+		return apiFetch<Dealer[]>("/dealers", { method: "GET" });
 	},
 
 	validate: async (data: {
@@ -294,7 +300,7 @@ export const dealerApi = {
 		phone?: string;
 		address?: string;
 	}) => {
-		return apiFetch<DealerSchema>("/dealers", {
+		return apiFetch<Dealer>("/dealers", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
@@ -309,14 +315,14 @@ export const dealerApi = {
 			address?: string | null;
 		},
 	) => {
-		return apiFetch<DealerSchema>(`/dealers/${id}`, {
+		return apiFetch<Dealer>(`/dealers/${id}`, {
 			method: "PUT",
 			body: JSON.stringify(data),
 		});
 	},
 
 	toggleStatus: async (id: string) => {
-		return apiFetch<DealerSchema>(`/dealers/${id}`, { method: "PATCH" });
+		return apiFetch<Dealer>(`/dealers/${id}`, { method: "PATCH" });
 	},
 
 	getProducts: async ({
@@ -518,6 +524,16 @@ export const customerApi = {
 		});
 	},
 
+	getAvailableForDealer: async ({ search }: { search?: string } = {}) => {
+		const params = new URLSearchParams();
+		if (search) params.set("search", search);
+
+		return apiFetch<CustomerSchema[]>(
+			`/customers/available-for-dealer?${params.toString()}`,
+			{ method: "GET" },
+		);
+	},
+
 	update: async (
 		id: string,
 		data: {
@@ -624,9 +640,7 @@ export const userApi = {
 		name: string;
 		email: string;
 		role: "admin" | "sales" | "dealer" | "technical_support";
-		dealerName?: string | null;
-		dealerPhone?: string | null;
-		dealerAddress?: string | null;
+		customerId?: string | null;
 	}) => {
 		return apiFetch<UserSchema>("/users", {
 			method: "POST",

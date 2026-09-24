@@ -85,7 +85,7 @@ export function ReassignModal({
 						</p>
 						<div className="flex items-center gap-2 mt-2">
 							<Badge variant="neutral">
-								{product.dealer?.name ?? "Tidak ada dealer"}
+								{product.customer?.name ?? "Tidak ada dealer"}
 							</Badge>
 							<ArrowRight size={12} className="text-zinc-400" />
 							{selectedDealerId ? (
