@@ -1,6 +1,6 @@
 export const authConfig = {
 	// better auth rate limit
-	RATE_LIMIT_MAX_REQUEST: 1,
+	RATE_LIMIT_MAX_REQUEST: 15,
 	RATE_LIMIT_TIME_WINDOW: 30,
 
 	// better auth password reset
