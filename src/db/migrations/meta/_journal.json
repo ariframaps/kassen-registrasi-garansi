@@ -8,6 +8,27 @@
       "when": 1790243390336,
       "tag": "0000_chief_unus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790262163438,
+      "tag": "0001_panoramic_blue_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790262176159,
+      "tag": "0002_living_silver_fox",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790262480135,
+      "tag": "0003_superb_multiple_man",
+      "breakpoints": true
     }
   ]
 }
