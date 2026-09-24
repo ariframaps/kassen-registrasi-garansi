@@ -711,17 +711,14 @@ export const uploadApi = {
 
 	uploadAccurateFile: async (
 		file: File,
-		destType: "dealer" | "customer",
-		destLabel: string,
-		pendingDealerCreation?: {
-			name: string;
-			email: string;
-			phone?: string;
-		},
+		selectedCustomerId?: string,
 		pendingCustomerCreation?: {
+			customId: string;
 			name: string;
-			email?: string;
+			categoryId: string;
 			phone?: string;
+			address?: string;
+			email?: string;
 		},
 		pendingItemCodes?: Array<{
 			code: string;
@@ -738,10 +735,8 @@ export const uploadApi = {
 	) => {
 		const formData = new FormData();
 		formData.append("file", file);
-		formData.append("destType", destType);
-		formData.append("destLabel", destLabel);
-		if (pendingDealerCreation) {
-			formData.append("pendingDealerCreation", JSON.stringify(pendingDealerCreation));
+		if (selectedCustomerId) {
+			formData.append("selectedCustomerId", selectedCustomerId);
 		}
 		if (pendingCustomerCreation) {
 			formData.append("pendingCustomerCreation", JSON.stringify(pendingCustomerCreation));

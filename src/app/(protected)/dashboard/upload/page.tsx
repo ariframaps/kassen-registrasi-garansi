@@ -38,9 +38,19 @@ import {
 	Loader2,
 } from "lucide-react";
 import { normalizeSerialNumber } from "@/lib/utils";
-import { productCateogoryApi, productTypeApi, dealerApi, customerApi } from "@/lib/api/api-client";
-import { CategorySchema, CustomerSchema } from "@/db/schema";
-import type { Dealer } from "@/types";
+import { productCateogoryApi, customerApi, customerCategoryApi } from "@/lib/api/api-client";
+import { CategorySchema, CustomerSchema, CustomerCategorySchema } from "@/db/schema";
+
+// A customer is treated as a "dealer" purely by its assigned category name
+// (case-insensitive "Dealer") — mirrors the check in accurate.service.ts.
+function isDealerCategory(
+	categories: CustomerCategorySchema[],
+	categoryId: string | null | undefined,
+): boolean {
+	if (!categoryId) return false;
+	const category = categories.find((c) => c.id === categoryId);
+	return category?.name.trim().toLowerCase() === "dealer";
+}
 
 // Simple fuzzy matching function
 function fuzzyMatch(searchText: string, targetText: string): number {
@@ -82,16 +92,15 @@ interface ParsedItem {
 	serialNumbers: string[];
 }
 
-interface PendingDealerCreation {
-	name: string;
-	email: string;
-	phone?: string;
-}
-
+// Consolidated customer/dealer creation payload — a dealer is simply a
+// `customer` row whose `categoryId` resolves to a category named "Dealer".
 interface PendingCustomerCreation {
+	customId: string;
 	name: string;
-	email?: string;
+	categoryId: string;
 	phone?: string;
+	address?: string;
+	email?: string;
 }
 
 interface PendingItemCode {
@@ -130,8 +139,9 @@ interface QueueFile {
 	errorMessage?: string;
 	shipTo?: string;
 	doNumber?: string;
-	// Pending creations (validated but not yet created)
-	pendingDealerCreation?: PendingDealerCreation;
+	// Existing customer/dealer chosen from the picker
+	selectedCustomerId?: string;
+	// Pending creation (validated but not yet created)
 	pendingCustomerCreation?: PendingCustomerCreation;
 	pendingItemCodes?: PendingItemCode[];
 	// Purchase data for end customer
@@ -192,392 +202,25 @@ async function hashFile(file: File): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// ── Fuzzy Dealer Match Modal ──
-function FuzzyDealerModal({
+// ── Customer/Dealer Search Modal ──
+// A single search+select modal for both destination flows. `mode` filters
+// the candidate list to Dealer-category customers ("dealer") or non-Dealer
+// customers ("customer"), keeping the resolved category consistent with the
+// button the user clicked.
+function CustomerSearchModal({
 	open,
+	mode,
 	shipTo,
+	categories,
 	onSelect,
 	onCreateNew,
 	onClose,
 }: {
 	open: boolean;
+	mode: "dealer" | "customer";
 	shipTo: string;
-	onSelect: (id: string, name: string) => void;
-	onCreateNew: () => void;
-	onClose: () => void;
-}) {
-	const [allDealers, setAllDealers] = React.useState<Dealer[]>([]);
-	const [displayedDealers, setDisplayedDealers] = React.useState<
-		(Dealer & { score: number })[]
-	>([]);
-	const [search, setSearch] = React.useState("");
-	const [loading, setLoading] = React.useState(true);
-
-	React.useEffect(() => {
-		if (open) {
-			loadDealers();
-		}
-	}, [open]);
-
-	React.useEffect(() => {
-		filterDealers(search);
-	}, [search, allDealers]);
-
-	const loadDealers = async () => {
-		try {
-			setLoading(true);
-			const result = await dealerApi.getAll();
-			if (result.success && result.data) {
-				setAllDealers(result.data);
-				// Initial: show fuzzy matched results
-				const scoredDealers = result.data
-					.map((d) => ({
-						...d,
-						score: fuzzyMatch(shipTo, d.name),
-					}))
-					.filter((d) => d.score > 0)
-					.sort((a, b) => b.score - a.score);
-				setDisplayedDealers(scoredDealers);
-			}
-		} catch (err) {
-			console.error("Gagal load dealers:", err);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const filterDealers = (query: string) => {
-		if (!query.trim()) {
-			// Show fuzzy matched results
-			const scoredDealers = allDealers
-				.map((d) => ({
-					...d,
-					score: fuzzyMatch(shipTo, d.name),
-				}))
-				.filter((d) => d.score > 0)
-				.sort((a, b) => b.score - a.score);
-			setDisplayedDealers(scoredDealers);
-		} else {
-			// Search by name, email, or phone
-			const queryLower = query.toLowerCase();
-			const scoredDealers = allDealers
-				.map((d) => {
-					const nameMatch = fuzzyMatch(query, d.name);
-					const emailMatch = d.email ? fuzzyMatch(query, d.email) : 0;
-					const phoneMatch = d.phone ? fuzzyMatch(query, d.phone) : 0;
-					const score = Math.max(nameMatch, emailMatch, phoneMatch);
-					return { ...d, score };
-				})
-				.filter((d) => d.score > 0)
-				.sort((a, b) => b.score - a.score);
-			setDisplayedDealers(scoredDealers);
-		}
-	};
-
-	return (
-		<Modal
-			open={open}
-			onClose={onClose}
-			title="Pilih atau Cari Dealer"
-			description={`Ship To dari file: "${shipTo}"`}
-			size="md">
-			<div className="space-y-3">
-				<Input
-					label="Cari Dealer (nama, email, atau nomor telepon)"
-					value={search}
-					onChange={(e) => setSearch(e.target.value)}
-					placeholder="Ketik nama, email, atau nomor telepon..."
-				/>
-
-				{loading ? (
-					<div className="text-center py-4 text-xs text-zinc-500">
-						Memuat dealers...
-					</div>
-				) : displayedDealers.length === 0 ? (
-					<div className="text-center py-4 text-xs text-zinc-500">
-						{search
-							? `Tidak ada dealer yang cocok dengan "${search}"`
-							: `Tidak ada dealer yang cocok dengan "${shipTo}"`}
-					</div>
-				) : (
-					<div className="max-h-64 overflow-y-auto space-y-2">
-						{displayedDealers.map((d) => (
-							<button
-								key={d.id}
-								onClick={() => onSelect(d.id, d.name)}
-								className="w-full flex items-start justify-between px-4 py-3 rounded-xl border border-zinc-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left">
-								<div className="flex-1">
-									<p className="text-sm font-medium text-zinc-800">{d.name}</p>
-									{d.email && (
-										<p className="text-xs text-zinc-400 mt-0.5">{d.email}</p>
-									)}
-									{d.phone && (
-										<p className="text-xs text-zinc-400">{d.phone}</p>
-									)}
-								</div>
-								{!search && (
-									<Badge variant={d.score >= 50 ? "success" : "warning"}>
-										{Math.round((d.score / 10) * 10)}%
-									</Badge>
-								)}
-							</button>
-						))}
-					</div>
-				)}
-
-				<button
-					onClick={onCreateNew}
-					className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-zinc-300 hover:border-blue-400 hover:bg-blue-50 transition-all text-left">
-					<div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-						<span className="text-blue-600 text-xs font-bold">+</span>
-					</div>
-					<span className="text-sm text-zinc-600">Buat dealer baru</span>
-				</button>
-				<div className="flex justify-end pt-2">
-					<Button variant="ghost" size="sm" onClick={onClose}>
-						Batal
-					</Button>
-				</div>
-			</div>
-		</Modal>
-	);
-}
-
-// ── New Dealer Form Modal ──
-function NewDealerModal({
-	open,
-	onClose,
-	onSave,
-	suggestedName,
-}: {
-	open: boolean;
-	onClose: () => void;
-	onSave: (data: PendingDealerCreation) => void;
-	suggestedName?: string;
-}) {
-	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
-	const [phone, setPhone] = useState("");
-	const [loading, setLoading] = useState(false);
-	const { error: toastError } = useToast();
-
-	React.useEffect(() => {
-		if (open && suggestedName) {
-			setName(suggestedName);
-		}
-	}, [open, suggestedName]);
-
-	const handleValidateAndSave = async () => {
-		if (!name || !email) {
-			toastError("Validasi", "Nama dan email wajib diisi");
-			return;
-		}
-
-		setLoading(true);
-		try {
-			// Validate dealer creation
-			const result = await dealerApi.validate({
-				name: name.trim(),
-				email: email.trim(),
-				phone: phone?.trim(),
-			});
-
-			if (result.success) {
-				// Only store pending data, don't create yet
-				onSave({
-					name: name.trim(),
-					email: email.trim(),
-					phone: phone?.trim(),
-				});
-				setName("");
-				setEmail("");
-				setPhone("");
-			} else {
-				throw new Error(result.message || "Validasi gagal");
-			}
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : "Validasi dealer gagal";
-			toastError("Validasi Gagal", msg);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	return (
-		<Modal open={open} onClose={onClose} title="Tambah Dealer Baru" size="md">
-			<div className="space-y-3">
-				<Input
-					label="Nama Dealer"
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					placeholder="Contoh: PT Maju Jaya, CV Elektronik"
-					required
-					disabled={loading}
-				/>
-				<Input
-					label="Email"
-					type="email"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					required
-					disabled={loading}
-				/>
-				<Input
-					label="Nomor Telepon"
-					type="tel"
-					pattern="[0-9+\-\s]*"
-					value={phone}
-					onChange={(e) => {
-						const value = e.target.value;
-						// Only allow digits and common phone number characters
-						if (/^[0-9+\-\s]*$/.test(value)) {
-							setPhone(value);
-						}
-					}}
-					disabled={loading}
-				/>
-				<div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-700 border border-blue-100">
-					Akun login dealer akan dibuat otomatis saat upload selesai. Dealer akan mendapat email notifikasi.
-				</div>
-				<div className="flex justify-end gap-2 pt-1">
-					<Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
-						Batal
-					</Button>
-					<Button
-						size="sm"
-						onClick={handleValidateAndSave}
-						disabled={loading || !name || !email}
-						icon={loading ? <Loader2 size={13} className="animate-spin" /> : undefined}
-						iconPosition="left">
-						{loading ? "Validasi..." : "Simpan & Lanjut"}
-					</Button>
-				</div>
-			</div>
-		</Modal>
-	);
-}
-
-// ── New Customer Form Modal ──
-function NewCustomerModal({
-	open,
-	onClose,
-	onSave,
-	suggestedName,
-}: {
-	open: boolean;
-	onClose: () => void;
-	onSave: (data: PendingCustomerCreation) => void;
-	suggestedName?: string;
-}) {
-	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
-	const [phone, setPhone] = useState("");
-	const [loading, setLoading] = useState(false);
-	const { error: toastError } = useToast();
-
-	React.useEffect(() => {
-		if (open && suggestedName) {
-			setName(suggestedName);
-		}
-	}, [open, suggestedName]);
-
-	const handleValidateAndSave = async () => {
-		if (!name.trim()) {
-			toastError("Validasi", "Nama customer wajib diisi");
-			return;
-		}
-
-		setLoading(true);
-		try {
-			// Validate customer creation
-			const result = await customerApi.validate({
-				name: name.trim(),
-				email: email?.trim(),
-				phone: phone?.trim(),
-			});
-
-			if (result.success) {
-				// Only store pending data, don't create yet
-				onSave({
-					name: name.trim(),
-					email: email?.trim(),
-					phone: phone?.trim(),
-				});
-				setName("");
-				setEmail("");
-				setPhone("");
-			} else {
-				throw new Error(result.message || "Validasi gagal");
-			}
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : "Validasi customer gagal";
-			toastError("Validasi Gagal", msg);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	return (
-		<Modal open={open} onClose={onClose} title="Tambah Customer Baru" size="md">
-			<div className="space-y-3">
-				<Input
-					label="Nama Customer/Toko"
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					placeholder="Contoh: Toko ABC, PT Maju Jaya"
-					required
-					disabled={loading}
-				/>
-				<Input
-					label="Email (Optional)"
-					type="email"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					disabled={loading}
-				/>
-				<Input
-					label="Nomor Telepon (Optional)"
-					type="tel"
-					pattern="[0-9+\-\s]*"
-					value={phone}
-					onChange={(e) => {
-						const value = e.target.value;
-						// Only allow digits and common phone number characters
-						if (/^[0-9+\-\s]*$/.test(value)) {
-							setPhone(value);
-						}
-					}}
-					disabled={loading}
-				/>
-				<div className="flex justify-end gap-2 pt-1">
-					<Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
-						Batal
-					</Button>
-					<Button
-						size="sm"
-						onClick={handleValidateAndSave}
-						disabled={loading || !name.trim()}
-						icon={loading ? <Loader2 size={13} className="animate-spin" /> : undefined}
-						iconPosition="left">
-						{loading ? "Validasi..." : "Simpan & Lanjut"}
-					</Button>
-				</div>
-			</div>
-		</Modal>
-	);
-}
-
-// ── Fuzzy Customer Modal ──
-function FuzzyCustomerModal({
-	open,
-	shipTo,
-	onSelect,
-	onCreateNew,
-	onClose,
-}: {
-	open: boolean;
-	shipTo: string;
-	onSelect: (name: string) => void;
+	categories: CustomerCategorySchema[];
+	onSelect: (customer: CustomerSchema) => void;
 	onCreateNew: () => void;
 	onClose: () => void;
 }) {
@@ -603,8 +246,11 @@ function FuzzyCustomerModal({
 			setLoading(true);
 			const result = await customerApi.getAll();
 			if (result.success && result.data) {
-				setAllCustomers(result.data);
-				const scoredCustomers = result.data
+				const candidates = result.data.filter(
+					(c) => isDealerCategory(categories, c.categoryId) === (mode === "dealer"),
+				);
+				setAllCustomers(candidates);
+				const scoredCustomers = candidates
 					.map((c) => ({
 						...c,
 						score: fuzzyMatch(shipTo, c.name),
@@ -645,16 +291,18 @@ function FuzzyCustomerModal({
 		}
 	};
 
+	const label = mode === "dealer" ? "Dealer" : "Customer";
+
 	return (
 		<Modal
 			open={open}
 			onClose={onClose}
-			title="Pilih atau Cari Customer"
+			title={`Pilih atau Cari ${label}`}
 			description={`Ship To dari file: "${shipTo}"`}
 			size="md">
 			<div className="space-y-3">
 				<Input
-					label="Cari Customer (nama, email, atau nomor telepon)"
+					label={`Cari ${label} (nama, email, atau nomor telepon)`}
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
 					placeholder="Ketik nama, email, atau nomor telepon..."
@@ -662,20 +310,20 @@ function FuzzyCustomerModal({
 
 				{loading ? (
 					<div className="text-center py-4 text-xs text-zinc-500">
-						Memuat customers...
+						Memuat {label.toLowerCase()}...
 					</div>
 				) : displayedCustomers.length === 0 ? (
 					<div className="text-center py-4 text-xs text-zinc-500">
 						{search
-							? `Tidak ada customer yang cocok dengan "${search}"`
-							: `Tidak ada customer yang cocok dengan "${shipTo}"`}
+							? `Tidak ada ${label.toLowerCase()} yang cocok dengan "${search}"`
+							: `Tidak ada ${label.toLowerCase()} yang cocok dengan "${shipTo}"`}
 					</div>
 				) : (
 					<div className="max-h-64 overflow-y-auto space-y-2">
 						{displayedCustomers.map((c) => (
 							<button
 								key={c.id}
-								onClick={() => onSelect(c.name)}
+								onClick={() => onSelect(c)}
 								className="w-full flex items-start justify-between px-4 py-3 rounded-xl border border-zinc-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left">
 								<div className="flex-1">
 									<p className="text-sm font-medium text-zinc-800">{c.name}</p>
@@ -702,11 +350,165 @@ function FuzzyCustomerModal({
 					<div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
 						<span className="text-blue-600 text-xs font-bold">+</span>
 					</div>
-					<span className="text-sm text-zinc-600">Buat customer baru</span>
+					<span className="text-sm text-zinc-600">Buat {label.toLowerCase()} baru</span>
 				</button>
 				<div className="flex justify-end pt-2">
 					<Button variant="ghost" size="sm" onClick={onClose}>
 						Batal
+					</Button>
+				</div>
+			</div>
+		</Modal>
+	);
+}
+
+// ── Consolidated Customer/Dealer Creation Modal ──
+// Replaces the old separate "Create Dealer" / "Create Customer" forms. A
+// dealer is nothing more than a customer whose category resolves to "Dealer".
+function CustomerCreationModal({
+	open,
+	onClose,
+	onSave,
+	suggestedName,
+	categories,
+	defaultCategoryId,
+}: {
+	open: boolean;
+	onClose: () => void;
+	onSave: (data: PendingCustomerCreation) => void;
+	suggestedName?: string;
+	categories: CustomerCategorySchema[];
+	defaultCategoryId?: string;
+}) {
+	const [customId, setCustomId] = useState("");
+	const [name, setName] = useState("");
+	const [categoryId, setCategoryId] = useState("");
+	const [phone, setPhone] = useState("");
+	const [address, setAddress] = useState("");
+	const [email, setEmail] = useState("");
+	const [loading, setLoading] = useState(false);
+	const { error: toastError } = useToast();
+
+	React.useEffect(() => {
+		if (open) {
+			setName(suggestedName || "");
+			setCategoryId(defaultCategoryId || "");
+		}
+	}, [open, suggestedName, defaultCategoryId]);
+
+	const isDealer = isDealerCategory(categories, categoryId);
+
+	const handleValidateAndSave = async () => {
+		if (!customId.trim() || !name.trim() || !categoryId) {
+			toastError("Validasi", "ID Pelanggan, nama, dan kategori wajib diisi");
+			return;
+		}
+
+		setLoading(true);
+		try {
+			const result = await customerApi.validate({
+				name: name.trim(),
+				email: email?.trim(),
+				phone: phone?.trim(),
+			});
+
+			if (result.success) {
+				onSave({
+					customId: customId.trim(),
+					name: name.trim(),
+					categoryId,
+					phone: phone?.trim() || undefined,
+					address: address?.trim() || undefined,
+					email: email?.trim() || undefined,
+				});
+				setCustomId("");
+				setName("");
+				setCategoryId("");
+				setPhone("");
+				setAddress("");
+				setEmail("");
+			} else {
+				throw new Error(result.message || "Validasi gagal");
+			}
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Validasi customer gagal";
+			toastError("Validasi Gagal", msg);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	return (
+		<Modal open={open} onClose={onClose} title="Tambah Customer/Dealer Baru" size="md">
+			<div className="space-y-3">
+				<Input
+					label="ID Pelanggan"
+					value={customId}
+					onChange={(e) => setCustomId(e.target.value)}
+					placeholder="Contoh: CUST-0001"
+					required
+					disabled={loading}
+				/>
+				<Input
+					label="Nama Customer/Dealer"
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					placeholder="Contoh: Toko ABC, PT Maju Jaya"
+					required
+					disabled={loading}
+				/>
+				<Select
+					label="Kategori"
+					value={categoryId}
+					onChange={(e) => setCategoryId(e.target.value)}
+					options={categories.map((c) => ({ value: c.id, label: c.name }))}
+					placeholder="-- Pilih Kategori --"
+					required
+					disabled={loading}
+				/>
+				<Input
+					label="Email (Optional)"
+					type="email"
+					value={email}
+					onChange={(e) => setEmail(e.target.value)}
+					disabled={loading}
+				/>
+				<Input
+					label="Nomor Telepon (Optional)"
+					type="tel"
+					pattern="[0-9+\-\s]*"
+					value={phone}
+					onChange={(e) => {
+						const value = e.target.value;
+						// Only allow digits and common phone number characters
+						if (/^[0-9+\-\s]*$/.test(value)) {
+							setPhone(value);
+						}
+					}}
+					disabled={loading}
+				/>
+				<Input
+					label="Alamat (Optional)"
+					value={address}
+					onChange={(e) => setAddress(e.target.value)}
+					disabled={loading}
+				/>
+				{isDealer && (
+					<div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-700 border border-blue-100">
+						Kategori ini akan diperlakukan sebagai dealer: produk akan langsung ditambahkan ke stok dealer, bukan dicatat sebagai pembelian end customer.
+					</div>
+				)}
+				<div className="flex justify-end gap-2 pt-1">
+					<Button variant="outline" size="sm" onClick={onClose} disabled={loading}>
+						Batal
+					</Button>
+					<Button
+						size="sm"
+						onClick={handleValidateAndSave}
+						disabled={loading || !customId.trim() || !name.trim() || !categoryId}
+						icon={loading ? <Loader2 size={13} className="animate-spin" /> : undefined}
+						iconPosition="left">
+						{loading ? "Validasi..." : "Simpan & Lanjut"}
 					</Button>
 				</div>
 			</div>
@@ -1110,8 +912,6 @@ function QueueItem({
 	onSubmit,
 	onSkip,
 	onDestSelect,
-	onFuzzyConfirm,
-	onNewDealer,
 	onCreateItemCodes,
 }: {
 	qf: QueueFile;
@@ -1122,8 +922,6 @@ function QueueItem({
 	onSubmit: (id: string) => void;
 	onSkip: (id: string) => void;
 	onDestSelect: (id: string, type: DestType) => void;
-	onFuzzyConfirm: (id: string, dealerId: string, dealerName: string) => void;
-	onNewDealer: (id: string) => void;
 	onCreateItemCodes: (id: string) => void;
 }) {
 	const isCurrent = isActive;
@@ -1421,18 +1219,15 @@ function QueueItem({
 					)}
 
 					{/* Pending creations indicators */}
-					{(qf.pendingDealerCreation || qf.pendingCustomerCreation || qf.pendingItemCodes?.length) && (
+					{(qf.pendingCustomerCreation || qf.pendingItemCodes?.length) && (
 						<div className="space-y-2 text-xs">
-							{qf.pendingDealerCreation && (
-								<div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700">
-									<Plus size={12} />
-									<span>Dealer baru akan dibuat: <span className="font-medium">{qf.pendingDealerCreation.name}</span></span>
-								</div>
-							)}
 							{qf.pendingCustomerCreation && (
 								<div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700">
 									<Plus size={12} />
-									<span>Customer baru akan dibuat: <span className="font-medium">{qf.pendingCustomerCreation.name}</span></span>
+									<span>
+										{qf.destType === "dealer" ? "Dealer" : "Customer"} baru akan dibuat:{" "}
+										<span className="font-medium">{qf.pendingCustomerCreation.name}</span>
+									</span>
 								</div>
 							)}
 							{qf.pendingItemCodes && qf.pendingItemCodes.length > 0 && (
@@ -1521,10 +1316,10 @@ export default function UploadPage() {
 	const [dragOver, setDragOver] = useState(false);
 	const [queue, setQueue] = useState<QueueFile[]>([]);
 	const [activeIdx, setActiveIdx] = useState(0);
-	const [showFuzzy, setShowFuzzy] = useState(false);
-	const [showFuzzyCustomer, setShowFuzzyCustomer] = useState(false);
-	const [showNewDealer, setShowNewDealer] = useState(false);
-	const [showNewCustomer, setShowNewCustomer] = useState(false);
+	const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+	const [customerSearchMode, setCustomerSearchMode] = useState<"dealer" | "customer">("customer");
+	const [showCustomerCreation, setShowCustomerCreation] = useState(false);
+	const [customerCategories, setCustomerCategories] = useState<CustomerCategorySchema[]>([]);
 	const [showCreateItemCodes, setShowCreateItemCodes] = useState(false);
 	const [showPurchaseForm, setShowPurchaseForm] = useState(false);
 	const [unknownItemCodes, setUnknownItemCodes] = useState<UnknownItemCode[]>([]);
@@ -1534,6 +1329,12 @@ export default function UploadPage() {
 	const [suggestedShipTo, setSuggestedShipTo] = useState<string>("");
 	const [finished, setFinished] = useState(false);
 	const { success, error: toastError } = useToast();
+
+	React.useEffect(() => {
+		customerCategoryApi.getAll().then((result) => {
+			if (result.success && result.data) setCustomerCategories(result.data);
+		});
+	}, []);
 
 	const KNOWN_HASHES = ["hash_DO-already-uploaded.xlsx_12345"]; // mock
 
@@ -1660,8 +1461,13 @@ export default function UploadPage() {
 		advanceQueue(id);
 	};
 
+	// `type` only picks which candidate list the search modal shows (Dealer-
+	// category vs non-Dealer). The queue item's actual destType is always
+	// re-derived from the resolved customer's category (see handleCustomerSelect
+	// / handleCustomerCreationSave), keeping it consistent with the backend.
 	const setDestType = (id: string, type: DestType) => {
 		const qf = queue.find((q) => q.id === id);
+		if (!type) return;
 
 		// If changing destination and there's already a selection, ask for confirmation
 		if (qf?.destType && qf.destType !== type && qf.destLabel) {
@@ -1678,55 +1484,47 @@ export default function UploadPage() {
 							...q,
 							destType: type,
 							destLabel: undefined,
-							pendingDealerCreation: type === "customer" ? undefined : q.pendingDealerCreation,
-							pendingCustomerCreation: type === "dealer" ? undefined : q.pendingCustomerCreation,
+							selectedCustomerId: undefined,
+							pendingCustomerCreation: undefined,
 						}
 					: q,
 			),
 		);
-		if (type === "dealer") {
-			setSuggestedShipTo(qf?.shipTo || "");
-			setPendingFuzzyId(id);
-			setShowFuzzy(true);
-		} else if (type === "customer") {
-			setSuggestedShipTo(qf?.shipTo || "");
-			setPendingFuzzyId(id);
-			setShowFuzzyCustomer(true);
-		}
+		setSuggestedShipTo(qf?.shipTo || "");
+		setPendingFuzzyId(id);
+		setCustomerSearchMode(type);
+		setShowCustomerSearch(true);
 	};
 
-	const handleFuzzySelect = (dealerId: string, dealerName: string) => {
+	const handleCustomerSelect = (selected: CustomerSchema) => {
+		const dealer = isDealerCategory(customerCategories, selected.categoryId);
 		if (pendingFuzzyId) {
 			setQueue((prev) =>
 				prev.map((q) =>
 					q.id === pendingFuzzyId
-						? { ...q, destLabel: dealerName, pendingDealerCreation: undefined }
+						? {
+								...q,
+								destType: dealer ? "dealer" : "customer",
+								destLabel: selected.name,
+								selectedCustomerId: selected.id,
+								pendingCustomerCreation: undefined,
+							}
 						: q,
 				),
 			);
 		}
-		setShowFuzzy(false);
-		setPendingFuzzyId(null);
-	};
-
-	const handleFuzzyCustomerSelect = (customerName: string) => {
-		if (pendingFuzzyId) {
-			setQueue((prev) =>
-				prev.map((q) =>
-					q.id === pendingFuzzyId
-						? { ...q, destLabel: customerName, pendingCustomerCreation: undefined }
-						: q,
-				),
-			);
+		setShowCustomerSearch(false);
+		if (dealer) {
+			setPendingFuzzyId(null);
+		} else {
+			// Non-dealer destinations still need purchase details (warranty, invoice)
+			setShowPurchaseForm(true);
 		}
-		setShowFuzzyCustomer(false);
-		// Open purchase form after customer selection
-		setShowPurchaseForm(true);
 	};
 
-	const handleFuzzyCustomerCreateNew = () => {
-		setShowFuzzyCustomer(false);
-		setShowNewCustomer(true);
+	const handleCustomerSearchCreateNew = () => {
+		setShowCustomerSearch(false);
+		setShowCustomerCreation(true);
 	};
 
 	const handlePurchaseFormSave = (purchaseData: PurchaseData) => {
@@ -1738,48 +1536,33 @@ export default function UploadPage() {
 			);
 		}
 		setShowPurchaseForm(false);
-	};
-
-	const handleFuzzyNewDealer = () => {
-		setShowFuzzy(false);
-		setShowNewDealer(true);
-	};
-
-	const handleNewDealerSave = (dealerData: PendingDealerCreation) => {
-		if (pendingFuzzyId) {
-			setQueue((prev) =>
-				prev.map((q) =>
-					q.id === pendingFuzzyId
-						? {
-								...q,
-								destLabel: dealerData.name,
-								pendingDealerCreation: dealerData,
-							}
-						: q,
-				),
-			);
-		}
-		setShowNewDealer(false);
 		setPendingFuzzyId(null);
 	};
 
-	const handleNewCustomerSave = (customerData: PendingCustomerCreation) => {
+	const handleCustomerCreationSave = (data: PendingCustomerCreation) => {
+		const dealer = isDealerCategory(customerCategories, data.categoryId);
 		if (pendingFuzzyId) {
 			setQueue((prev) =>
 				prev.map((q) =>
 					q.id === pendingFuzzyId
 						? {
 								...q,
-								destLabel: customerData.name,
-								pendingCustomerCreation: customerData,
+								destType: dealer ? "dealer" : "customer",
+								destLabel: data.name,
+								selectedCustomerId: undefined,
+								pendingCustomerCreation: data,
 							}
 						: q,
 				),
 			);
 		}
-		setShowNewCustomer(false);
-		// Open purchase form after customer creation
-		setShowPurchaseForm(true);
+		setShowCustomerCreation(false);
+		if (dealer) {
+			setPendingFuzzyId(null);
+		} else {
+			// Non-dealer destinations still need purchase details (warranty, invoice)
+			setShowPurchaseForm(true);
+		}
 	};
 
 	const handleOpenCreateItemCodes = (id: string) => {
@@ -1818,9 +1601,7 @@ export default function UploadPage() {
 		try {
 			const result = await uploadApi.uploadAccurateFile(
 				queueFile.file,
-				queueFile.destType as "dealer" | "customer",
-				queueFile.destLabel || "",
-				queueFile.pendingDealerCreation,
+				queueFile.selectedCustomerId,
 				queueFile.pendingCustomerCreation,
 				queueFile.pendingItemCodes,
 				queueFile.purchaseData,
@@ -2047,8 +1828,6 @@ export default function UploadPage() {
 										onSubmit={submitFile}
 										onSkip={skipFile}
 										onDestSelect={setDestType}
-										onFuzzyConfirm={handleFuzzySelect}
-										onNewDealer={handleFuzzyNewDealer}
 										onCreateItemCodes={handleOpenCreateItemCodes}
 									/>
 								))}
@@ -2106,45 +1885,35 @@ export default function UploadPage() {
 			</div>
 
 			{/* Modals */}
-			<FuzzyDealerModal
-				open={showFuzzy}
+			<CustomerSearchModal
+				open={showCustomerSearch}
+				mode={customerSearchMode}
 				shipTo={
 					pendingFuzzyId
 						? queue.find((q) => q.id === pendingFuzzyId)?.shipTo || "Unknown"
 						: "Unknown"
 				}
-				onSelect={handleFuzzySelect}
-				onCreateNew={handleFuzzyNewDealer}
+				categories={customerCategories}
+				onSelect={handleCustomerSelect}
+				onCreateNew={handleCustomerSearchCreateNew}
 				onClose={() => {
-					setShowFuzzy(false);
+					setShowCustomerSearch(false);
 					setPendingFuzzyId(null);
 				}}
 			/>
-			<NewDealerModal
-				open={showNewDealer}
-				onClose={() => setShowNewDealer(false)}
-				onSave={handleNewDealerSave}
+			<CustomerCreationModal
+				open={showCustomerCreation}
+				onClose={() => setShowCustomerCreation(false)}
+				onSave={handleCustomerCreationSave}
 				suggestedName={suggestedShipTo}
-			/>
-			<FuzzyCustomerModal
-				open={showFuzzyCustomer}
-				shipTo={
-					pendingFuzzyId
-						? queue.find((q) => q.id === pendingFuzzyId)?.shipTo || "Unknown"
-						: "Unknown"
+				categories={customerCategories}
+				defaultCategoryId={
+					customerSearchMode === "dealer"
+						? customerCategories.find(
+								(c) => c.name.trim().toLowerCase() === "dealer",
+							)?.id
+						: undefined
 				}
-				onSelect={handleFuzzyCustomerSelect}
-				onCreateNew={handleFuzzyCustomerCreateNew}
-				onClose={() => {
-					setShowFuzzyCustomer(false);
-					setPendingFuzzyId(null);
-				}}
-			/>
-			<NewCustomerModal
-				open={showNewCustomer}
-				onClose={() => setShowNewCustomer(false)}
-				onSave={handleNewCustomerSave}
-				suggestedName={suggestedShipTo}
 			/>
 			<CreateUnknownItemCodesModal
 				open={showCreateItemCodes}

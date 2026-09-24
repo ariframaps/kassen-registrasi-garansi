@@ -13,16 +13,13 @@ import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { submitAccurateFile } from "@/services/accurate.service";
 
-const pendingDealerCreationSchema = z.object({
-	name: z.string(),
-	email: z.string(),
-	phone: z.string().optional(),
-});
-
 const pendingCustomerCreationSchema = z.object({
-	name: z.string(),
-	email: z.string().optional(),
+	customId: z.string().min(1),
+	name: z.string().min(1),
+	categoryId: z.string().min(1),
 	phone: z.string().optional(),
+	address: z.string().optional(),
+	email: z.string().optional(),
 });
 
 const pendingItemCodeSchema = z.object({
@@ -38,15 +35,17 @@ const purchaseDataSchema = z.object({
 	dealerId: z.string().optional(),
 });
 
-const uploadSchema = z.object({
-	file: z.instanceof(File),
-	destType: z.enum(["dealer", "customer"]),
-	destLabel: z.string().min(1, "Destination label diperlukan"),
-	pendingDealerCreation: pendingDealerCreationSchema.optional(),
-	pendingCustomerCreation: pendingCustomerCreationSchema.optional(),
-	pendingItemCodes: z.array(pendingItemCodeSchema).optional(),
-	purchaseData: purchaseDataSchema.optional(),
-});
+const uploadSchema = z
+	.object({
+		file: z.instanceof(File),
+		selectedCustomerId: z.string().optional(),
+		pendingCustomerCreation: pendingCustomerCreationSchema.optional(),
+		pendingItemCodes: z.array(pendingItemCodeSchema).optional(),
+		purchaseData: purchaseDataSchema.optional(),
+	})
+	.refine((data) => !!data.selectedCustomerId || !!data.pendingCustomerCreation, {
+		message: "Customer/dealer tujuan wajib dipilih atau dibuat",
+	});
 
 export async function POST(req: NextRequest) {
 	try {
@@ -58,9 +57,7 @@ export async function POST(req: NextRequest) {
 
 		const formData = await req.formData();
 		const file = formData.get("file") as File | null;
-		const destType = formData.get("destType") as string | null;
-		const destLabel = formData.get("destLabel") as string | null;
-		const pendingDealerCreationStr = formData.get("pendingDealerCreation") as string | null;
+		const selectedCustomerId = formData.get("selectedCustomerId") as string | null;
 		const pendingCustomerCreationStr = formData.get("pendingCustomerCreation") as string | null;
 		const pendingItemCodesStr = formData.get("pendingItemCodes") as string | null;
 		const purchaseDataStr = formData.get("purchaseData") as string | null;
@@ -73,9 +70,7 @@ export async function POST(req: NextRequest) {
 
 		const parsedData = uploadSchema.parse({
 			file,
-			destType,
-			destLabel,
-			pendingDealerCreation: pendingDealerCreationStr ? JSON.parse(pendingDealerCreationStr) : undefined,
+			selectedCustomerId: selectedCustomerId ?? undefined,
 			pendingCustomerCreation: pendingCustomerCreationStr ? JSON.parse(pendingCustomerCreationStr) : undefined,
 			pendingItemCodes: pendingItemCodesStr ? JSON.parse(pendingItemCodesStr) : undefined,
 			purchaseData: purchaseData,
@@ -83,10 +78,8 @@ export async function POST(req: NextRequest) {
 
 		const result = await submitAccurateFile({
 			file: parsedData.file,
-			destType: parsedData.destType,
-			destLabel: parsedData.destLabel,
 			userId: session.user.id,
-			pendingDealerCreation: parsedData.pendingDealerCreation,
+			selectedCustomerId: parsedData.selectedCustomerId,
 			pendingCustomerCreation: parsedData.pendingCustomerCreation,
 			pendingItemCodes: parsedData.pendingItemCodes,
 			purchaseData: parsedData.purchaseData,
