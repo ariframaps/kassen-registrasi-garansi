@@ -22,6 +22,7 @@ import {
 import { normalizeSerialNumber } from "@/lib/utils";
 import { eq } from "drizzle-orm";
 import { notificationService } from "./notification.service";
+import { generateAutoCustomId } from "./customer.service";
 import crypto from "crypto";
 
 export async function getProductTypeMappings() {
@@ -225,10 +226,11 @@ export async function submitAccurateFile(
 	if (pendingCustomerCreation && destType === "customer") {
 		const email = pendingCustomerCreation.email?.trim()
 			? pendingCustomerCreation.email.trim()
-			: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`;
+			: null;
 
 		await db.insert(customer).values({
 			id: crypto.randomUUID(),
+			customId: generateAutoCustomId(),
 			name: pendingCustomerCreation.name,
 			email,
 			phone: pendingCustomerCreation.phone ?? null,
@@ -258,8 +260,8 @@ export async function submitAccurateFile(
 				.insert(customer)
 				.values({
 					id: crypto.randomUUID(),
+					customId: generateAutoCustomId(),
 					name: destLabel,
-					email: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`,
 				})
 				.returning();
 

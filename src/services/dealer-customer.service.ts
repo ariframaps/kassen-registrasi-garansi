@@ -12,7 +12,7 @@ interface DealerCustomerFilterParams {
 interface DealerCustomerResponse {
 	id: string;
 	name: string;
-	email: string;
+	email: string | null;
 	phone: string | null;
 }
 
@@ -46,7 +46,7 @@ export const dealerCustomerService = {
 		// Extract unique customers using a Map
 		const customerMap = new Map<
 			string,
-			{ id: string; name: string; email: string; phone: string | null }
+			{ id: string; name: string; email: string | null; phone: string | null }
 		>();
 		purchases.forEach((p) => {
 			if (!customerMap.has(p.customerId)) {
@@ -66,7 +66,7 @@ export const dealerCustomerService = {
 			? customers.filter(
 					(c) =>
 						c.name.toLowerCase().includes(params.search!.toLowerCase()) ||
-						c.email.toLowerCase().includes(params.search!.toLowerCase()) ||
+						(c.email && c.email.toLowerCase().includes(params.search!.toLowerCase())) ||
 						(c.phone && c.phone.toLowerCase().includes(params.search!.toLowerCase())),
 				)
 			: customers;

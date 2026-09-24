@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
 import { dealers } from "@/db/schema";
+import { generateAutoCustomId } from "@/services/customer.service";
 import { eq, inArray } from "drizzle-orm";
 
 const warrantyRegistrationSchema = z.object({
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
 			const custId = crypto.randomUUID();
 			await db.insert(customer).values({
 				id: custId,
+				customId: generateAutoCustomId(),
 				name: customerName,
 				email,
 				phone,

@@ -326,7 +326,7 @@ export default function AdminPurchasesPage() {
 			const matchSearch =
 				q === "" ||
 				g.customer.name.toLowerCase().includes(q) ||
-				g.customer.email.toLowerCase().includes(q) ||
+				(g.customer.email ?? "").toLowerCase().includes(q) ||
 				(g.dealer?.name ?? "").toLowerCase().includes(q);
 			const matchDealer =
 				dealerFilter === "all" ||
@@ -376,7 +376,7 @@ export default function AdminPurchasesPage() {
 		setEditingCustomer(c);
 		setEditCustomerForm({
 			name: c.name,
-			email: c.email,
+			email: c.email ?? "",
 			phone: c.phone ?? "",
 			address: c.address ?? "",
 		});

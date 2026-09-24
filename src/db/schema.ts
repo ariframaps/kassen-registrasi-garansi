@@ -1,6 +1,7 @@
 export * from "./schemas/auth-schema";
 export * from "./schemas/dealer.schema";
 export * from "./schemas/customer.schema";
+export * from "./schemas/customer_category.schema";
 
 // export * from "./schemas/otp_codes.schema";
 
