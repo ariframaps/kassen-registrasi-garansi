@@ -23,7 +23,9 @@ export const customer = pgTable("customer", {
 });
 
 // schema
-export const customerSchema = createSelectSchema(customer);
+export const customerSchema = createSelectSchema(customer, {
+	email: (schema) => schema.nullable(),
+});
 // export const productInsertSchema = createInsertSchema(product);
 // export const productUpdateSchema = createUpdateSchema(product);
 export type CustomerSchema = z.infer<typeof customerSchema>;

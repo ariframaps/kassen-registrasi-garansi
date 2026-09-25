@@ -34,7 +34,7 @@ export default function CustomersPage() {
 			(c) =>
 				!search ||
 				c.name.toLowerCase().includes(search.toLowerCase()) ||
-				c.email.toLowerCase().includes(search.toLowerCase()) ||
+				c.email?.toLowerCase().includes(search.toLowerCase()) ||
 				c.phone?.toLowerCase().includes(search.toLowerCase()),
 		);
 		return result;

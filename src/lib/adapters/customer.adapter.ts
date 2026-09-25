@@ -10,7 +10,7 @@ export const customerAdapter = {
 		return {
 			id: response.data.customer.id,
 			name: response.data.customer.name,
-			email: response.data.customer.email,
+			email: response.data.customer.email || "",
 			phone: response.data.customer.phone || "",
 			address: response.data.customer.address || "",
 			createdAt: response.data.customer.createdAt.toISOString(),
