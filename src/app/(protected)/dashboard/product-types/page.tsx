@@ -30,6 +30,7 @@ import {
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
 import { CategorySchema, ItemCodeMapsSchema } from "@/db/schema";
 import { formatDateShort } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 
 // type ProductType = {
 // 	id: string;
@@ -386,6 +387,10 @@ function ProductTypeModal({
 }
 
 export default function ProductTypesPage() {
+  const { data: session } = authClient.useSession();
+  const user = session?.user;
+  const isSales = user?.role === "sales";
+
   const router = useRouter();
   const [types, setTypes] = useState<ProductTypeWithNestedSchema[]>([]);
   const [itemCodes, setItemCodes] = useState<ItemCodeMapsSchema[]>([]);
@@ -704,84 +709,86 @@ export default function ProductTypesPage() {
 				</div> */}
 
         {/* Category management */}
-        <Card>
-          <CardHeader
-            title="Kategori Produk"
-            description="Kelola kategori yang digunakan untuk mengelompokkan tipe produk"
-            action={
-              <Button
-                size="sm"
-                variant="outline"
-                icon={<Plus size={13} />}
-                onClick={() => {
-                  setEditingCategory(undefined);
-                  setCategoryModalOpen(true);
-                }}
-              >
-                Tambah Kategori
-              </Button>
-            }
-          />
-          <Table>
-            <TableHead>
-              <TableHeader>Nama Kategori</TableHeader>
-              <TableHeader>Jumlah Tipe</TableHeader>
-              <TableHeader className="w-20"></TableHeader>
-            </TableHead>
-            <TableBody>
-              {categories.length === 0 ? (
-                <tr>
-                  <td colSpan={3}>
-                    <EmptyState
-                      icon={<Tag size={18} />}
-                      title="Belum ada kategori"
-                      description="Tambahkan kategori produk pertama Anda"
-                    />
-                  </td>
-                </tr>
-              ) : (
-                categories.map((cat) => {
-                  const count = types.filter(
-                    (t) => t.categoryId === cat.id,
-                  ).length;
-                  return (
-                    <TableRow key={cat.id}>
-                      <TableCell>
-                        <span className="font-medium text-zinc-900">
-                          {cat.name}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-zinc-500 text-xs">
-                        {count} tipe
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => {
-                              setEditingCategory(cat);
-                              setCategoryModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteCategoryTarget(cat)}
-                            className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
-                            title="Hapus"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+        {!isSales ? (
+          <Card>
+            <CardHeader
+              title="Kategori Produk"
+              description="Kelola kategori yang digunakan untuk mengelompokkan tipe produk"
+              action={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Plus size={13} />}
+                  onClick={() => {
+                    setEditingCategory(undefined);
+                    setCategoryModalOpen(true);
+                  }}
+                >
+                  Tambah Kategori
+                </Button>
+              }
+            />
+            <Table>
+              <TableHead>
+                <TableHeader>Nama Kategori</TableHeader>
+                <TableHeader>Jumlah Tipe</TableHeader>
+                <TableHeader className="w-20"></TableHeader>
+              </TableHead>
+              <TableBody>
+                {categories.length === 0 ? (
+                  <tr>
+                    <td colSpan={3}>
+                      <EmptyState
+                        icon={<Tag size={18} />}
+                        title="Belum ada kategori"
+                        description="Tambahkan kategori produk pertama Anda"
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  categories.map((cat) => {
+                    const count = types.filter(
+                      (t) => t.categoryId === cat.id,
+                    ).length;
+                    return (
+                      <TableRow key={cat.id}>
+                        <TableCell>
+                          <span className="font-medium text-zinc-900">
+                            {cat.name}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-zinc-500 text-xs">
+                          {count} tipe
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingCategory(cat);
+                                setCategoryModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteCategoryTarget(cat)}
+                              className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        ) : null}
 
         {/* Info box */}
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4">
@@ -809,16 +816,18 @@ export default function ProductTypesPage() {
             title="Daftar Tipe Produk"
             description="Kelola mapping item code Accurate ke nama tipe produk internal"
             action={
-              <Button
-                size="sm"
-                icon={<Plus size={13} />}
-                onClick={() => {
-                  setEditing(undefined);
-                  setModalOpen(true);
-                }}
-              >
-                Tambah Tipe
-              </Button>
+              !isSales ? (
+                <Button
+                  size="sm"
+                  icon={<Plus size={13} />}
+                  onClick={() => {
+                    setEditing(undefined);
+                    setModalOpen(true);
+                  }}
+                >
+                  Tambah Tipe
+                </Button>
+              ) : null
             }
           />
           <div className="px-5 py-3 flex gap-2 border-b border-zinc-100">
@@ -901,25 +910,27 @@ export default function ProductTypesPage() {
                           {formatDateShort(type.createdAt)}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => {
-                                setEditing(type);
-                                setModalOpen(true);
-                              }}
-                              className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(type)}
-                              className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
-                              title="Hapus"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
+                          {!isSales ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditing(type);
+                                  setModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(type)}
+                                className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+                                title="Hapus"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     );
