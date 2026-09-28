@@ -50,10 +50,13 @@ export interface Dealer {
 
 export interface Customer {
 	id: string;
+	customId: string;
 	name: string;
-	email: string;
-	phone: string;
+	email: string | null;
+	phone: string | null;
 	address: string;
+	categoryId?: string | null;
+	categoryName?: string | null;
 	created_at?: string;
 	updated_at?: string;
 }

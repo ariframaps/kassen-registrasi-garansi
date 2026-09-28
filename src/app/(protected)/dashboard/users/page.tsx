@@ -42,6 +42,7 @@ import {
 import type { User, UserRole } from "@/types";
 import { userApi } from "@/lib/api/api-client";
 import { UserSchema } from "@/db/schema";
+import { CreateUserModal, CreateUserPayload } from "@/components/users/create-user-modal";
 
 // todo: fetch real users from backend, addUser, editUser, deleteUser
 // todo: belum bisa edit email
@@ -87,8 +88,8 @@ const ROLE_ICONS: Record<UserRole, React.ReactNode> = {
 // 	).join("");
 // }
 
-// ── Add / Edit User Modal ──
-function UserFormModal({
+// ── Edit User Modal ──
+function EditUserModal({
 	open,
 	onClose,
 	editUser,
@@ -96,16 +97,13 @@ function UserFormModal({
 }: {
 	open: boolean;
 	onClose: () => void;
-	editUser?: UserSchema | null;
+	editUser: UserSchema | null;
 	onSave: (data: any) => Promise<void>;
 }) {
 	const [form, setForm] = useState({
 		name: editUser?.name ?? "",
 		email: editUser?.email ?? "",
 		role: (editUser?.role ?? "sales") as UserRole,
-		dealerName: "",
-		dealerPhone: "",
-		dealerAddress: "",
 		status: (editUser?.status ?? "active") as "active" | "inactive",
 	});
 	const [loading, setLoading] = useState(false);
@@ -115,11 +113,6 @@ function UserFormModal({
 	const validate = () => {
 		const e: Record<string, string> = {};
 		if (!form.name.trim()) e.name = "Wajib diisi";
-		if (!form.email.trim()) e.email = "Wajib diisi";
-		if (!form.email.includes("@")) e.email = "Format email tidak valid";
-		if (!editUser && form.role === "dealer" && !form.dealerName.trim()) {
-			e.dealerName = "Nama perusahaan wajib diisi untuk dealer";
-		}
 		setErrors(e);
 		return Object.keys(e).length === 0;
 	};
@@ -128,22 +121,12 @@ function UserFormModal({
 		if (!validate()) return;
 		setLoading(true);
 		try {
-			const payload = {
+			await onSave({
 				name: form.name,
-				email: form.email,
 				role: form.role,
-				...(editUser && { status: form.status }),
-				...(form.role === "dealer" && {
-					dealerName: form.dealerName || null,
-					dealerPhone: form.dealerPhone || null,
-					dealerAddress: form.dealerAddress || null,
-				}),
-			};
-			await onSave(payload);
-			success(
-				editUser ? "User berhasil diperbarui" : "User baru berhasil ditambahkan",
-				form.email,
-			);
+				status: form.status,
+			});
+			success("User berhasil diperbarui", form.email);
 			onClose();
 		} catch (err: any) {
 			errorToast(err.message || "Gagal menyimpan user");
@@ -153,11 +136,7 @@ function UserFormModal({
 	};
 
 	return (
-		<Modal
-			open={open}
-			onClose={onClose}
-			title={editUser ? "Edit User" : "Tambah User Baru"}
-			size="sm">
+		<Modal open={open} onClose={onClose} title="Edit User" size="sm">
 			<div className="space-y-3">
 				<Input
 					label="Nama Lengkap"
@@ -170,13 +149,11 @@ function UserFormModal({
 				<Input
 					label="Email"
 					type="email"
-					placeholder="email@kassengaransi.id"
 					value={form.email}
-					onChange={(e) => setForm({ ...form, email: e.target.value })}
 					error={errors.email}
 					required
-					disabled={!!editUser}
-					hint={editUser ? "Email tidak dapat diubah" : undefined}
+					disabled
+					hint="Email tidak dapat diubah"
 				/>
 				<Select
 					label="Role"
@@ -193,56 +170,21 @@ function UserFormModal({
 					}
 				/>
 
-				{/* Dealer fields */}
-				{form.role === "dealer" && (
-					<>
-						<Input
-							label="Nama Perusahaan"
-							placeholder="PT/CV Nama Dealer"
-							value={form.dealerName}
-							onChange={(e) =>
-								setForm({ ...form, dealerName: e.target.value })
-							}
-							error={errors.dealerName}
-							required={!editUser}
-						/>
-						<Input
-							label="Nomor Telepon"
-							placeholder="+62-xxx-xxxx-xxxx"
-							value={form.dealerPhone}
-							onChange={(e) =>
-								setForm({ ...form, dealerPhone: e.target.value })
-							}
-						/>
-						<Input
-							label="Alamat"
-							placeholder="Alamat lengkap dealer"
-							value={form.dealerAddress}
-							onChange={(e) =>
-								setForm({ ...form, dealerAddress: e.target.value })
-							}
-						/>
-					</>
-				)}
-
-				{/* Edit: Status field */}
-				{editUser && (
-					<Select
-						label="Status"
-						required
-						options={[
-							{ value: "active", label: "Aktif" },
-							{ value: "inactive", label: "Nonaktif" },
-						]}
-						value={form.status}
-						onChange={(e) =>
-							setForm({
-								...form,
-								status: e.target.value as "active" | "inactive",
-							})
-						}
-					/>
-				)}
+				<Select
+					label="Status"
+					required
+					options={[
+						{ value: "active", label: "Aktif" },
+						{ value: "inactive", label: "Nonaktif" },
+					]}
+					value={form.status}
+					onChange={(e) =>
+						setForm({
+							...form,
+							status: e.target.value as "active" | "inactive",
+						})
+					}
+				/>
 
 				{/* Scope description */}
 				<div className="px-3 py-2.5 rounded-lg bg-zinc-50 border border-zinc-100 text-[11px] text-zinc-500 leading-relaxed">
@@ -257,7 +199,7 @@ function UserFormModal({
 						Batal
 					</Button>
 					<Button fullWidth loading={loading} onClick={handleSave}>
-						{editUser ? "Simpan Perubahan" : "Tambah User"}
+						Simpan Perubahan
 					</Button>
 				</div>
 			</div>
@@ -523,7 +465,7 @@ export default function UsersPage() {
 		});
 	}, [users, search, roleFilter, statusFilter]);
 
-	const handleAddUser = async (data: any) => {
+	const handleAddUser = async (data: CreateUserPayload) => {
 		try {
 			const res = await userApi.add(data);
 			if (res.success) {
@@ -850,13 +792,12 @@ export default function UsersPage() {
 			</div>
 
 			{/* Modals */}
-			<UserFormModal
+			<CreateUserModal
 				open={addOpen}
 				onClose={() => setAddOpen(false)}
-				editUser={null}
 				onSave={handleAddUser}
 			/>
-			<UserFormModal
+			<EditUserModal
 				open={!!editTarget}
 				onClose={() => setEditTarget(null)}
 				editUser={editTarget}

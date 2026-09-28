@@ -30,13 +30,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { dealerApi } from "@/lib/api/api-client";
-import { DealerSchema } from "@/db/schema";
+import type { Dealer } from "@/types";
 
 export default function DealersPage() {
-	const [dealers, setDealers] = useState<DealerSchema[]>([]);
+	const [dealers, setDealers] = useState<Dealer[]>([]);
 	const [search, setSearch] = useState("");
-	const [selected, setSelected] = useState<DealerSchema | null>(null);
-	const [toggleTarget, setToggle] = useState<DealerSchema | null>(null);
+	const [selected, setSelected] = useState<Dealer | null>(null);
+	const [toggleTarget, setToggle] = useState<Dealer | null>(null);
 
 	// State untuk Modal Tambah Dealer
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -49,7 +49,7 @@ export default function DealersPage() {
 	});
 
 	// State untuk Modal Edit Dealer
-	const [editingDealer, setEditingDealer] = useState<DealerSchema | null>(null);
+	const [editingDealer, setEditingDealer] = useState<Dealer | null>(null);
 	const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
 	const { success, error: toastError } = useToast();
@@ -122,7 +122,7 @@ export default function DealersPage() {
 	};
 
 	// Membuka Modal Edit dari Detail Modal
-	const handleTriggerEdit = (dealer: DealerSchema) => {
+	const handleTriggerEdit = (dealer: Dealer) => {
 		setSelected(null); // Tutup modal detail terlebih dahulu
 		setEditingDealer(dealer); // Buka modal edit dengan data terisi
 	};
@@ -229,7 +229,7 @@ export default function DealersPage() {
 											</TableCell>
 											<TableCell>
 												<span className="text-xs text-zinc-400">
-													{formatDateShort(d.createdAt)}
+													{formatDateShort(d.created_at)}
 												</span>
 											</TableCell>
 											<TableCell>
@@ -467,7 +467,7 @@ export default function DealersPage() {
 								{
 									icon: <Calendar size={13} />,
 									label: "Bergabung",
-									value: formatDateShort(selected.createdAt),
+									value: formatDateShort(selected.created_at),
 								},
 							].map((item) => (
 								<div

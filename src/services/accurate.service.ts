@@ -2,11 +2,9 @@ import { db } from "@/db";
 import {
 	product,
 	deliveryOrders,
-	dealers,
 	customer,
 	productType,
 	itemCodeMapping,
-	user,
 	purchase,
 	purchaseItem,
 	invoice,
@@ -23,6 +21,13 @@ import { normalizeSerialNumber } from "@/lib/utils";
 import { eq } from "drizzle-orm";
 import { notificationService } from "./notification.service";
 import crypto from "crypto";
+
+// A customer is treated as a "dealer" for upload/inventory purposes purely
+// by its assigned `customer_category.name` (case-insensitive "Dealer") —
+// see DEALER_UPLOAD_REFACTOR.md.
+function isDealerCategory(categoryName: string | null | undefined): boolean {
+	return categoryName?.trim().toLowerCase() === "dealer";
+}
 
 export async function getProductTypeMappings() {
 	const types = await db.query.productType.findMany({
@@ -104,19 +109,18 @@ export async function validateAccurateFile(
 }
 
 export interface UploadSubmitOptions {
-	destType: "dealer" | "customer";
-	destLabel: string;
 	userId: string;
 	file: File;
-	pendingDealerCreation?: {
-		name: string;
-		email: string;
-		phone?: string;
-	};
+	/** Existing customer/dealer chosen from the picker. */
+	selectedCustomerId?: string;
+	/** Consolidated customer/dealer creation payload for a new entity. */
 	pendingCustomerCreation?: {
+		customId: string;
 		name: string;
-		email?: string;
+		categoryId: string;
 		phone?: string;
+		address?: string;
+		email?: string;
 	};
 	pendingItemCodes?: Array<{
 		code: string;
@@ -140,11 +144,9 @@ export async function submitAccurateFile(
 	productsCreated: number;
 }> {
 	const {
-		destType,
-		destLabel,
 		userId,
 		file,
-		pendingDealerCreation,
+		selectedCustomerId,
 		pendingCustomerCreation,
 		pendingItemCodes,
 		purchaseData,
@@ -200,77 +202,52 @@ export async function submitAccurateFile(
 		throw new Error("Tidak ada produk valid untuk disimpan");
 	}
 
-	// Create pending dealer if provided
-	if (pendingDealerCreation && destType === "dealer") {
-		const newUserId = crypto.randomUUID();
-		await db.insert(user).values({
-			id: newUserId,
-			name: pendingDealerCreation.name,
-			email: pendingDealerCreation.email,
-			emailVerified: false,
-			role: "dealer",
-			status: "active",
-		});
+	// Resolve (or create) the consolidated customer/dealer entity for this DO.
+	let customerId: string;
 
-		await db.insert(dealers).values({
-			id: crypto.randomUUID(),
-			userId: newUserId,
-			name: pendingDealerCreation.name,
-			email: pendingDealerCreation.email,
-			phone: pendingDealerCreation.phone ?? null,
-		});
-	}
-
-	// Create pending customer if provided
-	if (pendingCustomerCreation && destType === "customer") {
+	if (pendingCustomerCreation) {
 		const email = pendingCustomerCreation.email?.trim()
 			? pendingCustomerCreation.email.trim()
-			: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`;
+			: null;
 
-		await db.insert(customer).values({
-			id: crypto.randomUUID(),
-			name: pendingCustomerCreation.name,
-			email,
-			phone: pendingCustomerCreation.phone ?? null,
-		});
-	}
+		const created = await db
+			.insert(customer)
+			.values({
+				id: crypto.randomUUID(),
+				customId: pendingCustomerCreation.customId,
+				name: pendingCustomerCreation.name,
+				categoryId: pendingCustomerCreation.categoryId,
+				email,
+				phone: pendingCustomerCreation.phone ?? null,
+				address: pendingCustomerCreation.address ?? null,
+			})
+			.returning();
 
-	// Get dealer or customer ID
-	let dealerId: string | null = null;
-	let customerId: string | null = null;
-
-	if (destType === "dealer") {
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.name, destLabel),
-		});
-		if (!dealer) {
-			throw new Error(`Dealer '${destLabel}' tidak ditemukan`);
+		if (!created[0]) {
+			throw new Error(`Gagal membuat customer '${pendingCustomerCreation.name}'`);
 		}
-		dealerId = dealer.id;
-	} else {
-		let found = await db.query.customer.findFirst({
-			where: eq(customer.name, destLabel),
+		customerId = created[0].id;
+	} else if (selectedCustomerId) {
+		const found = await db.query.customer.findFirst({
+			where: eq(customer.id, selectedCustomerId),
 		});
-
 		if (!found) {
-			// Auto-create customer if doesn't exist (fallback)
-			const result = await db
-				.insert(customer)
-				.values({
-					id: crypto.randomUUID(),
-					name: destLabel,
-					email: `customer_${crypto.randomBytes(6).toString("hex")}@system.local`,
-				})
-				.returning();
-
-			if (!result[0]) {
-				throw new Error(`Gagal membuat customer '${destLabel}'`);
-			}
-			found = result[0];
+			throw new Error("Customer/dealer tujuan tidak ditemukan");
 		}
-
 		customerId = found.id;
+	} else {
+		throw new Error("Customer/dealer tujuan wajib dipilih");
 	}
+
+	// Whether this customer is a dealer is derived purely from its category
+	// (see isDealerCategory) — not from a manual dealer/customer toggle.
+	const customerWithCategory = await db.query.customer.findFirst({
+		where: eq(customer.id, customerId),
+		with: { category: true },
+	});
+	const isDealer = isDealerCategory(customerWithCategory?.category?.name);
+	const destType: "dealer" | "customer" = isDealer ? "dealer" : "customer";
+	const dealerId = isDealer ? customerId : null;
 
 	// Parse date from "dd MMM yyyy" format to ISO date
 	let doDate = new Date().toISOString().split("T")[0]; // Default to today
@@ -297,8 +274,7 @@ export async function submitAccurateFile(
 			orderRef: parsed.orderRef || null,
 			dcRef: parsed.area || null,
 			destinationType: destType,
-			destinationDealerId: dealerId,
-			destinationCustomerId: customerId,
+			destinationCustomerId: dealerId ?? customerId,
 			uploadedBy: userId,
 			fileHash: hash,
 			originalFilename: file.name,
@@ -357,7 +333,7 @@ export async function submitAccurateFile(
 					serialNumber: normalizedSn,
 					productTypeId: mapping.id,
 					deliveryOrderId: doId,
-					dealerId: dealerId,
+					customerId: dealerId,
 					status: "none" as const,
 				};
 
@@ -397,16 +373,30 @@ export async function submitAccurateFile(
 	// Create purchase record if purchaseData is provided (for end customer)
 	let purchaseId: string | null = null;
 	if (purchaseData && customerId && destType === "customer") {
+		// `purchase` no longer has a dealerId column (dealers are now customer rows).
+		// Best-effort: record which dealer facilitated the sale as a note, since
+		// there is currently no structured column to persist that link.
+		let notes = purchaseData.notes || null;
+		if (purchaseData.dealerId) {
+			const facilitatingDealer = await db.query.customer.findFirst({
+				where: eq(customer.id, purchaseData.dealerId),
+			});
+			if (facilitatingDealer) {
+				notes = [`Dijual melalui dealer: ${facilitatingDealer.name}`, notes]
+					.filter(Boolean)
+					.join(" — ");
+			}
+		}
+
 		const purchaseRecord = await db
 			.insert(purchase)
 			.values({
 				id: crypto.randomUUID(),
 				purchaseDate: purchaseData.purchaseDate,
 				customerId,
-				dealerId: purchaseData.dealerId || null,
 				registeredBy: userId,
 				source: purchaseData.dealerId ? "dealer" : "direct_sales",
-				notes: purchaseData.notes || null,
+				notes,
 			})
 			.returning();
 

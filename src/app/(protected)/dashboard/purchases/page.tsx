@@ -330,7 +330,7 @@ export default function AdminPurchasesPage() {
 				(g.dealer?.name ?? "").toLowerCase().includes(q);
 			const matchDealer =
 				dealerFilter === "all" ||
-				(dealerFilter === "none" ? !g.dealerId : g.dealerId === dealerFilter);
+				(dealerFilter === "none" ? !g.dealer : g.dealer?.id === dealerFilter);
 			const matchFrom = !dateFrom || g.purchaseDate >= dateFrom;
 			const matchTo = !dateTo || g.purchaseDate <= dateTo;
 			return matchSearch && matchDealer && matchFrom && matchTo;
@@ -422,12 +422,12 @@ export default function AdminPurchasesPage() {
 						{ l: "Total Pembelian", v: purchases.length, c: "text-zinc-900" },
 						{
 							l: "Via Dealer",
-							v: purchases.filter((g) => g.dealerId).length,
+							v: purchases.filter((g) => g.dealer).length,
 							c: "text-blue-700",
 						},
 						{
 							l: "Via Sales Langsung",
-							v: purchases.filter((g) => !g.dealerId).length,
+							v: purchases.filter((g) => !g.dealer).length,
 							c: "text-violet-700",
 						},
 					].map((s) => (
@@ -460,10 +460,10 @@ export default function AdminPurchasesPage() {
 								...Array.from(
 									new Map(
 										purchases
-											.filter((d): d is typeof d & { dealerId: string } => !!d.dealerId)
+											.filter((d) => !!d.dealer)
 											.map((d) => [
-												d.dealerId,
-												{ value: d.dealerId, label: d.dealer?.name ?? "Unknown" },
+												d.dealer!.id,
+												{ value: d.dealer!.id, label: d.dealer?.name ?? "Unknown" },
 											]),
 									).values(),
 								),

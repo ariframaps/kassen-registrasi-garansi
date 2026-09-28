@@ -42,6 +42,27 @@ export const auth = betterAuth({
 				},
 			});
 		},
+		onPasswordReset: async ({ user: resetUser }) => {
+			await db
+				.update(user)
+				.set({ emailVerified: true, status: "active", updatedAt: new Date() })
+				.where(eq(user.id, resetUser.id));
+		},
+	},
+
+	emailVerification: {
+		sendVerificationEmail: async ({ user, url }) => {
+			await sendEmail({
+				to: user.email,
+				subject: "Verifikasi Email Baru Anda",
+				templateFileName: "email-verification",
+				templateVariables: {
+					name: user.name,
+					email: user.email,
+					verificationLink: url,
+				},
+			});
+		},
 	},
 
 	user: {
@@ -103,8 +124,8 @@ export const auth = betterAuth({
 					.limit(1);
 				if (!result[0]) {
 					console.error("❌ Auth Error: User not found in DB");
-					throw new APIError("NOT_FOUND", {
-						message: "User not found",
+					throw new APIError("UNAUTHORIZED", {
+						message: "Email atau password salah",
 					});
 				}
 				const findUser = userSchema.parse(result[0]);

@@ -3,7 +3,7 @@ import {
 	notification,
 	waitingList,
 	product as productTable,
-	dealers,
+	customer,
 	productType,
 	WaitingListSchema,
 	NotificationSchema,
@@ -32,11 +32,8 @@ export const notificationService = {
 		serialNumberRequested?: string;
 		notes?: string;
 	}): Promise<WaitingListSchema> => {
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.id, data.dealerId),
-			with: {
-				user: true,
-			},
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.id, data.dealerId),
 		});
 
 		if (!dealer) {
@@ -64,7 +61,7 @@ export const notificationService = {
 				requesterName: dealer.name,
 				requesterEmail: dealer.email,
 				requesterPhone: dealer.phone || null,
-				dealerId: data.dealerId,
+				customerId: data.dealerId,
 				productTypeId: data.productTypeId,
 				status: "pending",
 			})
@@ -89,22 +86,19 @@ export const notificationService = {
 			return;
 		}
 
-		// Get dealer with user info
-		const dealerData = await db.query.dealers.findFirst({
-			where: eq(dealers.id, dealerId),
-			with: {
-				user: true,
-			},
+		// Get dealer (a customer row with a linked user account)
+		const dealerData = await db.query.customer.findFirst({
+			where: eq(customer.id, dealerId),
 		});
 
-		if (!dealerData) {
+		if (!dealerData || !dealerData.userId) {
 			return;
 		}
 
 		// Check for pending requests for this dealer
 		const pendingRequests = await db.query.waitingList.findMany({
 			where: and(
-				eq(waitingList.dealerId, dealerId),
+				eq(waitingList.customerId, dealerId),
 				eq(waitingList.status, "pending"),
 				eq(waitingList.requesterType, "dealer"),
 			),
@@ -172,6 +166,7 @@ export const notificationService = {
 				.where(eq(waitingList.id, request.id));
 
 			// Send email notification
+			if (!dealerData.email) continue;
 			try {
 				await sendEmail({
 					to: dealerData.email,
@@ -194,8 +189,8 @@ export const notificationService = {
 
 	// Get dealer notifications
 	getDealerNotifications: async (userId: string): Promise<NotificationSchema[]> => {
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, userId),
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, userId),
 		});
 
 		if (!dealer) {

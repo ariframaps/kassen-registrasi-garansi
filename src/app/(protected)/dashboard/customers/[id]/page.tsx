@@ -12,7 +12,7 @@ import {
 import { customerAdapter } from "@/lib/adapters/customer.adapter";
 import type { PurchaseGroup, CustomerDetail } from "@/types";
 import { formatDateShort, getDaysRemaining } from "@/lib/utils";
-import { ArrowLeft, Mail, Phone, ShoppingBag, CalendarDays, Building2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, ShoppingBag, CalendarDays, Building2, Users } from "lucide-react";
 
 function WarrantyBadge({ endDate }: { endDate: string }) {
   const days = getDaysRemaining(endDate);
@@ -32,11 +32,18 @@ export default function CustomerDetailPage() {
     Promise.all([
       customerAdapter.getById(id),
       customerAdapter.getPurchaseHistory(id),
-    ]).then(([cust, hist]) => {
-      setCustomer(cust);
-      setPurchases(hist);
-      setLoading(false);
-    });
+    ])
+      .then(([cust, hist]) => {
+        setCustomer(cust);
+        setPurchases(hist);
+      })
+      .catch(() => {
+        setCustomer(null);
+        setPurchases([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [id]);
 
   if (loading) {
@@ -54,10 +61,26 @@ export default function CustomerDetailPage() {
     return (
       <div className="flex flex-col min-h-screen bg-[var(--bg)]">
         <Topbar title="Detail Customer" />
-        <div className="flex-1 flex items-center justify-center flex-col gap-3">
-          <p className="text-sm text-zinc-600">Customer tidak ditemukan.</p>
-          <Button variant="outline" size="sm" onClick={() => router.back()}>Kembali</Button>
-        </div>
+        <main className="flex-1 p-6">
+          <Card>
+            <CardContent>
+              <EmptyState
+                icon={<Users size={18} />}
+                title="Customer Tidak Ditemukan"
+                description="Customer yang Anda cari tidak ada atau telah dihapus."
+                action={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/dashboard/customers")}
+                  >
+                    Kembali ke Daftar Customer
+                  </Button>
+                }
+              />
+            </CardContent>
+          </Card>
+        </main>
       </div>
     );
   }
@@ -87,13 +110,21 @@ export default function CustomerDetailPage() {
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-base font-semibold text-zinc-900">{customer.name}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base font-semibold text-zinc-900">{customer.name}</h2>
+                  <span className="text-xs text-zinc-400 font-mono">{customer.customId}</span>
+                  {customer.categoryName ? (
+                    <Badge variant="blue">{customer.categoryName}</Badge>
+                  ) : (
+                    <Badge variant="neutral">Tanpa kategori</Badge>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
                   <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                    <Mail size={12} /> {customer.email}
+                    <Mail size={12} /> {customer.email || "—"}
                   </span>
                   <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                    <Phone size={12} /> {customer.phone}
+                    <Phone size={12} /> {customer.phone || "—"}
                   </span>
                   <span className="flex items-center gap-1.5 text-xs text-zinc-500">
                     <CalendarDays size={12} /> Terdaftar {formatDateShort(customer.createdAt)}

@@ -48,7 +48,8 @@ import {
 import { useToast } from "@/components/ui/toast";
 // import type { Product } from "@/types";
 import { authClient } from "@/lib/auth-client";
-import { CategorySchema, DealerSchema } from "@/db/schema";
+import { CategorySchema } from "@/db/schema";
+import type { Dealer } from "@/types";
 import {
 	dealerApi,
 	productApi,
@@ -596,7 +597,7 @@ function WarrantyModal({
 export default function ProductsPage() {
 	const [products, setProducts] = useState<ProductWithNestedSchema[]>([]);
 	const [categories, setCategories] = useState<CategorySchema[]>([]);
-	const [dealers, setDealers] = useState<DealerSchema[]>([]);
+	const [dealers, setDealers] = useState<Dealer[]>([]);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState<ProductStatus | "all">(
 		"all",
@@ -629,7 +630,7 @@ export default function ProductsPage() {
 			const matchStatus = statusFilter === "all" || p.status === statusFilter;
 			const matchDealer =
 				dealerFilter === "all" ||
-				(dealerFilter === "none" ? !p.dealerId : p.dealerId === dealerFilter);
+				(dealerFilter === "none" ? !p.customerId : p.customerId === dealerFilter);
 			const matchCategory =
 				categoryFilter === "all" || p.productType.categoryId === categoryFilter;
 			return matchSearch && matchStatus && matchDealer && matchCategory;
@@ -876,7 +877,7 @@ export default function ProductsPage() {
 												</TableCell>
 												<TableCell>
 													<span className="text-xs text-zinc-500">
-														{p.dealer?.name ?? (
+														{p.customer?.name ?? (
 															<span className="text-zinc-300">—</span>
 														)}
 													</span>
@@ -979,7 +980,7 @@ export default function ProductsPage() {
 									{[
 										{
 											l: "Dealer",
-											v: selectedProduct.dealer?.name ?? "—",
+											v: selectedProduct.customer?.name ?? "—",
 										},
 										{
 											l: "Customer",

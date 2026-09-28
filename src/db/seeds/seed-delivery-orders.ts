@@ -33,8 +33,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0001",
 			dcRef: "DC-2024-001",
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.pratama,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.pratama,
 			uploadedBy: USER_IDS.admin,
 			fileHash:
 				"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f61111",
@@ -51,8 +50,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0002",
 			dcRef: "DC-2024-002",
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.maju,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.maju,
 			uploadedBy: USER_IDS.sales1,
 			fileHash:
 				"b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a12222",
@@ -69,8 +67,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0003",
 			dcRef: null,
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.sakti,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.sakti,
 			uploadedBy: USER_IDS.admin,
 			fileHash:
 				"c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b23333",
@@ -87,8 +84,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0004",
 			dcRef: "DC-2024-004",
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.pratama,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.pratama,
 			uploadedBy: USER_IDS.sales1,
 			fileHash:
 				"d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c34444",
@@ -105,8 +101,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0005",
 			dcRef: "DC-2024-005",
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.maju,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.maju,
 			uploadedBy: USER_IDS.sales2,
 			fileHash:
 				"e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d45555",
@@ -123,8 +118,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0006",
 			dcRef: null,
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.sakti,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.sakti,
 			uploadedBy: USER_IDS.admin,
 			fileHash:
 				"f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e56666",
@@ -142,7 +136,6 @@ export async function seedDeliveryOrders() {
 			orderRef: "SO-2024-0001",
 			dcRef: null,
 			destinationType: "customer" as const,
-			destinationDealerId: null,
 			destinationCustomerId: CUSTOMER_IDS[0],
 			uploadedBy: USER_IDS.sales1,
 			fileHash:
@@ -160,7 +153,6 @@ export async function seedDeliveryOrders() {
 			orderRef: "SO-2024-0002",
 			dcRef: "DC-2024-008",
 			destinationType: "customer" as const,
-			destinationDealerId: null,
 			destinationCustomerId: CUSTOMER_IDS[3],
 			uploadedBy: USER_IDS.sales2,
 			fileHash:
@@ -178,8 +170,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0007",
 			dcRef: "DC-2024-009",
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.pratama,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.pratama,
 			uploadedBy: USER_IDS.admin,
 			fileHash:
 				"c3d4e5f6000003b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f69999",
@@ -196,8 +187,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0008",
 			dcRef: null,
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.maju,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.maju,
 			uploadedBy: USER_IDS.sales1,
 			fileHash:
 				"d4e5f6000004b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1aaaa",
@@ -214,7 +204,6 @@ export async function seedDeliveryOrders() {
 			orderRef: "SO-2024-0003",
 			dcRef: "DC-2024-011",
 			destinationType: "customer" as const,
-			destinationDealerId: null,
 			destinationCustomerId: CUSTOMER_IDS[1],
 			uploadedBy: USER_IDS.sales2,
 			fileHash:
@@ -232,8 +221,7 @@ export async function seedDeliveryOrders() {
 			orderRef: "PO-2024-0009",
 			dcRef: null,
 			destinationType: "dealer" as const,
-			destinationDealerId: DEALER_IDS.sakti,
-			destinationCustomerId: null,
+			destinationCustomerId: DEALER_IDS.sakti,
 			uploadedBy: USER_IDS.admin,
 			fileHash:
 				"f6000006b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3cccc",

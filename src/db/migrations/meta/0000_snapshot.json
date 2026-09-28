@@ -1,5 +1,5 @@
 {
-  "id": "6c6fef09-a9fb-4f37-95e4-4d94c993e0e3",
+  "id": "c69c28b7-92e4-408f-a2af-89b472734983",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -387,8 +387,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dealer": {
-      "name": "dealer",
+    "public.customer": {
+      "name": "customer",
       "schema": "",
       "columns": {
         "id": {
@@ -396,13 +396,25 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'fab323c6-7f4e-4eba-884d-69f5238ad027'"
+          "default": "'ecfc6591-9c00-4a2e-b6ed-ceb9588ef055'"
+        },
+        "custom_id": {
+          "name": "custom_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "name": {
           "name": "name",
@@ -414,7 +426,7 @@
           "name": "email",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "phone": {
           "name": "phone",
@@ -427,14 +439,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "dealer_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
         },
         "created_at": {
           "name": "created_at",
@@ -459,9 +463,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "dealer_user_id_user_id_fk": {
-          "name": "dealer_user_id_user_id_fk",
-          "tableFrom": "dealer",
+        "customer_user_id_user_id_fk": {
+          "name": "customer_user_id_user_id_fk",
+          "tableFrom": "customer",
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
@@ -471,19 +475,39 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "customer_category_id_customer_category_id_fk": {
+          "name": "customer_category_id_customer_category_id_fk",
+          "tableFrom": "customer",
+          "tableTo": "customer_category",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "dealer_user_id_unique": {
-          "name": "dealer_user_id_unique",
+        "customer_custom_id_unique": {
+          "name": "customer_custom_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "custom_id"
+          ]
+        },
+        "customer_user_id_unique": {
+          "name": "customer_user_id_unique",
           "nullsNotDistinct": false,
           "columns": [
             "user_id"
           ]
         },
-        "dealer_email_unique": {
-          "name": "dealer_email_unique",
+        "customer_email_unique": {
+          "name": "customer_email_unique",
           "nullsNotDistinct": false,
           "columns": [
             "email"
@@ -494,8 +518,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.customer": {
-      "name": "customer",
+    "public.customer_category": {
+      "name": "customer_category",
       "schema": "",
       "columns": {
         "id": {
@@ -503,31 +527,13 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'8bfc1969-93d9-4c71-9877-b2849ddb35d4'"
+          "default": "'90e23789-62ff-4959-9b80-9e1d748ad85f'"
         },
         "name": {
           "name": "name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "phone": {
-          "name": "phone",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "address": {
-          "name": "address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -554,11 +560,11 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "customer_email_unique": {
-          "name": "customer_email_unique",
+        "customer_category_name_unique": {
+          "name": "customer_category_name_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "email"
+            "name"
           ]
         }
       },
@@ -575,7 +581,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'4b0d2410-3360-4ad8-8ea5-39c16dc356c7'"
+          "default": "'2cfe302e-aa02-4026-b526-474c9ce17433'"
         },
         "name": {
           "name": "name",
@@ -629,7 +635,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'733317d3-16f0-46a6-891a-c025996402f6'"
+          "default": "'c5a9f1ed-4957-499f-a687-2d043cef43a1'"
         },
         "category_id": {
           "name": "category_id",
@@ -718,7 +724,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'c530ecef-7f29-4bab-8acb-5c39753e51d4'"
+          "default": "'898f5097-1a8a-427c-acb9-ad1d61962830'"
         },
         "item_code": {
           "name": "item_code",
@@ -792,7 +798,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'49b1deaa-5281-4903-812a-5982b64a6eef'"
+          "default": "'eb603233-6889-4107-8050-f5e63a906329'"
         },
         "do_number": {
           "name": "do_number",
@@ -836,12 +842,6 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
-        },
-        "destination_dealer_id": {
-          "name": "destination_dealer_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "destination_customer_id": {
           "name": "destination_customer_id",
@@ -906,19 +906,6 @@
         }
       },
       "foreignKeys": {
-        "delivery_order_destination_dealer_id_dealer_id_fk": {
-          "name": "delivery_order_destination_dealer_id_dealer_id_fk",
-          "tableFrom": "delivery_order",
-          "tableTo": "dealer",
-          "columnsFrom": [
-            "destination_dealer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "delivery_order_destination_customer_id_customer_id_fk": {
           "name": "delivery_order_destination_customer_id_customer_id_fk",
           "tableFrom": "delivery_order",
@@ -969,7 +956,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'7ca23db6-a1c4-40bc-95d1-ff47cbc369d5'"
+          "default": "'0beea556-1ed2-41a4-a23a-c95642da19c9'"
         },
         "serial_number": {
           "name": "serial_number",
@@ -989,8 +976,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "dealer_id": {
-          "name": "dealer_id",
+        "customer_id": {
+          "name": "customer_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1001,7 +988,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'unassigned'"
+          "default": "'none'"
         },
         "warranty_start_date": {
           "name": "warranty_start_date",
@@ -1037,11 +1024,11 @@
         }
       },
       "indexes": {
-        "product_dealer_id_index": {
-          "name": "product_dealer_id_index",
+        "product_customer_id_index": {
+          "name": "product_customer_id_index",
           "columns": [
             {
-              "expression": "dealer_id",
+              "expression": "customer_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1110,12 +1097,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "product_dealer_id_dealer_id_fk": {
-          "name": "product_dealer_id_dealer_id_fk",
+        "product_customer_id_customer_id_fk": {
+          "name": "product_customer_id_customer_id_fk",
           "tableFrom": "product",
-          "tableTo": "dealer",
+          "tableTo": "customer",
           "columnsFrom": [
-            "dealer_id"
+            "customer_id"
           ],
           "columnsTo": [
             "id"
@@ -1147,7 +1134,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'d6743c00-0014-4885-842e-f8be7293a3c6'"
+          "default": "'b75c6371-34f9-49fe-b5e0-0ab05ff7d758'"
         },
         "purchase_date": {
           "name": "purchase_date",
@@ -1160,12 +1147,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "dealer_id": {
-          "name": "dealer_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "registered_by": {
           "name": "registered_by",
@@ -1222,21 +1203,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "purchase_dealer_id_index": {
-          "name": "purchase_dealer_id_index",
-          "columns": [
-            {
-              "expression": "dealer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1251,19 +1217,6 @@
             "id"
           ],
           "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "purchase_dealer_id_dealer_id_fk": {
-          "name": "purchase_dealer_id_dealer_id_fk",
-          "tableFrom": "purchase",
-          "tableTo": "dealer",
-          "columnsFrom": [
-            "dealer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "purchase_registered_by_user_id_fk": {
@@ -1295,7 +1248,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'5ac79cd5-58f0-45f5-9d62-4612fde8271f'"
+          "default": "'f67ca7cc-d5ef-40da-a93f-dd1ef6b52b72'"
         },
         "purchase_id": {
           "name": "purchase_id",
@@ -1385,7 +1338,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'36a6b582-7565-48f3-b28f-18891b3c3c2c'"
+          "default": "'3160188c-dbf4-48dd-ac04-071904b1e566'"
         },
         "purchase_id": {
           "name": "purchase_id",
@@ -1495,8 +1448,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "'6fc37d22-0e33-40a2-923c-7c4371a76d37'"
+          "notNull": true
         },
         "product_id": {
           "name": "product_id",
@@ -1584,7 +1536,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'2cc53f53-07e2-4557-803b-42cbc6b970cb'"
+          "default": "'29448740-544d-44f4-bb45-af4eebea8706'"
         },
         "serial_number_requested": {
           "name": "serial_number_requested",
@@ -1617,14 +1569,20 @@
           "primaryKey": false,
           "notNull": false
         },
-        "dealer_id": {
-          "name": "dealer_id",
+        "customer_id": {
+          "name": "customer_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "product_id": {
           "name": "product_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "product_type_id": {
+          "name": "product_type_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1700,11 +1658,11 @@
           "method": "btree",
           "with": {}
         },
-        "waiting_list_dealer_id_index": {
-          "name": "waiting_list_dealer_id_index",
+        "waiting_list_customer_id_index": {
+          "name": "waiting_list_customer_id_index",
           "columns": [
             {
-              "expression": "dealer_id",
+              "expression": "customer_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1717,12 +1675,12 @@
         }
       },
       "foreignKeys": {
-        "waiting_list_dealer_id_dealer_id_fk": {
-          "name": "waiting_list_dealer_id_dealer_id_fk",
+        "waiting_list_customer_id_customer_id_fk": {
+          "name": "waiting_list_customer_id_customer_id_fk",
           "tableFrom": "waiting_list",
-          "tableTo": "dealer",
+          "tableTo": "customer",
           "columnsFrom": [
-            "dealer_id"
+            "customer_id"
           ],
           "columnsTo": [
             "id"
@@ -1736,6 +1694,19 @@
           "tableTo": "product",
           "columnsFrom": [
             "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "waiting_list_product_type_id_product_type_id_fk": {
+          "name": "waiting_list_product_type_id_product_type_id_fk",
+          "tableFrom": "waiting_list",
+          "tableTo": "product_type",
+          "columnsFrom": [
+            "product_type_id"
           ],
           "columnsTo": [
             "id"
@@ -1772,7 +1743,7 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "default": "'98c4c64e-5d26-44b3-85a2-c38688c378de'"
+          "default": "'48b35b36-e0b0-4205-9890-2574310538c2'"
         },
         "user_id": {
           "name": "user_id",
@@ -1921,8 +1892,7 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "'d5c5f659-33fc-4b03-9b7d-38466e6535e7'"
+          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -2121,14 +2091,6 @@
         "deleted"
       ]
     },
-    "public.dealer_status": {
-      "name": "dealer_status",
-      "schema": "public",
-      "values": [
-        "active",
-        "inactive"
-      ]
-    },
     "public.destination_type": {
       "name": "destination_type",
       "schema": "public",
@@ -2141,8 +2103,7 @@
       "name": "product_status",
       "schema": "public",
       "values": [
-        "unassigned",
-        "assigned",
+        "none",
         "warranty_active",
         "warranty_expired"
       ]

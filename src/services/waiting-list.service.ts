@@ -38,7 +38,7 @@ export const waitingListService = {
 				requesterName: data.requesterName,
 				requesterEmail: data.requesterEmail,
 				requesterPhone: data.requesterPhone,
-				dealerId: data.dealerId || null,
+				customerId: data.dealerId || null,
 				status: "pending",
 			})
 			.returning();

@@ -11,8 +11,8 @@ import { getSafeErrorMessage } from "@/lib/api/get-safe-error-message";
 import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { db } from "@/db";
-import { dealers, user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { customer, user } from "@/db/schema";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 const validateDealerSchema = z.object({
 	name: z.string().min(1, "Nama wajib diisi"),
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
 		const parsed = validateDealerSchema.parse(body);
 
 		// Check if dealer already exists
-		const existingDealer = await db.query.dealers.findFirst({
-			where: eq(dealers.name, parsed.name),
+		const existingDealer = await db.query.customer.findFirst({
+			where: and(eq(customer.name, parsed.name), isNotNull(customer.userId)),
 		});
 
 		if (existingDealer) {

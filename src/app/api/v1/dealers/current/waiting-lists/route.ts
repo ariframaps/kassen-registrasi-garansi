@@ -12,7 +12,7 @@ import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { waitingListService } from "@/services/waiting-list.service";
 import { db } from "@/db";
-import { dealers, user } from "@/db/schema";
+import { customer, user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const createDealerWaitingListSchema = z.object({
@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
 		});
 
 		// Get dealer info
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, session.user.id),
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, session.user.id),
 		});
 
 		if (!dealer) {
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 			serialNumberRequested: parsedData.serialNumberRequested,
 			requesterType: "dealer",
 			requesterName: dealer.name,
-			requesterEmail: dealer.email,
+			requesterEmail: dealer.email || "",
 			requesterPhone: dealer.phone || "",
 			dealerId: dealer.id,
 		});

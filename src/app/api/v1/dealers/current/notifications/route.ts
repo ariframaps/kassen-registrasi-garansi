@@ -11,7 +11,7 @@ import { HttpError } from "@/lib/api/http-error";
 import { normalizeError } from "@/lib/errors/normalize-error";
 import { notificationService } from "@/services/notification.service";
 import { db } from "@/db";
-import { dealers, notification, product as productTable, productType as productTypeTable } from "@/db/schema";
+import { customer, notification, product as productTable, productType as productTypeTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
 		});
 
 		// Get dealer by userId
-		const dealer = await db.query.dealers.findFirst({
-			where: eq(dealers.userId, session.user.id),
+		const dealer = await db.query.customer.findFirst({
+			where: eq(customer.userId, session.user.id),
 		});
 
 		if (!dealer) {

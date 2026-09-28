@@ -3,7 +3,6 @@ import { pgTable, uuid, date, text, pgEnum, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 import { customer } from "./customer.schema";
-import { dealers } from "./dealer.schema";
 import { timestamps } from "../utils/column.helper";
 import { invoice } from "./invoice.schema";
 import { purchaseItem } from "./purchase_item.schema";
@@ -31,10 +30,6 @@ export const purchase = pgTable(
 				onDelete: "restrict",
 			}),
 
-		dealerId: text("dealer_id").references(() => dealers.id, {
-			onDelete: "set null",
-		}),
-
 		registeredBy: text("registered_by")
 			.notNull()
 			.references(() => user.id, {
@@ -47,7 +42,7 @@ export const purchase = pgTable(
 
 		...timestamps,
 	},
-	(table) => [index().on(table.customerId), index().on(table.dealerId)],
+	(table) => [index().on(table.customerId)],
 );
 
 // schema
@@ -62,11 +57,6 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
 	customer: one(customer, {
 		fields: [purchase.customerId],
 		references: [customer.id],
-	}),
-
-	dealer: one(dealers, {
-		fields: [purchase.dealerId],
-		references: [dealers.id],
 	}),
 
 	registeredByUser: one(user, {
