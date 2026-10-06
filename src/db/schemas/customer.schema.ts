@@ -1,7 +1,7 @@
-import { pgTable, uuid, varchar, text } from "drizzle-orm/pg-core";
-import { customerType } from "../enums/customer-type.enum";
-
+import { pgTable, uuid, varchar, text, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+const customerType = pgEnum("customer_type", ["MKO", "DEALER"]);
 import { timestamps } from "../utils/column.helper";
 
 import { purchase } from "./purchase.schema";
