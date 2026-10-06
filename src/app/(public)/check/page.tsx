@@ -28,6 +28,7 @@ export default function CheckPage() {
 	const [state, setState] = useState<
 		"idle" | "found" | "notfound" | "submitted" | "error"
 	>("idle");
+	console.log(state)
 	const [loading, setLoading] = useState(false);
 	const [found, setFound] = useState<Product | null>(null); // fix NEED TO FIX THIS = products must be fetched not using mock
 	const [contact, setContact] = useState({ name: "", phone: "", email: "" });
@@ -256,7 +257,7 @@ export default function CheckPage() {
 										className={`font-semibold text-base ${found.warrantyStatus === "active" ? "text-emerald-800" : "text-red-800"}`}>
 										{found.warrantyStatus === "active"
 											? "Garansi Aktif"
-											: "Garansi Berakhir"}
+											: found.warrantyStatus === "none" ? "Garansi Belum Terdaftar" : "Garansi Berakhir"}
 									</p>
 									<p className="font-mono text-xs text-zinc-500">
 										{found.serialNumber}
