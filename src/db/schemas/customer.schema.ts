@@ -1,7 +1,6 @@
-import { pgTable, uuid, varchar, text, pgEnum } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, uuid, varchar, text } from "drizzle-orm/pg-core";
 
-const customerType = pgEnum("customer_type", ["MKO", "DEALER"]);
+import { relations } from "drizzle-orm";
 import { timestamps } from "../utils/column.helper";
 
 import { purchase } from "./purchase.schema";
@@ -17,12 +16,6 @@ export const customer = pgTable("customer", {
 	id: text("id").default(crypto.randomUUID()).primaryKey(),
 
 	customId: varchar("custom_id", { length: 100 }).notNull().unique(),
-
-	type: customerType("type").default("MKO").notNull(),
-
-	dealerId: text("dealer_id").references(() => customer.id, {
-		onDelete: "set null",
-	}),
 
 	userId: text("user_id").references(() => user.id).unique(),
 
@@ -44,9 +37,6 @@ export const customer = pgTable("customer", {
 // schema
 export const customerSchema = createSelectSchema(customer, {
 	email: (schema) => schema.nullable(),
-	phone: (schema) => schema.nullable(),
-	address: (schema) => schema.nullable(),
-	dealerId: (schema) => schema.nullable(),
 });
 // export const productInsertSchema = createInsertSchema(product);
 // export const productUpdateSchema = createUpdateSchema(product);
@@ -55,11 +45,6 @@ export type CustomerSchema = z.infer<typeof customerSchema>;
 // export type ProductUpdateSchema = z.infer<typeof productUpdateSchema>;
 
 export const customersRelations = relations(customer, ({ one, many }) => ({
-	dealer: one(customer, {
-		fields: [customer.dealerId],
-		references: [customer.id],
-		relationName: "dealer_customers",
-	}),
 	category: one(customerCategory, {
 		fields: [customer.categoryId],
 		references: [customerCategory.id],
