@@ -1,8 +1,6 @@
-import { pgTable, uuid, varchar, text } from "drizzle-orm/pg-core";
-
+import { pgTable, varchar, text, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { timestamps } from "../utils/column.helper";
-
 import { purchase } from "./purchase.schema";
 import { customerCategory } from "./customer_category.schema";
 import { product } from "./product.schema";
@@ -10,6 +8,8 @@ import { waitingList } from "./waiting_list.schema";
 import { user } from "./auth-schema";
 import { createSelectSchema } from "drizzle-zod";
 import z from "zod";
+
+export const customerTypeEnum = pgEnum("customer_type", ["MKO", "DEALER"]);
 
 // TABLE
 export const customer = pgTable("customer", {
@@ -20,6 +20,12 @@ export const customer = pgTable("customer", {
 	userId: text("user_id").references(() => user.id).unique(),
 
 	categoryId: text("category_id").references(() => customerCategory.id, {
+		onDelete: "set null",
+	}),
+
+	type: customerTypeEnum("type").default("MKO").notNull(),
+
+	dealerId: text("dealer_id").references(() => user.id, {
 		onDelete: "set null",
 	}),
 
@@ -37,6 +43,9 @@ export const customer = pgTable("customer", {
 // schema
 export const customerSchema = createSelectSchema(customer, {
 	email: (schema) => schema.nullable(),
+	phone: (schema) => schema.nullable(),
+	address: (schema) => schema.nullable(),
+	dealerId: (schema) => schema.nullable(),
 });
 // export const productInsertSchema = createInsertSchema(product);
 // export const productUpdateSchema = createUpdateSchema(product);
@@ -52,6 +61,11 @@ export const customersRelations = relations(customer, ({ one, many }) => ({
 
 	user: one(user, {
 		fields: [customer.userId],
+		references: [user.id],
+	}),
+
+	dealer: one(user, {
+		fields: [customer.dealerId],
 		references: [user.id],
 	}),
 
