@@ -11,6 +11,7 @@ import {
 	product,
 	invoice,
 } from "@/db/schema";
+import type { UserRole } from "@/types";
 import { HttpError } from "@/lib/api/http-error";
 import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import z from "zod";
@@ -29,7 +30,7 @@ const optionalEmailSchema = z
 	.transform((v) => (v ? v : null));
 
 export const createCustomerSchema = z.object({
-	customId: z.string().trim().min(1, "ID Pelanggan wajib diisi").max(100),
+	customId: z.string().trim().min(1, "ID Pelanggan wajib diisi").max(100).optional(),
 	name: z.string().min(1, "Nama wajib diisi"),
 	email: optionalEmailSchema,
 	categoryId: z.string().trim().min(1).optional().nullable(),
@@ -44,6 +45,8 @@ export const createCustomerSchema = z.object({
 		.nullable()
 		.optional()
 		.transform((v) => (v === "" ? null : v)),
+	type: z.enum(["DEALER", "MKO"]).default("MKO"),
+	dealerId: z.string().optional().nullable(),
 });
 export type CreateCustomerPayload = z.infer<typeof createCustomerSchema>;
 
@@ -62,6 +65,8 @@ export const updateCustomerSchema = z.object({
 		.nullable()
 		.optional()
 		.transform((v) => (v === "" ? null : v)),
+	type: z.enum(["DEALER", "MKO"]).optional(),
+	dealerId: z.string().optional().nullable(),
 });
 export type UpdateCustomerPayload = z.infer<typeof updateCustomerSchema>;
 
@@ -127,14 +132,30 @@ function getRowValue(
 }
 
 export const customerService = {
-	getAll: async (): Promise<CustomerSchema[]> => {
-		const result = await db.query.customer.findMany({});
+	getAll: async (filters?: {
+		dealerId?: string;
+		type?: "DEALER" | "MKO";
+	}): Promise<CustomerSchema[]> => {
+		const conditions = [];
+		if (filters?.dealerId) {
+			conditions.push(eq(customer.dealerId, filters.dealerId));
+		}
+		if (filters?.type) {
+			conditions.push(eq(customer.type, filters.type));
+		}
+
+		const result = await db.query.customer.findMany({
+			where: conditions.length ? and(...conditions) : undefined,
+		});
 		return customerSchema.array().parse(result);
 	},
 
 	// Customers not yet linked to a dashboard login — eligible to become a dealer.
 	getAvailableForDealer: async (search?: string): Promise<CustomerSchema[]> => {
-		const conditions = [isNull(customer.userId)];
+		const conditions = [
+			isNull(customer.userId),
+			eq(customer.type, "DEALER"),
+		];
 		if (search && search.trim()) {
 			const term = `%${search.trim()}%`;
 			conditions.push(
@@ -151,16 +172,40 @@ export const customerService = {
 
 	create: async (
 		data: CreateCustomerPayload,
-		audit: AuditContext,
+		audit: AuditContext & { role?: UserRole },
 	): Promise<CustomerSchema> => {
-		const existingCustomId = await db.query.customer.findFirst({
-			where: eq(customer.customId, data.customId),
-		});
-		if (existingCustomId)
+		let customId = data.customId;
+		let type = data.type;
+		let dealerId = data.dealerId;
+
+		// Auto-generate customId for dealer customers
+		if (type === "DEALER" || audit.role === "dealer") {
+			type = "DEALER";
+			if (!customId) {
+				const dealerPrefix = dealerId ? dealerId.slice(0, 5) : "DLR";
+				customId = `DLR-${dealerPrefix}-${Date.now().toString().slice(-6)}`;
+			}
+			// Ensure dealerId is set for dealer-created customers
+			if (audit.role === "dealer") {
+				dealerId = audit.userId;
+			}
+		} else if (!customId) {
 			throw new HttpError(
-				"ID Pelanggan sudah terdaftar",
-				HTTP_STATUS.CONFLICT.code,
+				"ID Pelanggan wajib diisi untuk customer MKO",
+				HTTP_STATUS.BAD_REQUEST.code,
 			);
+		}
+
+		if (customId) {
+			const existingCustomId = await db.query.customer.findFirst({
+				where: eq(customer.customId, customId),
+			});
+			if (existingCustomId)
+				throw new HttpError(
+					"ID Pelanggan sudah terdaftar",
+					HTTP_STATUS.CONFLICT.code,
+				);
+		}
 
 		if (data.email) {
 			const existingEmail = await db.query.customer.findFirst({
@@ -177,12 +222,14 @@ export const customerService = {
 			.insert(customer)
 			.values({
 				id: crypto.randomUUID(),
-				customId: data.customId,
+				customId: customId!,
 				categoryId: data.categoryId ?? null,
 				name: data.name.trim(),
 				email: data.email,
 				phone: data.phone ?? null,
 				address: data.address ?? null,
+				type,
+				dealerId,
 			})
 			.returning();
 

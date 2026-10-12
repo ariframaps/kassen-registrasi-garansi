@@ -29,6 +29,13 @@
       "when": 1790262480135,
       "tag": "0003_superb_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791292081301,
+      "tag": "0004_perpetual_juggernaut",
+      "breakpoints": true
     }
   ]
 }
