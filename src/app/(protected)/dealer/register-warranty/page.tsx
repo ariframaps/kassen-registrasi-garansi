@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
-import { dealerApi } from "@/lib/api/api-client";
+import { Select } from "@/components/ui/select";
+import { dealerApi, customerApi, customerCategoryApi } from "@/lib/api/api-client";
+import type { CustomerSchema, CustomerCategorySchema } from "@/db/schema";
 import { Check, ChevronRight, Package, X, Upload, CheckCircle2, Search, ArrowLeft, User, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -16,20 +18,15 @@ interface FormData {
   customerName: string;
   phone: string;
   email: string;
+  address: string;
+  categoryId: string;
   purchaseDate: string;
   invoiceFile: File | null;
 }
 
 const INIT: FormData = {
-  selectedSNs: [], customerName: "", phone: "", email: "", purchaseDate: "", invoiceFile: null,
+  selectedSNs: [], customerName: "", phone: "", email: "", address: "", categoryId: "", purchaseDate: "", invoiceFile: null,
 };
-
-interface CustomerOption {
-  id: string;
-  name: string;
-  email: string;
-  phone: string | null;
-}
 
 interface ProductItem {
   id: string;
@@ -50,8 +47,9 @@ export default function RegisterWarrantyPage() {
 
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerSchema[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [categories, setCategories] = useState<CustomerCategorySchema[]>([]);
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -76,7 +74,7 @@ export default function RegisterWarrantyPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await dealerApi.getCustomers();
+        const res = await customerApi.getAll();
         if (res.success) {
           setCustomers(res.data || []);
         }
@@ -84,6 +82,20 @@ export default function RegisterWarrantyPage() {
         console.error("Failed to load customers:", e);
       } finally {
         setLoadingCustomers(false);
+      }
+    };
+    load();
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await customerCategoryApi.getAll();
+        if (res.success) {
+          setCategories(res.data || []);
+        }
+      } catch (e) {
+        console.error("Failed to load customer categories:", e);
       }
     };
     load();
@@ -102,26 +114,32 @@ export default function RegisterWarrantyPage() {
   const filteredCustomers = customerSearch
     ? customers.filter(c =>
         c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        (c.email && c.email.toLowerCase().includes(customerSearch.toLowerCase())) ||
         (c.phone && c.phone.includes(customerSearch)))
     : customers;
 
-  const selectCustomer = (c: CustomerOption) => {
+  const selectCustomer = (c: CustomerSchema) => {
     setSelectedCustomerId(c.id);
-    setForm(prev => ({ ...prev, customerName: c.name, email: c.email, phone: c.phone || "" }));
+    setForm(prev => ({
+      ...prev,
+      customerName: c.name,
+      email: c.email || "",
+      phone: c.phone || "",
+      address: c.address || "",
+      categoryId: c.categoryId || "",
+    }));
   };
 
   const handleCustomerModeChange = (mode: "existing" | "new") => {
     setCustomerMode(mode);
     setSelectedCustomerId(null);
-    if (mode === "new") setForm(prev => ({ ...prev, customerName: "", email: "", phone: "" }));
+    if (mode === "new") setForm(prev => ({ ...prev, customerName: "", email: "", phone: "", address: "", categoryId: "" }));
   };
 
   const validate = () => {
     const e: Partial<Record<keyof FormData, string>> = {};
     if (!form.customerName) e.customerName = "Wajib diisi";
     if (!form.phone) e.phone = "Wajib diisi";
-    if (!form.email) e.email = "Wajib diisi";
     if (!form.purchaseDate) e.purchaseDate = "Wajib diisi";
     if (!form.invoiceFile) e.invoiceFile = "Invoice wajib diunggah";
     setErrors(e);
@@ -136,7 +154,9 @@ export default function RegisterWarrantyPage() {
         selectedSNs: form.selectedSNs,
         customerName: form.customerName,
         phone: form.phone,
-        email: form.email,
+        email: form.email || undefined,
+        address: form.address || undefined,
+        categoryId: form.categoryId || undefined,
         purchaseDate: form.purchaseDate,
         invoiceFile: form.invoiceFile!,
       });
@@ -352,7 +372,7 @@ export default function RegisterWarrantyPage() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-medium text-zinc-800">{c.name}</p>
-                                <p className="text-[11px] text-zinc-400 truncate">{c.email}{c.phone ? ` · ${c.phone}` : ""}</p>
+                                <p className="text-[11px] text-zinc-400 truncate">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
                               </div>
                             </button>
                           );
@@ -365,10 +385,18 @@ export default function RegisterWarrantyPage() {
 
               <div className="space-y-3">
                 <Input label="Nama Customer" placeholder="Nama lengkap pembeli" required value={form.customerName} onChange={e => setForm({...form,customerName:e.target.value})} error={errors.customerName}/>
+                <Select
+                  label="Kategori Customer"
+                  placeholder="Tanpa kategori"
+                  options={categories.map(c => ({ value: c.id, label: c.name }))}
+                  value={form.categoryId}
+                  onChange={e => setForm({...form,categoryId:e.target.value})}
+                />
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="No. HP" type="tel" placeholder="08xx-xxxx-xxxx" required value={form.phone} onChange={e => setForm({...form,phone:e.target.value})} error={errors.phone}/>
-                  <Input label="Email" type="email" placeholder="email@contoh.com" required value={form.email} onChange={e => setForm({...form,email:e.target.value})} error={errors.email}/>
+                  <Input label="No. HP/WA" type="tel" placeholder="08xx-xxxx-xxxx" required value={form.phone} onChange={e => setForm({...form,phone:e.target.value})} error={errors.phone}/>
+                  <Input label="Email" type="email" placeholder="email@contoh.com (opsional)" value={form.email} onChange={e => setForm({...form,email:e.target.value})} error={errors.email}/>
                 </div>
+                <Input label="Alamat" placeholder="Alamat customer (opsional)" value={form.address} onChange={e => setForm({...form,address:e.target.value})} error={errors.address}/>
                 <Input
                   label="Tanggal Terjual (= Tanggal Mulai Garansi)"
                   type="date"

@@ -18,16 +18,10 @@ export async function uploadInvoiceToDrive(
 	fileName: string,
 	mimeType: string,
 ): Promise<string> {
-	const auth = new google.auth.OAuth2(
-		process.env.GOOGLE_DRIVE_CLIENT_ID,
-		process.env.GOOGLE_DRIVE_CLIENT_SECRET,
-	);
-	auth.setCredentials({
-		refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
-	});
+	const drive = getDriveClient();
 
-	const drive = google.drive({ version: "v3", auth });
 	const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+	console.log("makanan enak",folderId)
 	if (!folderId) throw new Error("GOOGLE_DRIVE_FOLDER_ID tidak dikonfigurasi");
 
 	const uploadRes = await drive.files.create({

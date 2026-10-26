@@ -12,13 +12,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
 import { generateAutoCustomId } from "@/services/customer.service";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 const warrantyRegistrationSchema = z.object({
 	selectedSNs: z.array(z.string()).min(1, "Minimal 1 produk harus dipilih"),
 	customerName: z.string().min(1, "Nama customer wajib diisi"),
-	phone: z.string().min(1, "No. HP wajib diisi"),
-	email: z.string().email("Email tidak valid"),
+	phone: z.string().min(1, "No. HP/WA wajib diisi"),
+	email: z
+		.union([z.string().email("Format email tidak valid"), z.literal("")])
+		.optional()
+		.transform((v) => (v ? v : null)),
+	address: z
+		.string()
+		.optional()
+		.transform((v) => (v ? v : null)),
+	categoryId: z
+		.string()
+		.optional()
+		.transform((v) => (v ? v : null)),
 	purchaseDate: z.string().date("Format tanggal tidak valid"),
 });
 
@@ -46,7 +57,9 @@ export async function POST(req: NextRequest) {
 		const selectedSNsStr = formData.get("selectedSNs") as string;
 		const customerName = formData.get("customerName") as string;
 		const phone = formData.get("phone") as string;
-		const email = formData.get("email") as string;
+		const email = formData.get("email") as string | null;
+		const address = formData.get("address") as string | null;
+		const categoryId = formData.get("categoryId") as string | null;
 		const purchaseDate = formData.get("purchaseDate") as string;
 
 		if (!invoiceFile) {
@@ -59,7 +72,9 @@ export async function POST(req: NextRequest) {
 			selectedSNs,
 			customerName,
 			phone,
-			email,
+			email: email ?? undefined,
+			address: address ?? undefined,
+			categoryId: categoryId ?? undefined,
 			purchaseDate,
 		});
 
@@ -68,10 +83,17 @@ export async function POST(req: NextRequest) {
 			throw new HttpError(issues.join(", "), HTTP_STATUS.BAD_REQUEST.code);
 		}
 
-		// Get or create customer
-		let cust = await db.query.customer.findFirst({
-			where: eq(customer.email, email),
-		});
+		const data = validationResult.data;
+
+		// Get or create the dealer's own customer record (DEALER type, auto-generated customId)
+		let cust = data.email
+			? await db.query.customer.findFirst({
+					where: and(
+						eq(customer.email, data.email),
+						eq(customer.dealerId, session.user.id),
+					),
+				})
+			: undefined;
 
 		if (!cust) {
 			const custId = crypto.randomUUID();
@@ -79,8 +101,12 @@ export async function POST(req: NextRequest) {
 				id: custId,
 				customId: generateAutoCustomId(),
 				name: customerName,
-				email,
+				email: data.email,
 				phone,
+				address: data.address,
+				categoryId: data.categoryId,
+				type: "DEALER",
+				dealerId: session.user.id,
 			});
 			cust = await db.query.customer.findFirst({
 				where: eq(customer.id, custId),

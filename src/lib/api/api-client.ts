@@ -433,13 +433,17 @@ export const dealerApi = {
 		customerName,
 		phone,
 		email,
+		address,
+		categoryId,
 		purchaseDate,
 		invoiceFile,
 	}: {
 		selectedSNs: string[];
 		customerName: string;
 		phone: string;
-		email: string;
+		email?: string;
+		address?: string;
+		categoryId?: string;
 		purchaseDate: string;
 		invoiceFile: File;
 	}) => {
@@ -447,7 +451,9 @@ export const dealerApi = {
 		formData.append("selectedSNs", JSON.stringify(selectedSNs));
 		formData.append("customerName", customerName);
 		formData.append("phone", phone);
-		formData.append("email", email);
+		if (email) formData.append("email", email);
+		if (address) formData.append("address", address);
+		if (categoryId) formData.append("categoryId", categoryId);
 		formData.append("purchaseDate", purchaseDate);
 		formData.append("file", invoiceFile);
 

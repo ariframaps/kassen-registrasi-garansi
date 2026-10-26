@@ -12,11 +12,11 @@ const serverEnvSchema = z.object({
 	SMTP_PASS: z.string().min(1),
 	SMTP_SECURE: z.string(),
 	SMTP_PORT: z.string().min(1),
-	google_drive_client_id: z.string().min(1),
-	google_drive_client_secret: z.string().min(1),
-  google_drive_access_token: z.string().min(1),
-	google_drive_folder_id: z.string().min(1),
-	google_drive_refresh_token: z.string().min(1),
+	GOOGLE_DRIVE_CLIENT_ID: z.string().min(1),
+	GOOGLE_DRIVE_CLIENT_SECRET: z.string().min(1),
+	GOOGLE_DRIVE_ACCESS_TOKEN: z.string().min(1),
+	GOOGLE_DRIVE_REFRESH_TOKEN: z.string().min(1),
+	GOOGLE_DRIVE_FOLDER_ID: z.string().min(1),
 	RESEND_API_KEY: z.string().min(1),
 });
 
