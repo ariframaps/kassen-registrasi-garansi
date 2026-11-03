@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import z from "zod";
 import crypto from "crypto";
+import { generateAutoCustomId } from "./customer.service";
 import { headers } from "next/headers";
 
 const userFormFields = {
@@ -22,7 +23,6 @@ const userFormFields = {
 
 export const addUserSchema = z.object({
 	...userFormFields,
-	customerId: z.string().trim().min(1).optional().nullable(),
 });
 export type AddUserPayload = z.infer<typeof addUserSchema>;
 
@@ -73,7 +73,7 @@ export const userService = {
 
 		const newUserId = crypto.randomUUID();
 
-		// Insert user dan dealer (jika perlu) dalam satu transaction
+		// Insert user dan profil customer dealer (jika perlu) dalam satu transaction
 		await db.transaction(async (tx) => {
 			await tx.insert(user).values({
 				id: newUserId,
@@ -85,31 +85,14 @@ export const userService = {
 			});
 
 			if (data.role === "dealer") {
-				if (!data.customerId) {
-					throw new HttpError(
-						"Pilih dealer yang akan ditautkan",
-						HTTP_STATUS.BAD_REQUEST.code,
-					);
-				}
-
-				const existingCustomer = await tx.query.customer.findFirst({
-					where: eq(customer.id, data.customerId),
+				await tx.insert(customer).values({
+					id: crypto.randomUUID(),
+					customId: generateAutoCustomId(),
+					userId: newUserId,
+					type: "DEALER",
+					name: data.name,
+					email: data.email,
 				});
-				if (!existingCustomer)
-					throw new HttpError(
-						"Dealer tidak ditemukan",
-						HTTP_STATUS.NOT_FOUND.code,
-					);
-				if (existingCustomer.userId)
-					throw new HttpError(
-						"Dealer ini sudah ditautkan ke user lain",
-						HTTP_STATUS.CONFLICT.code,
-					);
-
-				await tx
-					.update(customer)
-					.set({ userId: newUserId, updatedAt: new Date() })
-					.where(eq(customer.id, data.customerId));
 			}
 
 			await tx.insert(auditLog).values({

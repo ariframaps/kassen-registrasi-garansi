@@ -2,7 +2,7 @@ import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { db } from "@/db";
 import { auditLog, customer, user } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import z from "zod";
 import crypto from "crypto";
 import type { Dealer } from "@/types";
@@ -36,40 +36,70 @@ interface AuditContext {
 	userAgent?: string | null;
 }
 
-// A "dealer" is a `customer` row with a linked dashboard login (userId set).
-// Since `customer` has no status column, active/inactive is tracked on the linked `user`.
-function toDealer(
-	row: {
-		id: string;
-		name: string;
-		email: string | null;
-		phone: string | null;
-		address: string | null;
-		createdAt: Date;
-		updatedAt: Date;
-	},
-	userStatus: "active" | "inactive" | "deleted",
-): Dealer {
+// A "dealer" is a `user` with role "dealer". The user table has no phone/address,
+// so those come from the optional `customer` profile linked via customer.userId.
+type DealerUser = typeof user.$inferSelect;
+type DealerProfile = {
+	phone: string | null;
+	address: string | null;
+} | null;
+
+function toDealer(u: DealerUser, profile: DealerProfile): Dealer {
 	return {
-		id: row.id,
-		name: row.name,
-		email: row.email ?? "",
-		phone: row.phone ?? undefined,
-		address: row.address ?? undefined,
-		status: userStatus === "active" ? "active" : "inactive",
-		created_at: row.createdAt.toISOString(),
-		updated_at: row.updatedAt.toISOString(),
+		id: u.id,
+		name: u.name,
+		email: u.email,
+		phone: profile?.phone ?? undefined,
+		address: profile?.address ?? undefined,
+		status: u.status === "active" ? "active" : "inactive",
+		created_at: u.createdAt.toISOString(),
+		updated_at: u.updatedAt.toISOString(),
 	};
+}
+
+async function findDealerUser(id: string) {
+	const found = await db.query.user.findFirst({
+		where: and(eq(user.id, id), eq(user.role, "dealer")),
+	});
+	if (!found)
+		throw new HttpError("Dealer tidak ditemukan", HTTP_STATUS.NOT_FOUND.code);
+	return found;
 }
 
 export const dealerService = {
 	getAll: async (): Promise<Dealer[]> => {
-		const rows = await db.query.customer.findMany({
-			where: isNotNull(customer.userId),
-			with: { user: true },
-		});
+		const rows = await db
+			.select({
+				user,
+				profileId: customer.id,
+				phone: customer.phone,
+				address: customer.address,
+			})
+			.from(user)
+			.leftJoin(customer, eq(customer.userId, user.id))
+			.where(and(eq(user.role, "dealer"), isNull(user.deletedAt)));
 
-		return rows.filter((r) => r.user).map((r) => toDealer(r, r.user!.status));
+		// Lazy-create the DEALER customer profile for legacy dealer users that have none.
+		const missing = rows.filter((r) => r.profileId === null);
+		if (missing.length > 0) {
+			await db
+				.insert(customer)
+				.values(
+					missing.map((r) => ({
+						id: crypto.randomUUID(),
+						customId: generateAutoCustomId(),
+						userId: r.user.id,
+						type: "DEALER" as const,
+						name: r.user.name,
+						email: r.user.email,
+					})),
+				)
+				.onConflictDoNothing();
+		}
+
+		return rows.map((r) =>
+			toDealer(r.user, { phone: r.phone, address: r.address }),
+		);
 	},
 
 	add: async (
@@ -101,6 +131,7 @@ export const dealerService = {
 				id: crypto.randomUUID(),
 				customId: generateAutoCustomId(),
 				userId: newUserId,
+				type: "DEALER",
 				name: data.name,
 				email: data.email,
 				phone: data.phone ?? null,
@@ -123,10 +154,11 @@ export const dealerService = {
 			priority: "medium",
 			ipAddress: audit.ipAddress ?? undefined,
 			userAgent: audit.userAgent ?? undefined,
-			data: { dealerId: result[0].id, name: data.name, email: data.email },
+			data: { dealerId: newUserId, name: data.name, email: data.email },
 		});
 
-		return toDealer(result[0], "active");
+		const created = await findDealerUser(newUserId);
+		return toDealer(created, result[0]);
 	},
 
 	update: async (
@@ -134,33 +166,32 @@ export const dealerService = {
 		data: DealerUpdatePayload,
 		audit: AuditContext,
 	): Promise<Dealer> => {
-		const existing = await db.query.customer.findFirst({
-			where: and(eq(customer.id, id), isNotNull(customer.userId)),
-			with: { user: true },
-		});
-		if (!existing || !existing.user)
-			throw new HttpError(
-				"Dealer tidak ditemukan",
-				HTTP_STATUS.NOT_FOUND.code,
-			);
+		await findDealerUser(id);
 
-		const result = await db
-			.update(customer)
-			.set({
-				name: data.name,
-				email: data.email,
-				phone: data.phone ?? null,
-				address: data.address ?? null,
-				updatedAt: new Date(),
-			})
-			.where(eq(customer.id, id))
+		const [updatedUser] = await db
+			.update(user)
+			.set({ name: data.name, updatedAt: new Date() })
+			.where(eq(user.id, id))
 			.returning();
 
-		if (!result[0])
+		if (!updatedUser)
 			throw new HttpError(
 				"Gagal memperbarui dealer",
 				HTTP_STATUS.BAD_GATEWAY.code,
 			);
+
+		// Email lives on better-auth's user row and is changed via the
+		// change-email flow; only profile fields are updated here.
+		const [profile] = await db
+			.update(customer)
+			.set({
+				name: data.name,
+				phone: data.phone ?? null,
+				address: data.address ?? null,
+				updatedAt: new Date(),
+			})
+			.where(eq(customer.userId, id))
+			.returning();
 
 		await db.insert(auditLog).values({
 			id: crypto.randomUUID(),
@@ -174,35 +205,31 @@ export const dealerService = {
 			data: { dealerId: id, changes: data },
 		});
 
-		return toDealer(result[0], existing.user.status);
+		return toDealer(updatedUser, profile ?? null);
 	},
 
 	toggleStatus: async (
 		id: string,
 		audit: AuditContext,
 	): Promise<Dealer> => {
-		const current = await db.query.customer.findFirst({
-			where: and(eq(customer.id, id), isNotNull(customer.userId)),
-			with: { user: true },
-		});
-		if (!current || !current.user)
-			throw new HttpError(
-				"Dealer tidak ditemukan",
-				HTTP_STATUS.NOT_FOUND.code,
-			);
+		const current = await findDealerUser(id);
 
-		if (current.user.deletedAt)
+		if (current.deletedAt)
 			throw new HttpError(
 				"Dealer tidak bisa diaktifkan karena User yang bersangkutan sudah tidak ada/dihapus",
 				HTTP_STATUS.BAD_REQUEST.code,
 			);
 
-		const newStatus = current.user.status === "active" ? "inactive" : "active";
+		const newStatus = current.status === "active" ? "inactive" : "active";
 
 		await db
 			.update(user)
 			.set({ status: newStatus, updatedAt: new Date() })
-			.where(eq(user.id, current.user.id));
+			.where(eq(user.id, current.id));
+
+		const profile = await db.query.customer.findFirst({
+			where: eq(customer.userId, id),
+		});
 
 		await db.insert(auditLog).values({
 			id: crypto.randomUUID(),
@@ -213,9 +240,9 @@ export const dealerService = {
 			priority: "high",
 			ipAddress: audit.ipAddress ?? undefined,
 			userAgent: audit.userAgent ?? undefined,
-			data: { dealerId: id, previousStatus: current.user.status, newStatus },
+			data: { dealerId: id, previousStatus: current.status, newStatus },
 		});
 
-		return toDealer(current, newStatus);
+		return toDealer({ ...current, status: newStatus }, profile ?? null);
 	},
 };

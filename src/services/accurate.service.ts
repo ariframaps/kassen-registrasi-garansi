@@ -3,6 +3,7 @@ import {
 	product,
 	deliveryOrders,
 	customer,
+	customerCategory,
 	productType,
 	itemCodeMapping,
 	purchase,
@@ -18,7 +19,9 @@ import {
 	PreviewRow,
 } from "@/lib/parser-accurate";
 import { normalizeSerialNumber } from "@/lib/utils";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
+import { HttpError } from "@/lib/api/http-error";
+import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { notificationService } from "./notification.service";
 import crypto from "crypto";
 
@@ -210,6 +213,32 @@ export async function submitAccurateFile(
 			? pendingCustomerCreation.email.trim()
 			: null;
 
+		// Reject duplicates up front with a clear message instead of a raw DB unique-violation.
+		const duplicate = await db.query.customer.findFirst({
+			where: email
+				? or(
+						eq(customer.customId, pendingCustomerCreation.customId),
+						eq(customer.email, email),
+					)
+				: eq(customer.customId, pendingCustomerCreation.customId),
+		});
+		if (duplicate) {
+			throw new HttpError(
+				`Customer/dealer dengan ID '${pendingCustomerCreation.customId}'${email ? ` atau email '${email}'` : ""} sudah ada, pilih dari daftar`,
+				HTTP_STATUS.CONFLICT.code,
+			);
+		}
+
+		const category = await db.query.customerCategory.findFirst({
+			where: eq(customerCategory.id, pendingCustomerCreation.categoryId),
+		});
+		if (!category) {
+			throw new HttpError(
+				"Kategori customer tidak ditemukan",
+				HTTP_STATUS.BAD_REQUEST.code,
+			);
+		}
+
 		const created = await db
 			.insert(customer)
 			.values({
@@ -217,6 +246,7 @@ export async function submitAccurateFile(
 				customId: pendingCustomerCreation.customId,
 				name: pendingCustomerCreation.name,
 				categoryId: pendingCustomerCreation.categoryId,
+				type: isDealerCategory(category.name) ? "DEALER" : "MKO",
 				email,
 				phone: pendingCustomerCreation.phone ?? null,
 				address: pendingCustomerCreation.address ?? null,
@@ -224,7 +254,10 @@ export async function submitAccurateFile(
 			.returning();
 
 		if (!created[0]) {
-			throw new Error(`Gagal membuat customer '${pendingCustomerCreation.name}'`);
+			throw new HttpError(
+				`Gagal membuat customer '${pendingCustomerCreation.name}'`,
+				HTTP_STATUS.BAD_GATEWAY.code,
+			);
 		}
 		customerId = created[0].id;
 	} else if (selectedCustomerId) {
@@ -245,7 +278,9 @@ export async function submitAccurateFile(
 		where: eq(customer.id, customerId),
 		with: { category: true },
 	});
-	const isDealer = isDealerCategory(customerWithCategory?.category?.name);
+	const isDealer =
+		customerWithCategory?.type === "DEALER" ||
+		isDealerCategory(customerWithCategory?.category?.name);
 	const destType: "dealer" | "customer" = isDealer ? "dealer" : "customer";
 	const dealerId = isDealer ? customerId : null;
 
