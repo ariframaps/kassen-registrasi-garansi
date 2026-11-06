@@ -7,7 +7,7 @@ import {
 } from "@/db/schema";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { HttpError } from "@/lib/api/http-error";
-import { eq } from "drizzle-orm";
+import { eq, ilike, or } from "drizzle-orm";
 import z from "zod";
 
 interface AuditContext {
@@ -33,6 +33,17 @@ export type UpdateCustomerCategoryPayload = z.infer<
 export const customerCategoryService = {
 	getAll: async (): Promise<CustomerCategorySchema[]> => {
 		const result = await db.query.customerCategory.findMany({});
+		return customerCategorySchema.array().parse(result);
+	},
+
+	// Only categories relevant to dealers (e.g. "Reseller", "Dealer"); hides internal MKO categories.
+	getForDealer: async (): Promise<CustomerCategorySchema[]> => {
+		const result = await db.query.customerCategory.findMany({
+			where: or(
+				ilike(customerCategory.name, "%reseller%"),
+				ilike(customerCategory.name, "%dealer%"),
+			),
+		});
 		return customerCategorySchema.array().parse(result);
 	},
 

@@ -85,6 +85,51 @@ export async function POST(req: NextRequest) {
 
 		const data = validationResult.data;
 
+		// Upload invoice to Google Drive FIRST: if it fails, nothing is written to the DB
+		const fileBuffer = Buffer.from(await invoiceFile.arrayBuffer());
+		let invoiceLink: string;
+		try {
+			invoiceLink = await uploadInvoiceToDrive(
+				fileBuffer,
+				invoiceFile.name,
+				invoiceFile.type,
+			);
+		} catch (e) {
+			console.error("Google Drive upload failed:", e);
+			throw new HttpError(
+				"Gagal mengunggah invoice ke Google Drive. Registrasi dibatalkan.",
+				HTTP_STATUS.INTERNAL_SERVER_ERROR.code,
+			);
+		}
+
+		// Get products and validate they exist and belong to dealer
+		const products = await db.query.product.findMany({
+			where: (p, { and, inArray, eq: eqFn }) =>
+				and(inArray(p.serialNumber, selectedSNs), eqFn(p.customerId, dealer.id)),
+			with: { productType: true },
+		});
+
+		if (products.length !== selectedSNs.length) {
+			throw new HttpError("Beberapa produk tidak ditemukan atau tidak milik dealer Anda", HTTP_STATUS.BAD_REQUEST.code);
+		}
+
+		// Check if products are already linked to a purchase
+		const existingPurchaseItems = await db
+			.select()
+			.from(purchaseItem)
+			.where(inArray(purchaseItem.productId, products.map((p) => p.id)));
+
+		if (existingPurchaseItems.length > 0) {
+			const linkedSNs = existingPurchaseItems
+				.map((pi) => products.find((p) => p.id === pi.productId)?.serialNumber)
+				.filter(Boolean)
+				.join(", ");
+			throw new HttpError(
+				`Produk berikut sudah terdaftar garansi sebelumnya: ${linkedSNs}. Hubungi admin jika perlu mengubah data.`,
+				HTTP_STATUS.CONFLICT.code,
+			);
+		}
+
 		// Get or create the dealer's own customer record (DEALER type, auto-generated customId)
 		let cust = data.email
 			? await db.query.customer.findFirst({
@@ -116,42 +161,6 @@ export async function POST(req: NextRequest) {
 		if (!cust) {
 			throw new HttpError("Gagal membuat/mendapatkan customer", HTTP_STATUS.INTERNAL_SERVER_ERROR.code);
 		}
-
-		// Get products and validate they exist and belong to dealer
-		const products = await db.query.product.findMany({
-			where: (p, { and, inArray, eq: eqFn }) =>
-				and(inArray(p.serialNumber, selectedSNs), eqFn(p.customerId, dealer.id)),
-			with: { productType: true },
-		});
-
-		if (products.length !== selectedSNs.length) {
-			throw new HttpError("Beberapa produk tidak ditemukan atau tidak milik dealer Anda", HTTP_STATUS.BAD_REQUEST.code);
-		}
-
-		// Check if products are already linked to a purchase
-		const existingPurchaseItems = await db
-			.select()
-			.from(purchaseItem)
-			.where(inArray(purchaseItem.productId, products.map((p) => p.id)));
-
-		if (existingPurchaseItems.length > 0) {
-			const linkedSNs = existingPurchaseItems
-				.map((pi) => products.find((p) => p.id === pi.productId)?.serialNumber)
-				.filter(Boolean)
-				.join(", ");
-			throw new HttpError(
-				`Produk berikut sudah terdaftar garansi sebelumnya: ${linkedSNs}. Hubungi admin jika perlu mengubah data.`,
-				HTTP_STATUS.CONFLICT.code,
-			);
-		}
-
-		// Upload invoice to Google Drive
-		const fileBuffer = Buffer.from(await invoiceFile.arrayBuffer());
-		const invoiceLink = await uploadInvoiceToDrive(
-			fileBuffer,
-			invoiceFile.name,
-			invoiceFile.type,
-		);
 
 		// Create purchase
 		const purchaseId = crypto.randomUUID();

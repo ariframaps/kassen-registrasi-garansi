@@ -22,7 +22,10 @@ export async function GET() {
 			currentRole: session.user.role,
 		});
 
-		const data = await customerCategoryService.getAll();
+		const data =
+			session.user.role === "dealer"
+				? await customerCategoryService.getForDealer()
+				: await customerCategoryService.getAll();
 
 		return NextResponse.json(
 			successResponse({

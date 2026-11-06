@@ -32,6 +32,7 @@ interface DealerPurchaseResponse {
 	warrantyEndDate: string | null;
 	items: PurchaseItemResponse[];
 	invoiceFile: string | null;
+	invoiceUrl: string | null;
 	totalProducts: number;
 }
 
@@ -127,6 +128,7 @@ export const dealerPurchaseService = {
 						item.product.warrantyCondition?.condition || null,
 				})),
 				invoiceFile: p.invoice ? p.invoice.originalFilename : null,
+				invoiceUrl: p.invoice?.storagePath ?? null,
 				totalProducts: p.items.length,
 			};
 		});

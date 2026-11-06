@@ -445,7 +445,7 @@ export default function DealerPurchasesPage() {
 																		),
 																		invoiceFileName:
 																			p.invoiceFile || "Tidak ada invoice",
-																		invoiceUrl: "#",
+																		invoiceUrl: p.invoiceUrl || "",
 																		registeredAt: new Date().toISOString(),
 																	};
 																	setSelectedDetail(convertedGroup);
@@ -508,7 +508,7 @@ export default function DealerPurchasesPage() {
 																		),
 																		invoiceFileName:
 																			p.invoiceFile || "Tidak ada invoice",
-																		invoiceUrl: "#",
+																		invoiceUrl: p.invoiceUrl || "",
 																		registeredAt: new Date().toISOString(),
 																	};
 																	setSelectedDetail(convertedGroup);
@@ -646,9 +646,20 @@ export default function DealerPurchasesPage() {
 												</p>
 												<p className="text-[11px] text-zinc-400">Invoice</p>
 											</div>
-											<Button size="xs" variant="outline">
-												Lihat
-											</Button>
+											{selectedDetail.invoiceUrl ? (
+												<a
+													href={selectedDetail.invoiceUrl}
+													target="_blank"
+													rel="noopener noreferrer">
+													<Button size="xs" variant="outline">
+														Lihat
+													</Button>
+												</a>
+											) : (
+												<Button size="xs" variant="outline" disabled>
+													Lihat
+												</Button>
+											)}
 										</div>
 									)}
 
