@@ -1,5 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { customerApi } from "@/lib/api/api-client";
+import type { CustomerSchema } from "@/db/schema";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,7 @@ export type CreateUserPayload = {
 	name: string;
 	email: string;
 	role: UserRole;
+	customerId?: string | null;
 };
 
 export function CreateUserModal({
@@ -43,11 +46,46 @@ export function CreateUserModal({
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
 	const [role, setRole] = useState<UserRole>("sales");
+	const [customerId, setCustomerId] = useState("");
+	const [dealerCustomers, setDealerCustomers] = useState<CustomerSchema[]>([]);
+	const [customersLoading, setCustomersLoading] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const { success, error: errorToast } = useToast();
 
+	useEffect(() => {
+		if (!open || role !== "dealer") return;
+		let cancelled = false;
+		setCustomersLoading(true);
+		customerApi
+			.getAvailableForDealer()
+			.then((res) => {
+				if (!cancelled && res.success) setDealerCustomers(res.data);
+			})
+			.finally(() => {
+				if (!cancelled) setCustomersLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, role]);
+
+	const handleRoleChange = (next: UserRole) => {
+		setRole(next);
+		if (next !== "dealer") setCustomerId("");
+	};
+
+	const handleCustomerChange = (id: string) => {
+		setCustomerId(id);
+		const c = dealerCustomers.find((x) => x.id === id);
+		if (c) {
+			setName(c.name);
+			setEmail(c.email ?? "");
+		}
+	};
+
 	const reset = () => {
+		setCustomerId("");
 		setName("");
 		setEmail("");
 		setRole("sales");
@@ -61,6 +99,8 @@ export function CreateUserModal({
 
 	const validate = () => {
 		const e: Record<string, string> = {};
+		if (role === "dealer" && !customerId)
+			e.customerId = "Customer Dealer wajib dipilih";
 		if (!name.trim()) e.name = "Wajib diisi";
 		if (!email.trim()) e.email = "Wajib diisi";
 		else if (!email.includes("@")) e.email = "Format email tidak valid";
@@ -72,7 +112,12 @@ export function CreateUserModal({
 		if (!validate()) return;
 		setLoading(true);
 		try {
-			await onSave({ name, email, role });
+			await onSave({
+				name,
+				email,
+				role,
+				customerId: role === "dealer" && customerId ? customerId : null,
+			});
 			success("User baru berhasil ditambahkan", email);
 			handleClose();
 		} catch (err) {
@@ -116,8 +161,25 @@ export function CreateUserModal({
 						{ value: "technical_support", label: "Technical Support" },
 					]}
 					value={role}
-					onChange={(e) => setRole(e.target.value as UserRole)}
+					onChange={(e) => handleRoleChange(e.target.value as UserRole)}
 				/>
+				{role === "dealer" && (
+					<Select
+						label="Customer Dealer"
+						required
+						error={errors.customerId}
+						placeholder={
+							customersLoading ? "Memuat..." : "Pilih customer dealer"
+						}
+						hint="Nama & email terisi otomatis dari data customer."
+						options={dealerCustomers.map((c) => ({
+							value: c.id,
+							label: `${c.name}${c.customId ? ` (${c.customId})` : ""}`,
+						}))}
+						value={customerId}
+						onChange={(e) => handleCustomerChange(e.target.value)}
+					/>
+				)}
 
 				{/* Scope description */}
 				<div className="px-3 py-2.5 rounded-lg bg-zinc-50 border border-zinc-100 text-[11px] text-zinc-500 leading-relaxed">

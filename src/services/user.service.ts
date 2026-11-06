@@ -5,14 +5,14 @@ import {
 	userSchema,
 	UserSchema,
 	customer,
+	customerCategory,
 	auditLog,
 } from "@/db/schema";
 import { HttpError } from "@/lib/api/http-error";
 import { auth } from "@/lib/auth";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import z from "zod";
 import crypto from "crypto";
-import { generateAutoCustomId } from "./customer.service";
 import { headers } from "next/headers";
 
 const userFormFields = {
@@ -21,9 +21,15 @@ const userFormFields = {
 	role: z.enum(["admin", "sales", "dealer", "technical_support"]),
 };
 
-export const addUserSchema = z.object({
-	...userFormFields,
-});
+export const addUserSchema = z
+	.object({
+		...userFormFields,
+		customerId: z.string().nullable().optional(),
+	})
+	.refine((d) => d.role !== "dealer" || !!d.customerId, {
+		message: "Customer Dealer wajib dipilih untuk role Dealer",
+		path: ["customerId"],
+	});
 export type AddUserPayload = z.infer<typeof addUserSchema>;
 
 export const updateUserSchema = z.object({
@@ -85,14 +91,33 @@ export const userService = {
 			});
 
 			if (data.role === "dealer") {
-				await tx.insert(customer).values({
-					id: crypto.randomUUID(),
-					customId: generateAutoCustomId(),
-					userId: newUserId,
-					type: "DEALER",
-					name: data.name,
-					email: data.email,
-				});
+				{
+					// Link ke customer DEALER yang sudah ada (single source of truth)
+					const linked = await tx
+						.update(customer)
+						.set({ userId: newUserId, updatedAt: new Date() })
+						.where(
+							and(
+								eq(customer.id, data.customerId!),
+								eq(customer.type, "MKO"),
+							inArray(
+								customer.categoryId,
+								tx
+									.select({ id: customerCategory.id })
+									.from(customerCategory)
+									.where(eq(customerCategory.name, "Dealer")),
+							),
+								isNull(customer.userId),
+								isNull(customer.dealerId),
+							),
+						)
+						.returning({ id: customer.id });
+					if (linked.length === 0)
+						throw new HttpError(
+							"Customer dealer tidak ditemukan atau sudah terhubung ke user lain",
+							HTTP_STATUS.BAD_REQUEST.code,
+						);
+				}
 			}
 
 			await tx.insert(auditLog).values({

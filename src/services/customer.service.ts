@@ -152,9 +152,12 @@ export const customerService = {
 
 	// Customers not yet linked to a dashboard login — eligible to become a dealer.
 	getAvailableForDealer: async (search?: string): Promise<CustomerSchema[]> => {
+		// Master dealer MKO: type MKO, kategori "Dealer", tanpa dealerId & tanpa akun user.
 		const conditions = [
+			isNull(customer.dealerId),
+			eq(customer.type, "MKO"),
+			eq(customerCategory.name, "Dealer"),
 			isNull(customer.userId),
-			eq(customer.type, "DEALER"),
 		];
 		if (search && search.trim()) {
 			const term = `%${search.trim()}%`;
@@ -163,11 +166,13 @@ export const customerService = {
 			);
 		}
 
-		const result = await db.query.customer.findMany({
-			where: and(...conditions),
-			limit: 20,
-		});
-		return customerSchema.array().parse(result);
+		const result = await db
+			.select({ customer })
+			.from(customer)
+			.innerJoin(customerCategory, eq(customer.categoryId, customerCategory.id))
+			.where(and(...conditions))
+			.limit(20);
+		return customerSchema.array().parse(result.map((r) => r.customer));
 	},
 
 	create: async (

@@ -37,6 +37,7 @@ interface AuditContext {
 // so those come from the optional `customer` profile linked via customer.userId.
 type DealerUser = typeof user.$inferSelect;
 type DealerProfile = {
+	id?: string | null;
 	phone: string | null;
 	address: string | null;
 } | null;
@@ -44,6 +45,7 @@ type DealerProfile = {
 function toDealer(u: DealerUser, profile: DealerProfile): Dealer {
 	return {
 		id: u.id,
+		customerId: profile?.id ?? undefined,
 		name: u.name,
 		email: u.email,
 		phone: profile?.phone ?? undefined,
@@ -78,8 +80,9 @@ export const dealerService = {
 
 		// Lazy-create the DEALER customer profile for legacy dealer users that have none.
 		const missing = rows.filter((r) => r.profileId === null);
+		const createdIds = new Map<string, string>();
 		if (missing.length > 0) {
-			await db
+			const created = await db
 				.insert(customer)
 				.values(
 					missing.map((r) => ({
@@ -91,11 +94,17 @@ export const dealerService = {
 						email: r.user.email,
 					})),
 				)
-				.onConflictDoNothing();
+				.onConflictDoNothing()
+				.returning({ id: customer.id, userId: customer.userId });
+			for (const c of created) if (c.userId) createdIds.set(c.userId, c.id);
 		}
 
 		return rows.map((r) =>
-			toDealer(r.user, { phone: r.phone, address: r.address }),
+			toDealer(r.user, {
+				id: r.profileId ?? createdIds.get(r.user.id) ?? null,
+				phone: r.phone,
+				address: r.address,
+			}),
 		);
 	},
 

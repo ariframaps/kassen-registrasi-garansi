@@ -39,6 +39,8 @@ export interface User {
 
 export interface Dealer {
 	id: string;
+	/** ID customer (type DEALER) yang terhubung; dipakai sebagai product.customerId */
+	customerId?: string;
 	name: string;
 	email: string;
 	phone?: string;

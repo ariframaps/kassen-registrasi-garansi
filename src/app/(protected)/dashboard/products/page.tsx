@@ -719,7 +719,9 @@ export default function ProductsPage() {
 							options={[
 								{ value: "all", label: "Semua Dealer" },
 								{ value: "none", label: "Tanpa Dealer" },
-								...dealers.map((d) => ({ value: d.id, label: d.name })),
+								...dealers
+									.filter((d) => d.customerId)
+									.map((d) => ({ value: d.customerId!, label: d.name })),
 							]}
 							value={dealerFilter}
 							onChange={(e) => setDealerFilter(e.target.value)}
