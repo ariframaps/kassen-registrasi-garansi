@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,6 @@ import { formatDateShort } from "@/lib/utils";
 import {
 	Search,
 	Eye,
-	Plus,
 	UserX,
 	UserCheck,
 	MapPin,
@@ -27,6 +27,8 @@ import {
 	Phone,
 	Package,
 	Calendar,
+	Users,
+	ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { dealerApi } from "@/lib/api/api-client";
@@ -37,16 +39,6 @@ export default function DealersPage() {
 	const [search, setSearch] = useState("");
 	const [selected, setSelected] = useState<Dealer | null>(null);
 	const [toggleTarget, setToggle] = useState<Dealer | null>(null);
-
-	// State untuk Modal Tambah Dealer
-	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-	const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
-	const [newDealer, setNewDealer] = useState({
-		name: "",
-		email: "",
-		phone: "",
-		address: "",
-	});
 
 	// State untuk Modal Edit Dealer
 	const [editingDealer, setEditingDealer] = useState<Dealer | null>(null);
@@ -92,32 +84,6 @@ export default function DealersPage() {
 			toastError("Gagal", "Terjadi kesalahan pada sistem");
 		} finally {
 			setToggle(null);
-		}
-	};
-
-	// Aksi Tambah Dealer Baru
-	const handleAddDealer = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!newDealer.name || !newDealer.email) {
-			toastError("Gagal", "Nama dan Email wajib diisi");
-			return;
-		}
-
-		setIsSubmittingAdd(true);
-		try {
-			const response = await dealerApi.add(newDealer);
-			if (response.success) {
-				success("Berhasil", "Dealer baru berhasil ditambahkan");
-				setIsAddModalOpen(false);
-				setNewDealer({ name: "", email: "", phone: "", address: "" });
-				fetchData();
-			} else {
-				toastError("Gagal", response.message || "Gagal menambahkan dealer");
-			}
-		} catch {
-			toastError("Gagal", "Terjadi kesalahan pada sistem");
-		} finally {
-			setIsSubmittingAdd(false);
 		}
 	};
 
@@ -174,12 +140,23 @@ export default function DealersPage() {
 						<p className="text-xs text-zinc-400 ml-auto">
 							{filtered.length} dealer
 						</p>
-						<Button
-							size="sm"
-							icon={<Plus size={13} />}
-							onClick={() => setIsAddModalOpen(true)}>
-							Tambah Dealer
-						</Button>
+						<Link href="/dashboard/customers">
+							<Button size="sm" variant="outline" icon={<Users size={13} />}>
+								Kelola via Customer
+							</Button>
+						</Link>
+					</div>
+					<div className="px-5 py-2.5 border-b border-zinc-100 bg-blue-50/60 flex items-center gap-2 text-xs text-blue-700">
+						<span>
+							Pendaftaran dealer baru kini dilakukan melalui menu{" "}
+							<span className="font-medium">Customer</span> dengan memilih
+							tipe &ldquo;DEALER&rdquo;.
+						</span>
+						<Link
+							href="/dashboard/customers"
+							className="ml-auto inline-flex items-center gap-1 font-medium hover:underline shrink-0">
+							Buka menu Customer <ArrowRight size={12} />
+						</Link>
 					</div>
 					<CardContent className="p-0">
 						<Table>
@@ -269,78 +246,6 @@ export default function DealersPage() {
 					</CardContent>
 				</Card>
 			</div>
-
-			{/* Modal Tambah Dealer */}
-			<Modal
-				open={isAddModalOpen}
-				onClose={() => setIsAddModalOpen(false)}
-				title="Tambah Dealer Baru"
-				size="md">
-				<form onSubmit={handleAddDealer} className="space-y-4">
-					<div className="space-y-1">
-						<label className="text-xs font-medium text-zinc-600">
-							Nama Dealer <span className="text-red-500">*</span>
-						</label>
-						<Input
-							required
-							placeholder="Masukkan nama dealer..."
-							value={newDealer.name}
-							onChange={(e) =>
-								setNewDealer({ ...newDealer, name: e.target.value })
-							}
-						/>
-					</div>
-					<div className="space-y-1">
-						<label className="text-xs font-medium text-zinc-600">
-							Email <span className="text-red-500">*</span>
-						</label>
-						<Input
-							required
-							type="email"
-							placeholder="contoh@dealer.com"
-							value={newDealer.email}
-							onChange={(e) =>
-								setNewDealer({ ...newDealer, email: e.target.value })
-							}
-						/>
-					</div>
-					<div className="space-y-1">
-						<label className="text-xs font-medium text-zinc-600">
-							No. Telepon
-						</label>
-						<Input
-							type="tel"
-							placeholder="0812xxxxxxx"
-							value={newDealer.phone}
-							onChange={(e) =>
-								setNewDealer({ ...newDealer, phone: e.target.value })
-							}
-						/>
-					</div>
-					<div className="space-y-1">
-						<label className="text-xs font-medium text-zinc-600">Alamat</label>
-						<Input
-							placeholder="Masukkan alamat lengkap..."
-							value={newDealer.address}
-							onChange={(e) =>
-								setNewDealer({ ...newDealer, address: e.target.value })
-							}
-						/>
-					</div>
-					<div className="flex gap-2 pt-2 border-t border-zinc-100">
-						<Button
-							type="button"
-							variant="outline"
-							fullWidth
-							onClick={() => setIsAddModalOpen(false)}>
-							Batal
-						</Button>
-						<Button type="submit" fullWidth loading={isSubmittingAdd}>
-							Simpan Dealer
-						</Button>
-					</div>
-				</form>
-			</Modal>
 
 			{/* Modal Edit Dealer */}
 			<Modal

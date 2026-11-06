@@ -32,8 +32,13 @@ function isDealerCategory(categoryName: string | null | undefined): boolean {
 	return categoryName?.trim().toLowerCase() === "dealer";
 }
 
-export async function getProductTypeMappings() {
-	const types = await db.query.productType.findMany({
+// Accepts either the plain `db` or an open `db.transaction` client, so reads
+// done during `submitAccurateFile`'s transaction see uncommitted writes from
+// the same transaction (e.g. pending item codes) instead of a stale snapshot.
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function getProductTypeMappings(dbClient: DbOrTx = db) {
+	const types = await dbClient.query.productType.findMany({
 		with: {
 			category: true,
 			itemCodeMappings: true,
@@ -55,8 +60,10 @@ export async function getProductTypeMappings() {
 	return map;
 }
 
-export async function getExistingSerialNumbers(): Promise<Set<string>> {
-	const products = await db
+export async function getExistingSerialNumbers(
+	dbClient: DbOrTx = db,
+): Promise<Set<string>> {
+	const products = await dbClient
 		.select({ serialNumber: product.serialNumber })
 		.from(product);
 	return new Set(products.map((p) => normalizeSerialNumber(p.serialNumber)));
@@ -72,6 +79,7 @@ export interface UploadValidationResult {
 
 export async function validateAccurateFile(
 	file: File,
+	dbClient: DbOrTx = db,
 ): Promise<UploadValidationResult> {
 	// Check if file has already been uploaded using hash
 	const buffer = await file.arrayBuffer();
@@ -80,7 +88,7 @@ export async function validateAccurateFile(
 		.update(Buffer.from(buffer))
 		.digest("hex");
 
-	const existingFile = await db.query.deliveryOrders.findFirst({
+	const existingFile = await dbClient.query.deliveryOrders.findFirst({
 		where: eq(deliveryOrders.fileHash, hash),
 	});
 
@@ -90,8 +98,8 @@ export async function validateAccurateFile(
 
 	const [parsed, existingSerials, typeMap] = await Promise.all([
 		parseExcelFile(file),
-		getExistingSerialNumbers(),
-		getProductTypeMappings(),
+		getExistingSerialNumbers(dbClient),
+		getProductTypeMappings(dbClient),
 	]);
 
 	console.log(parsed);
@@ -163,7 +171,8 @@ export async function submitAccurateFile(
 		.update(Buffer.from(buffer))
 		.digest("hex");
 
-	// Check if DO already uploaded
+	// Fast-fail pre-check outside the transaction (cheap read, avoids doing
+	// any work below for an obvious duplicate).
 	const existing = await db.query.deliveryOrders.findFirst({
 		where: eq(deliveryOrders.fileHash, hash),
 	});
@@ -172,312 +181,341 @@ export async function submitAccurateFile(
 		throw new Error("File ini sudah pernah diupload sebelumnya");
 	}
 
-	// Create pending item codes FIRST (before validation)
-	if (pendingItemCodes && pendingItemCodes.length > 0) {
-		for (const itemCode of pendingItemCodes) {
-			await db.insert(productType).values({
-				id: crypto.randomUUID(),
-				name: itemCode.productTypeName,
-				categoryId: itemCode.categoryId,
-			});
-		}
-
-		for (const itemCode of pendingItemCodes) {
-			const createdType = await db.query.productType.findFirst({
-				where: eq(productType.name, itemCode.productTypeName),
-			});
-
-			if (createdType) {
-				await db.insert(itemCodeMapping).values({
+	// The entire write pipeline below — pending item codes, customer creation,
+	// the delivery order + products, and the purchase/invoice records — runs
+	// inside a single transaction. If any step fails, including a failed
+	// Google Drive invoice upload, everything rolls back atomically: no
+	// orphaned rows are left behind, and `deliveryOrders.fileHash` is never
+	// committed unless the whole upload succeeded, so a failed upload never
+	// permanently blocks re-uploading the same file.
+	const txResult = await db.transaction(async (tx) => {
+		// Create pending item codes FIRST (before validation)
+		if (pendingItemCodes && pendingItemCodes.length > 0) {
+			for (const itemCode of pendingItemCodes) {
+				await tx.insert(productType).values({
 					id: crypto.randomUUID(),
-					itemCode: itemCode.code,
-					productTypeId: createdType.id,
+					name: itemCode.productTypeName,
+					categoryId: itemCode.categoryId,
 				});
 			}
+
+			for (const itemCode of pendingItemCodes) {
+				const createdType = await tx.query.productType.findFirst({
+					where: eq(productType.name, itemCode.productTypeName),
+				});
+
+				if (createdType) {
+					await tx.insert(itemCodeMapping).values({
+						id: crypto.randomUUID(),
+						itemCode: itemCode.code,
+						productTypeId: createdType.id,
+					});
+				}
+			}
 		}
-	}
 
-	// Now validate file AFTER item codes are created
-	const validation = await validateAccurateFile(file);
-	const { parsed, preview } = validation;
+		// Now validate file AFTER item codes are created
+		const validation = await validateAccurateFile(file, tx);
+		const { parsed, preview } = validation;
 
-	if (validation.validCount === 0) {
-		throw new Error("Tidak ada produk valid untuk disimpan");
-	}
+		if (validation.validCount === 0) {
+			throw new Error("Tidak ada produk valid untuk disimpan");
+		}
 
-	// Resolve (or create) the consolidated customer/dealer entity for this DO.
-	let customerId: string;
+		// Resolve (or create) the consolidated customer/dealer entity for this DO.
+		let customerId: string;
 
-	if (pendingCustomerCreation) {
-		const email = pendingCustomerCreation.email?.trim()
-			? pendingCustomerCreation.email.trim()
-			: null;
+		if (pendingCustomerCreation) {
+			const email = pendingCustomerCreation.email?.trim()
+				? pendingCustomerCreation.email.trim()
+				: null;
 
-		// Reject duplicates up front with a clear message instead of a raw DB unique-violation.
-		const duplicate = await db.query.customer.findFirst({
-			where: email
-				? or(
-						eq(customer.customId, pendingCustomerCreation.customId),
-						eq(customer.email, email),
-					)
-				: eq(customer.customId, pendingCustomerCreation.customId),
+			// Reject duplicates up front with a clear message instead of a raw DB unique-violation.
+			const duplicate = await tx.query.customer.findFirst({
+				where: email
+					? or(
+							eq(customer.customId, pendingCustomerCreation.customId),
+							eq(customer.email, email),
+						)
+					: eq(customer.customId, pendingCustomerCreation.customId),
+			});
+			if (duplicate) {
+				throw new HttpError(
+					`Customer/dealer dengan ID '${pendingCustomerCreation.customId}'${email ? ` atau email '${email}'` : ""} sudah ada, pilih dari daftar`,
+					HTTP_STATUS.CONFLICT.code,
+				);
+			}
+
+			const category = await tx.query.customerCategory.findFirst({
+				where: eq(customerCategory.id, pendingCustomerCreation.categoryId),
+			});
+			if (!category) {
+				throw new HttpError(
+					"Kategori customer tidak ditemukan",
+					HTTP_STATUS.BAD_REQUEST.code,
+				);
+			}
+
+			const created = await tx
+				.insert(customer)
+				.values({
+					id: crypto.randomUUID(),
+					customId: pendingCustomerCreation.customId,
+					name: pendingCustomerCreation.name,
+					categoryId: pendingCustomerCreation.categoryId,
+					type: isDealerCategory(category.name) ? "DEALER" : "MKO",
+					email,
+					phone: pendingCustomerCreation.phone ?? null,
+					address: pendingCustomerCreation.address ?? null,
+				})
+				.returning();
+
+			if (!created[0]) {
+				throw new HttpError(
+					`Gagal membuat customer '${pendingCustomerCreation.name}'`,
+					HTTP_STATUS.BAD_GATEWAY.code,
+				);
+			}
+			customerId = created[0].id;
+		} else if (selectedCustomerId) {
+			const found = await tx.query.customer.findFirst({
+				where: eq(customer.id, selectedCustomerId),
+			});
+			if (!found) {
+				throw new Error("Customer/dealer tujuan tidak ditemukan");
+			}
+			customerId = found.id;
+		} else {
+			throw new Error("Customer/dealer tujuan wajib dipilih");
+		}
+
+		// Whether this customer is a dealer is derived purely from its category
+		// (see isDealerCategory) — not from a manual dealer/customer toggle.
+		const customerWithCategory = await tx.query.customer.findFirst({
+			where: eq(customer.id, customerId),
+			with: { category: true },
 		});
-		if (duplicate) {
-			throw new HttpError(
-				`Customer/dealer dengan ID '${pendingCustomerCreation.customId}'${email ? ` atau email '${email}'` : ""} sudah ada, pilih dari daftar`,
-				HTTP_STATUS.CONFLICT.code,
-			);
+		const isDealer =
+			customerWithCategory?.type === "DEALER" ||
+			isDealerCategory(customerWithCategory?.category?.name);
+		const destType: "dealer" | "customer" = isDealer ? "dealer" : "customer";
+		const dealerId = isDealer ? customerId : null;
+
+		// Parse date from "dd MMM yyyy" format to ISO date
+		let doDate = new Date().toISOString().split("T")[0]; // Default to today
+		if (parsed.date) {
+			try {
+				const dateObj = new Date(parsed.date);
+				if (!isNaN(dateObj.getTime())) {
+					doDate = dateObj.toISOString().split("T")[0];
+				}
+			} catch {
+				// If date parsing fails, use today
+			}
 		}
 
-		const category = await db.query.customerCategory.findFirst({
-			where: eq(customerCategory.id, pendingCustomerCreation.categoryId),
-		});
-		if (!category) {
-			throw new HttpError(
-				"Kategori customer tidak ditemukan",
-				HTTP_STATUS.BAD_REQUEST.code,
-			);
-		}
-
-		const created = await db
-			.insert(customer)
+		// Create DO record with explicit ID
+		const doRecord = await tx
+			.insert(deliveryOrders)
 			.values({
 				id: crypto.randomUUID(),
-				customId: pendingCustomerCreation.customId,
-				name: pendingCustomerCreation.name,
-				categoryId: pendingCustomerCreation.categoryId,
-				type: isDealerCategory(category.name) ? "DEALER" : "MKO",
-				email,
-				phone: pendingCustomerCreation.phone ?? null,
-				address: pendingCustomerCreation.address ?? null,
+				doNumber: parsed.doNumber,
+				doDate,
+				shipToRaw: parsed.shipTo,
+				sentBy: parsed.sentBy || null,
+				orderRef: parsed.orderRef || null,
+				dcRef: parsed.area || null,
+				destinationType: destType,
+				destinationCustomerId: dealerId ?? customerId,
+				uploadedBy: userId,
+				fileHash: hash,
+				originalFilename: file.name,
 			})
 			.returning();
 
-		if (!created[0]) {
-			throw new HttpError(
-				`Gagal membuat customer '${pendingCustomerCreation.name}'`,
-				HTTP_STATUS.BAD_GATEWAY.code,
-			);
-		}
-		customerId = created[0].id;
-	} else if (selectedCustomerId) {
-		const found = await db.query.customer.findFirst({
-			where: eq(customer.id, selectedCustomerId),
-		});
-		if (!found) {
-			throw new Error("Customer/dealer tujuan tidak ditemukan");
-		}
-		customerId = found.id;
-	} else {
-		throw new Error("Customer/dealer tujuan wajib dipilih");
-	}
+		const doId = doRecord[0].id;
 
-	// Whether this customer is a dealer is derived purely from its category
-	// (see isDealerCategory) — not from a manual dealer/customer toggle.
-	const customerWithCategory = await db.query.customer.findFirst({
-		where: eq(customer.id, customerId),
-		with: { category: true },
-	});
-	const isDealer =
-		customerWithCategory?.type === "DEALER" ||
-		isDealerCategory(customerWithCategory?.category?.name);
-	const destType: "dealer" | "customer" = isDealer ? "dealer" : "customer";
-	const dealerId = isDealer ? customerId : null;
+		// Get product type mapping again for save
+		const typeMap = await getProductTypeMappings(tx);
 
-	// Parse date from "dd MMM yyyy" format to ISO date
-	let doDate = new Date().toISOString().split("T")[0]; // Default to today
-	if (parsed.date) {
-		try {
-			const dateObj = new Date(parsed.date);
-			if (!isNaN(dateObj.getTime())) {
-				doDate = dateObj.toISOString().split("T")[0];
+		// Get all product types for warranty calculation
+		const allProductTypes = await tx.query.productType.findMany();
+		const productTypeMap = new Map(allProductTypes.map((pt) => [pt.id, pt]));
+
+		// Create product records by matching preview with parsed items
+		const productsToCreate: ProductInsertSchema[] = [];
+		const validSerialNumbers = new Set(
+			preview.filter((p) => p.status === "valid").map((p) => p.serialNumber),
+		);
+
+		// For end customer, calculate warranty end date
+		let warrantyEndDate: string | null = null;
+		let maxWarrantyMonths = 0;
+
+		if (destType === "customer" && purchaseData) {
+			// Calculate max warranty duration from product types
+			for (const item of parsed.items) {
+				const mapping = typeMap.get(item.itemCode);
+				if (mapping) {
+					const pt = productTypeMap.get(mapping.id);
+					if (pt) {
+						maxWarrantyMonths = Math.max(maxWarrantyMonths, pt.warrantyDurationMonths);
+					}
+				}
 			}
-		} catch {
-			// If date parsing fails, use today
+
+			// Default to 12 months if no product type found
+			if (maxWarrantyMonths === 0) maxWarrantyMonths = 12;
+
+			// Calculate warranty end date
+			const purchaseDateObj = new Date(purchaseData.purchaseDate);
+			purchaseDateObj.setMonth(purchaseDateObj.getMonth() + maxWarrantyMonths);
+			warrantyEndDate = purchaseDateObj.toISOString().split("T")[0];
 		}
-	}
 
-	// Create DO record with explicit ID
-	const doRecord = await db
-		.insert(deliveryOrders)
-		.values({
-			id: crypto.randomUUID(),
-			doNumber: parsed.doNumber,
-			doDate,
-			shipToRaw: parsed.shipTo,
-			sentBy: parsed.sentBy || null,
-			orderRef: parsed.orderRef || null,
-			dcRef: parsed.area || null,
-			destinationType: destType,
-			destinationCustomerId: dealerId ?? customerId,
-			uploadedBy: userId,
-			fileHash: hash,
-			originalFilename: file.name,
-		})
-		.returning();
-
-	const doId = doRecord[0].id;
-
-	// Get product type mapping again for save
-	const typeMap = await getProductTypeMappings();
-
-	// Get all product types for warranty calculation
-	const allProductTypes = await db.query.productType.findMany();
-	const productTypeMap = new Map(allProductTypes.map((pt) => [pt.id, pt]));
-
-	// Create product records by matching preview with parsed items
-	const productsToCreate: ProductInsertSchema[] = [];
-	const validSerialNumbers = new Set(
-		preview.filter((p) => p.status === "valid").map((p) => p.serialNumber),
-	);
-
-	// For end customer, calculate warranty end date
-	let warrantyEndDate: string | null = null;
-	let maxWarrantyMonths = 0;
-
-	if (destType === "customer" && purchaseData) {
-		// Calculate max warranty duration from product types
 		for (const item of parsed.items) {
 			const mapping = typeMap.get(item.itemCode);
-			if (mapping) {
-				const pt = productTypeMap.get(mapping.id);
-				if (pt) {
-					maxWarrantyMonths = Math.max(maxWarrantyMonths, pt.warrantyDurationMonths);
-				}
-			}
-		}
+			if (!mapping) continue;
 
-		// Default to 12 months if no product type found
-		if (maxWarrantyMonths === 0) maxWarrantyMonths = 12;
-
-		// Calculate warranty end date
-		const purchaseDateObj = new Date(purchaseData.purchaseDate);
-		purchaseDateObj.setMonth(purchaseDateObj.getMonth() + maxWarrantyMonths);
-		warrantyEndDate = purchaseDateObj.toISOString().split("T")[0];
-	}
-
-	for (const item of parsed.items) {
-		const mapping = typeMap.get(item.itemCode);
-		if (!mapping) continue;
-
-		for (const sn of item.serialNumbers) {
-			const normalizedSn = normalizeSerialNumber(sn);
-			if (validSerialNumbers.has(normalizedSn)) {
-				const productData: ProductInsertSchema = {
-					id: crypto.randomUUID(),
-					serialNumber: normalizedSn,
-					productTypeId: mapping.id,
-					deliveryOrderId: doId,
-					customerId: dealerId,
-					status: "none" as const,
-				};
-
-				// Set warranty dates for end customer
-				if (destType === "customer" && purchaseData && warrantyEndDate) {
-					productData.status = "warranty_active";
-					productData.warrantyStartDate = purchaseData.purchaseDate;
-					productData.warrantyEndDate = warrantyEndDate;
-				}
-
-				productsToCreate.push(productData);
-			}
-		}
-	}
-
-	if (productsToCreate.length > 0) {
-		await db.insert(product).values(productsToCreate);
-
-		// Trigger notification check for dealer product requests
-		if (destType === "dealer" && dealerId) {
-			try {
-				await notificationService.checkAndNotifyProductMatch({
-					dealerId,
-					productsCreated: productsToCreate.map((p) => ({
-						id: p.id!,
-						serialNumber: p.serialNumber,
-						productTypeId: p.productTypeId,
-					})),
-					uploadedBy: userId,
-				});
-			} catch (error) {
-				console.error("Failed to check and notify product match:", error);
-			}
-		}
-	}
-
-	// Create purchase record if purchaseData is provided (for end customer)
-	let purchaseId: string | null = null;
-	if (purchaseData && customerId && destType === "customer") {
-		// `purchase` no longer has a dealerId column (dealers are now customer rows).
-		// Best-effort: record which dealer facilitated the sale as a note, since
-		// there is currently no structured column to persist that link.
-		let notes = purchaseData.notes || null;
-		if (purchaseData.dealerId) {
-			const facilitatingDealer = await db.query.customer.findFirst({
-				where: eq(customer.id, purchaseData.dealerId),
-			});
-			if (facilitatingDealer) {
-				notes = [`Dijual melalui dealer: ${facilitatingDealer.name}`, notes]
-					.filter(Boolean)
-					.join(" — ");
-			}
-		}
-
-		const purchaseRecord = await db
-			.insert(purchase)
-			.values({
-				id: crypto.randomUUID(),
-				purchaseDate: purchaseData.purchaseDate,
-				customerId,
-				registeredBy: userId,
-				source: purchaseData.dealerId ? "dealer" : "direct_sales",
-				notes,
-			})
-			.returning();
-
-		if (purchaseRecord[0]) {
-			purchaseId = purchaseRecord[0].id;
-
-			// Create purchase items for all products
-			const purchaseItemsToCreate = productsToCreate.map((prod) => ({
-				id: crypto.randomUUID(),
-				purchaseId: purchaseId!,
-				productId: prod.id!,
-			}));
-
-			if (purchaseItemsToCreate.length > 0) {
-				await db.insert(purchaseItem).values(purchaseItemsToCreate);
-			}
-
-			// Upload invoice to Google Drive and save record
-			const invoiceFileToUse = invoiceFile ?? purchaseData.invoiceFile;
-			if (invoiceFileToUse) {
-				try {
-					const fileBuffer = Buffer.from(await invoiceFileToUse.arrayBuffer());
-					const mimeType = invoiceFileToUse.type || "application/octet-stream";
-					const driveUrl = await uploadInvoiceToDrive(
-						fileBuffer,
-						invoiceFileToUse.name,
-						mimeType,
-					);
-					await db.insert(invoice).values({
+			for (const sn of item.serialNumbers) {
+				const normalizedSn = normalizeSerialNumber(sn);
+				if (validSerialNumbers.has(normalizedSn)) {
+					const productData: ProductInsertSchema = {
 						id: crypto.randomUUID(),
-						purchaseId: purchaseId!,
+						serialNumber: normalizedSn,
+						productTypeId: mapping.id,
+						deliveryOrderId: doId,
+						customerId: dealerId,
+						status: "none" as const,
+					};
+
+					// Set warranty dates for end customer
+					if (destType === "customer" && purchaseData && warrantyEndDate) {
+						productData.status = "warranty_active";
+						productData.warrantyStartDate = purchaseData.purchaseDate;
+						productData.warrantyEndDate = warrantyEndDate;
+					}
+
+					productsToCreate.push(productData);
+				}
+			}
+		}
+
+		if (productsToCreate.length > 0) {
+			await tx.insert(product).values(productsToCreate);
+		}
+
+		// Create purchase record if purchaseData is provided (for end customer)
+		if (purchaseData && customerId && destType === "customer") {
+			// `purchase` no longer has a dealerId column (dealers are now customer rows).
+			// Best-effort: record which dealer facilitated the sale as a note, since
+			// there is currently no structured column to persist that link.
+			let notes = purchaseData.notes || null;
+			if (purchaseData.dealerId) {
+				const facilitatingDealer = await tx.query.customer.findFirst({
+					where: eq(customer.id, purchaseData.dealerId),
+				});
+				if (facilitatingDealer) {
+					notes = [`Dijual melalui dealer: ${facilitatingDealer.name}`, notes]
+						.filter(Boolean)
+						.join(" — ");
+				}
+			}
+
+			const purchaseRecord = await tx
+				.insert(purchase)
+				.values({
+					id: crypto.randomUUID(),
+					purchaseDate: purchaseData.purchaseDate,
+					customerId,
+					registeredBy: userId,
+					source: purchaseData.dealerId ? "dealer" : "direct_sales",
+					notes,
+				})
+				.returning();
+
+			if (purchaseRecord[0]) {
+				const purchaseId = purchaseRecord[0].id;
+
+				// Create purchase items for all products
+				const purchaseItemsToCreate = productsToCreate.map((prod) => ({
+					id: crypto.randomUUID(),
+					purchaseId,
+					productId: prod.id!,
+				}));
+
+				if (purchaseItemsToCreate.length > 0) {
+					await tx.insert(purchaseItem).values(purchaseItemsToCreate);
+				}
+
+				// Upload invoice to Google Drive and save record. A failed upload
+				// throws instead of being swallowed, so the whole transaction
+				// (DO, products, purchase, purchase items) rolls back with it.
+				const invoiceFileToUse = invoiceFile ?? purchaseData.invoiceFile;
+				if (invoiceFileToUse) {
+					let driveUrl: string;
+					try {
+						const fileBuffer = Buffer.from(await invoiceFileToUse.arrayBuffer());
+						const mimeType = invoiceFileToUse.type || "application/octet-stream";
+						driveUrl = await uploadInvoiceToDrive(
+							fileBuffer,
+							invoiceFileToUse.name,
+							mimeType,
+						);
+					} catch (err) {
+						throw new HttpError(
+							`Gagal mengunggah invoice ke Google Drive: ${err instanceof Error ? err.message : "unknown error"}`,
+							HTTP_STATUS.BAD_GATEWAY.code,
+						);
+					}
+
+					await tx.insert(invoice).values({
+						id: crypto.randomUUID(),
+						purchaseId,
 						storagePath: driveUrl,
 						originalFilename: invoiceFileToUse.name,
-						mimeType,
+						mimeType: invoiceFileToUse.type || "application/octet-stream",
 						fileSizeBytes: invoiceFileToUse.size,
 						uploadedBy: userId,
 					});
-				} catch (err) {
-					console.error("Gagal upload invoice ke Google Drive:", err);
 				}
 			}
+		}
+
+		return {
+			doNumber: parsed.doNumber,
+			productsCreated: productsToCreate.length,
+			destType,
+			dealerId,
+			productsToCreate,
+		};
+	});
+
+	// Best-effort dealer product-match notification. Runs only after the
+	// transaction has committed, so it only ever sees fully-persisted
+	// products; a failure here must not undo the (already-committed) upload.
+	if (
+		txResult.destType === "dealer" &&
+		txResult.dealerId &&
+		txResult.productsToCreate.length > 0
+	) {
+		try {
+			await notificationService.checkAndNotifyProductMatch({
+				dealerId: txResult.dealerId,
+				productsCreated: txResult.productsToCreate.map((p) => ({
+					id: p.id!,
+					serialNumber: p.serialNumber,
+					productTypeId: p.productTypeId,
+				})),
+				uploadedBy: userId,
+			});
+		} catch (error) {
+			console.error("Failed to check and notify product match:", error);
 		}
 	}
 
 	return {
-		doNumber: parsed.doNumber,
-		productsCreated: productsToCreate.length,
+		doNumber: txResult.doNumber,
+		productsCreated: txResult.productsCreated,
 	};
 }

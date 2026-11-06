@@ -24,9 +24,6 @@ const dealerFormFields = {
 		.transform((v) => (v === "" ? null : v)),
 };
 
-export const addDealerSchema = z.object(dealerFormFields);
-export type AddDealerPayload = z.infer<typeof addDealerSchema>;
-
 export const dealerUpdateSchema = z.object(dealerFormFields);
 export type DealerUpdatePayload = z.infer<typeof dealerUpdateSchema>;
 
@@ -100,65 +97,6 @@ export const dealerService = {
 		return rows.map((r) =>
 			toDealer(r.user, { phone: r.phone, address: r.address }),
 		);
-	},
-
-	add: async (
-		data: AddDealerPayload,
-		audit: AuditContext,
-	): Promise<Dealer> => {
-		const existingUser = await db.query.user.findFirst({
-			where: eq(user.email, data.email),
-		});
-		if (existingUser)
-			throw new HttpError(
-				"Email sudah terdaftar",
-				HTTP_STATUS.CONFLICT.code,
-			);
-
-		const newUserId = crypto.randomUUID();
-		await db.insert(user).values({
-			id: newUserId,
-			name: data.name,
-			email: data.email,
-			emailVerified: false,
-			role: "dealer",
-			status: "active",
-		});
-
-		const result = await db
-			.insert(customer)
-			.values({
-				id: crypto.randomUUID(),
-				customId: generateAutoCustomId(),
-				userId: newUserId,
-				type: "DEALER",
-				name: data.name,
-				email: data.email,
-				phone: data.phone ?? null,
-				address: data.address ?? null,
-			})
-			.returning();
-
-		if (!result[0])
-			throw new HttpError(
-				"Gagal menambahkan dealer",
-				HTTP_STATUS.BAD_GATEWAY.code,
-			);
-
-		await db.insert(auditLog).values({
-			id: crypto.randomUUID(),
-			userId: audit.userId,
-			category: "DEALER",
-			event: "DEALER_ADDED",
-			status: "success",
-			priority: "medium",
-			ipAddress: audit.ipAddress ?? undefined,
-			userAgent: audit.userAgent ?? undefined,
-			data: { dealerId: newUserId, name: data.name, email: data.email },
-		});
-
-		const created = await findDealerUser(newUserId);
-		return toDealer(created, result[0]);
 	},
 
 	update: async (

@@ -85,157 +85,169 @@ export async function POST(req: NextRequest) {
 
 		const data = validationResult.data;
 
-		// Upload invoice to Google Drive FIRST: if it fails, nothing is written to the DB
-		const fileBuffer = Buffer.from(await invoiceFile.arrayBuffer());
-		let invoiceLink: string;
-		try {
-			invoiceLink = await uploadInvoiceToDrive(
-				fileBuffer,
-				invoiceFile.name,
-				invoiceFile.type,
-			);
-		} catch (e) {
-			console.error("Google Drive upload failed:", e);
-			throw new HttpError(
-				"Gagal mengunggah invoice ke Google Drive. Registrasi dibatalkan.",
-				HTTP_STATUS.INTERNAL_SERVER_ERROR.code,
-			);
-		}
+		// Everything below — resolving/creating the customer, validating product
+		// ownership, uploading the invoice to Google Drive, and writing the
+		// purchase/invoice/purchaseItem/product/auditLog rows — runs inside a
+		// single transaction. A failure at any step (including a failed Drive
+		// upload or a failure partway through the per-product loop) rolls back
+		// everything atomically instead of leaving a half-registered purchase.
+		const { purchaseId, custId: finalCustId, productsCount } = await db.transaction(
+			async (tx) => {
+				// Get or create the dealer's own customer record (DEALER type, auto-generated customId)
+				let cust = data.email
+					? await tx.query.customer.findFirst({
+							where: and(
+								eq(customer.email, data.email),
+								eq(customer.dealerId, session.user.id),
+							),
+						})
+					: undefined;
 
-		// Get products and validate they exist and belong to dealer
-		const products = await db.query.product.findMany({
-			where: (p, { and, inArray, eq: eqFn }) =>
-				and(inArray(p.serialNumber, selectedSNs), eqFn(p.customerId, dealer.id)),
-			with: { productType: true },
-		});
+				if (!cust) {
+					const custId = crypto.randomUUID();
+					await tx.insert(customer).values({
+						id: custId,
+						customId: generateAutoCustomId(),
+						name: customerName,
+						email: data.email,
+						phone,
+						address: data.address,
+						categoryId: data.categoryId,
+						type: "DEALER",
+						dealerId: session.user.id,
+					});
+					cust = await tx.query.customer.findFirst({
+						where: eq(customer.id, custId),
+					});
+				}
 
-		if (products.length !== selectedSNs.length) {
-			throw new HttpError("Beberapa produk tidak ditemukan atau tidak milik dealer Anda", HTTP_STATUS.BAD_REQUEST.code);
-		}
+				if (!cust) {
+					throw new HttpError("Gagal membuat/mendapatkan customer", HTTP_STATUS.INTERNAL_SERVER_ERROR.code);
+				}
 
-		// Check if products are already linked to a purchase
-		const existingPurchaseItems = await db
-			.select()
-			.from(purchaseItem)
-			.where(inArray(purchaseItem.productId, products.map((p) => p.id)));
+				// Get products and validate they exist and belong to dealer
+				const products = await tx.query.product.findMany({
+					where: (p, { and, inArray, eq: eqFn }) =>
+						and(inArray(p.serialNumber, selectedSNs), eqFn(p.customerId, dealer.id)),
+					with: { productType: true },
+				});
 
-		if (existingPurchaseItems.length > 0) {
-			const linkedSNs = existingPurchaseItems
-				.map((pi) => products.find((p) => p.id === pi.productId)?.serialNumber)
-				.filter(Boolean)
-				.join(", ");
-			throw new HttpError(
-				`Produk berikut sudah terdaftar garansi sebelumnya: ${linkedSNs}. Hubungi admin jika perlu mengubah data.`,
-				HTTP_STATUS.CONFLICT.code,
-			);
-		}
+				if (products.length !== selectedSNs.length) {
+					throw new HttpError("Beberapa produk tidak ditemukan atau tidak milik dealer Anda", HTTP_STATUS.BAD_REQUEST.code);
+				}
 
-		// Get or create the dealer's own customer record (DEALER type, auto-generated customId)
-		let cust = data.email
-			? await db.query.customer.findFirst({
-					where: and(
-						eq(customer.email, data.email),
-						eq(customer.dealerId, session.user.id),
-					),
-				})
-			: undefined;
+				// Check if products are already linked to a purchase
+				const existingPurchaseItems = await tx
+					.select()
+					.from(purchaseItem)
+					.where(inArray(purchaseItem.productId, products.map((p) => p.id)));
 
-		if (!cust) {
-			const custId = crypto.randomUUID();
-			await db.insert(customer).values({
-				id: custId,
-				customId: generateAutoCustomId(),
-				name: customerName,
-				email: data.email,
-				phone,
-				address: data.address,
-				categoryId: data.categoryId,
-				type: "DEALER",
-				dealerId: session.user.id,
-			});
-			cust = await db.query.customer.findFirst({
-				where: eq(customer.id, custId),
-			});
-		}
+				if (existingPurchaseItems.length > 0) {
+					const linkedSNs = existingPurchaseItems
+						.map((pi) => products.find((p) => p.id === pi.productId)?.serialNumber)
+						.filter(Boolean)
+						.join(", ");
+					throw new HttpError(
+						`Produk berikut sudah terdaftar garansi sebelumnya: ${linkedSNs}. Hubungi admin jika perlu mengubah data.`,
+						HTTP_STATUS.CONFLICT.code,
+					);
+				}
 
-		if (!cust) {
-			throw new HttpError("Gagal membuat/mendapatkan customer", HTTP_STATUS.INTERNAL_SERVER_ERROR.code);
-		}
+				// Upload invoice to Google Drive. A failure here throws instead of
+				// being swallowed, rolling back the customer/purchase writes above.
+				let invoiceLink: string;
+				const fileBuffer = Buffer.from(await invoiceFile.arrayBuffer());
+				try {
+					invoiceLink = await uploadInvoiceToDrive(
+						fileBuffer,
+						invoiceFile.name,
+						invoiceFile.type,
+					);
+				} catch (err) {
+					throw new HttpError(
+						`Gagal mengunggah invoice ke Google Drive: ${err instanceof Error ? err.message : "unknown error"}`,
+						HTTP_STATUS.BAD_GATEWAY.code,
+					);
+				}
 
-		// Create purchase
-		const purchaseId = crypto.randomUUID();
+				// Create purchase
+				const purchaseId = crypto.randomUUID();
 
-		await db.insert(purchase).values({
-			id: purchaseId,
-			purchaseDate,
-			customerId: cust.id,
-			registeredBy: session.user.id,
-			source: "dealer",
-		});
+				await tx.insert(purchase).values({
+					id: purchaseId,
+					purchaseDate,
+					customerId: cust.id,
+					registeredBy: session.user.id,
+					source: "dealer",
+				});
 
-		// Create invoice record
-		const invoiceId = crypto.randomUUID();
-		await db.insert(invoice).values({
-			id: invoiceId,
-			purchaseId: purchaseId,
-			storagePath: invoiceLink,
-			originalFilename: invoiceFile.name,
-			mimeType: invoiceFile.type,
-			fileSizeBytes: fileBuffer.length,
-			uploadedBy: session.user.id,
-		});
+				// Create invoice record
+				const invoiceId = crypto.randomUUID();
+				await tx.insert(invoice).values({
+					id: invoiceId,
+					purchaseId: purchaseId,
+					storagePath: invoiceLink,
+					originalFilename: invoiceFile.name,
+					mimeType: invoiceFile.type,
+					fileSizeBytes: fileBuffer.length,
+					uploadedBy: session.user.id,
+				});
 
-		// Link products to purchase and update warranty dates
-		for (const prod of products) {
-			// Link to purchase
-			await db.insert(purchaseItem).values({
-				id: crypto.randomUUID(),
-				purchaseId,
-				productId: prod.id,
-			});
+				// Link products to purchase and update warranty dates
+				for (const prod of products) {
+					// Link to purchase
+					await tx.insert(purchaseItem).values({
+						id: crypto.randomUUID(),
+						purchaseId,
+						productId: prod.id,
+					});
 
-			// Calculate warranty end date
-			const warrantyMonths = prod.productType.warrantyDurationMonths || 12;
-			const startDate = new Date(purchaseDate);
-			const endDate = new Date(startDate);
-			endDate.setMonth(endDate.getMonth() + warrantyMonths);
+					// Calculate warranty end date
+					const warrantyMonths = prod.productType.warrantyDurationMonths || 12;
+					const startDate = new Date(purchaseDate);
+					const endDate = new Date(startDate);
+					endDate.setMonth(endDate.getMonth() + warrantyMonths);
 
-			// Format dates as ISO date strings (YYYY-MM-DD)
-			const startDateStr = startDate.toISOString().split("T")[0];
-			const endDateStr = endDate.toISOString().split("T")[0];
+					// Format dates as ISO date strings (YYYY-MM-DD)
+					const startDateStr = startDate.toISOString().split("T")[0];
+					const endDateStr = endDate.toISOString().split("T")[0];
 
-			// Update product with warranty info
-			await db.update(product).set({
-				warrantyStartDate: startDateStr,
-				warrantyEndDate: endDateStr,
-				status: "warranty_active",
-			}).where(eq(product.id, prod.id));
-		}
+					// Update product with warranty info
+					await tx.update(product).set({
+						warrantyStartDate: startDateStr,
+						warrantyEndDate: endDateStr,
+						status: "warranty_active",
+					}).where(eq(product.id, prod.id));
+				}
 
-		// Audit log
-		await db.insert(auditLog).values({
-			id: crypto.randomUUID(),
-			userId: session.user.id,
-			category: "DEALER",
-			event: "REGISTER_WARRANTY",
-			status: "success",
-			priority: "high",
-			data: {
-				dealerId: dealer.id,
-				customerId: cust.id,
-				purchaseId,
-				productCount: products.length,
-				serialNumbers: selectedSNs,
+				// Audit log
+				await tx.insert(auditLog).values({
+					id: crypto.randomUUID(),
+					userId: session.user.id,
+					category: "DEALER",
+					event: "REGISTER_WARRANTY",
+					status: "success",
+					priority: "high",
+					data: {
+						dealerId: dealer.id,
+						customerId: cust.id,
+						purchaseId,
+						productCount: products.length,
+						serialNumbers: selectedSNs,
+					},
+				});
+
+				return { purchaseId, custId: cust.id, productsCount: products.length };
 			},
-		});
+		);
 
 		return NextResponse.json(
 			successResponse({
 				message: "Garansi berhasil terdaftar",
 				data: {
 					purchaseId,
-					customerId: cust.id,
-					productsCount: products.length,
+					customerId: finalCustId,
+					productsCount,
 					groupId: `GRP-${customerName.slice(0, 3).toUpperCase()}-${purchaseDate.replace(/-/g, "").slice(2)}`,
 				},
 			}),

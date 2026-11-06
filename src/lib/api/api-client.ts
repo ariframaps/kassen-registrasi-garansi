@@ -294,18 +294,6 @@ export const dealerApi = {
 		});
 	},
 
-	add: async (data: {
-		name: string;
-		email: string;
-		phone?: string;
-		address?: string;
-	}) => {
-		return apiFetch<Dealer>("/dealers", {
-			method: "POST",
-			body: JSON.stringify(data),
-		});
-	},
-
 	update: async (
 		id: string,
 		data: {
