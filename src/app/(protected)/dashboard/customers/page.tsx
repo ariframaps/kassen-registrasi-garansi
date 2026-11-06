@@ -35,6 +35,7 @@ import {
 import { formatDateShort } from "@/lib/utils";
 import { CustomerCategorySchema, CustomerSchema } from "@/db/schema";
 import { customerApi, customerCategoryApi } from "@/lib/api/api-client";
+import { authClient } from "@/lib/auth-client";
 
 type ImportResult = {
 	totalRows: number;
@@ -446,6 +447,8 @@ function ImportModal({
 
 export default function CustomersPage() {
 	const router = useRouter();
+	  const { data: session, isPending: isCheckingSession } =
+		  authClient.useSession();
 	const [customers, setCustomers] = useState<CustomerSchema[]>([]);
 	const [categories, setCategories] = useState<CustomerCategorySchema[]>([]);
 	const [search, setSearch] = useState("");
@@ -623,6 +626,9 @@ export default function CustomersPage() {
 		}
 	};
 
+	if (isCheckingSession) return;
+
+
 	return (
 		<div className="flex flex-col min-h-screen bg-[var(--bg)]">
 			<Topbar title="Manajemen Customer" />
@@ -663,21 +669,26 @@ export default function CustomersPage() {
 										className="group flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-lg bg-zinc-50 border border-zinc-200">
 										<span className="text-xs font-medium text-zinc-700">{cat.name}</span>
 										<span className="text-[11px] text-zinc-400">({count})</span>
-										<button
-											onClick={() => {
-												setEditingCategory(cat);
-												setCategoryModalOpen(true);
-											}}
-											className="p-1 rounded hover:bg-zinc-200 text-zinc-400 hover:text-zinc-700 transition-colors"
-											title="Edit">
-											<Pencil size={11} />
-										</button>
-										<button
-											onClick={() => setDeleteCategoryTarget(cat)}
-											className="p-1 rounded hover:bg-red-100 text-zinc-400 hover:text-red-600 transition-colors"
-											title="Hapus">
-											<Trash2 size={11} />
-										</button>
+										{session && session.user.role ==="admin" ? (
+											<>
+												<button
+													onClick={() => {
+														setEditingCategory(cat);
+														setCategoryModalOpen(true);
+													}}
+													className="p-1 rounded hover:bg-zinc-200 text-zinc-400 hover:text-zinc-700 transition-colors"
+													title="Edit">
+													<Pencil size={11} />
+												</button>
+												<button
+													onClick={() => setDeleteCategoryTarget(cat)}
+													className="p-1 rounded hover:bg-red-100 text-zinc-400 hover:text-red-600 transition-colors"
+													title="Hapus">
+													<Trash2 size={11} />
+												</button>
+											</>
+										) : null}
+										
 									</div>
 								);
 							})}
@@ -788,28 +799,31 @@ export default function CustomersPage() {
 											<TableCell className="text-zinc-500 text-xs">
 												{formatDateShort(c.createdAt)}
 											</TableCell>
-											<TableCell>
-												<div
-													className="flex items-center gap-1"
-													onClick={(e) => e.stopPropagation()}>
-													<button
-														onClick={() => {
-															setEditingCustomer(c);
-															setCustomerModalOpen(true);
-														}}
-														className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-														title="Edit">
-														<Pencil size={13} />
-													</button>
-													<button
-														onClick={() => setDeleteTarget(c)}
-														className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
-														title="Hapus">
-														<Trash2 size={13} />
-													</button>
-													<ChevronRight size={14} className="text-zinc-300" />
-												</div>
-											</TableCell>
+
+											{session && session.user.role ==="admin" ? (
+												<TableCell>
+													<div
+														className="flex items-center gap-1"
+														onClick={(e) => e.stopPropagation()}>
+														<button
+															onClick={() => {
+																setEditingCustomer(c);
+																setCustomerModalOpen(true);
+															}}
+															className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+															title="Edit">
+															<Pencil size={13} />
+														</button>
+														<button
+															onClick={() => setDeleteTarget(c)}
+															className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+															title="Hapus">
+															<Trash2 size={13} />
+														</button>
+														<ChevronRight size={14} className="text-zinc-300" />
+													</div>
+												</TableCell>
+											) : null}
 										</TableRow>
 									))
 								)}

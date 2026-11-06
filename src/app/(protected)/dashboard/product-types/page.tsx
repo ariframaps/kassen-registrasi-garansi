@@ -30,6 +30,7 @@ import {
 import { ProductTypeWithNestedSchema } from "@/services/product-type.service";
 import { CategorySchema, ItemCodeMapsSchema } from "@/db/schema";
 import { formatDateShort } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 
 // type ProductType = {
 // 	id: string;
@@ -387,6 +388,8 @@ function ProductTypeModal({
 
 export default function ProductTypesPage() {
   const router = useRouter();
+  const { data: session, isPending: isCheckingSession } =
+      authClient.useSession();
   const [types, setTypes] = useState<ProductTypeWithNestedSchema[]>([]);
   const [itemCodes, setItemCodes] = useState<ItemCodeMapsSchema[]>([]);
   const [categories, setCategories] = useState<CategorySchema[]>([]);
@@ -683,6 +686,8 @@ export default function ProductTypesPage() {
   // 	success("Tipe produk dihapus");
   // };
 
+  if (isCheckingSession) return;
+
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg)]">
       <Topbar title="Kategori & Tipe Produk" />
@@ -754,27 +759,31 @@ export default function ProductTypesPage() {
                       <TableCell className="text-zinc-500 text-xs">
                         {count} tipe
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => {
-                              setEditingCategory(cat);
-                              setCategoryModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteCategoryTarget(cat)}
-                            className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
-                            title="Hapus"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </TableCell>
+
+                      {session && session.user.role ==="admin" ? (
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingCategory(cat);
+                                setCategoryModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteCategoryTarget(cat)}
+                              className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </TableCell>
+                      ) : null}
+                      
                     </TableRow>
                   );
                 })
@@ -900,27 +909,30 @@ export default function ProductTypesPage() {
                         <TableCell className="text-zinc-500 text-xs">
                           {formatDateShort(type.createdAt)}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => {
-                                setEditing(type);
-                                setModalOpen(true);
-                              }}
-                              className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(type)}
-                              className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
-                              title="Hapus"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </TableCell>
+                        {session && session.user.role ==="admin" ? (
+                          <TableCell>
+                              <div className="flex gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditing(type);
+                                  setModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(type)}
+                                className="p-1.5 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors"
+                                title="Hapus"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </TableCell>
+                        ) : null}
+                        
                       </TableRow>
                     );
                   })

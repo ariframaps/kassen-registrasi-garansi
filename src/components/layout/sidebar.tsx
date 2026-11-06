@@ -75,18 +75,18 @@ const adminNav: NavItem[] = [
 ];
 
 const salesNav: NavItem[] = [
-	{
-		href: "/dashboard",
-		label: "Dashboard",
-		icon: <LayoutDashboard size={15} />,
-	},
+	// {
+	// 	href: "/dashboard",
+	// 	label: "Dashboard",
+	// 	icon: <LayoutDashboard size={15} />,
+	// },
 	{ href: "/dashboard/products", label: "Produk", icon: <Package size={15} /> },
 	{
 		href: "/dashboard/purchases",
 		label: "Pembelian",
 		icon: <ShoppingBag size={15} />,
 	},
-	{ href: "/dashboard/dealers", label: "Dealer", icon: <Users size={15} /> },
+	// { href: "/dashboard/dealers", label: "Dealer", icon: <Users size={15} /> },
 	{
 		href: "/dashboard/customers",
 		label: "Customer",

@@ -19,6 +19,8 @@ import {
 	Circle,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 const activityIcon: Record<string, React.ReactNode> = {
 	warranty_registered: <Shield size={13} className="text-emerald-500" />,
@@ -29,9 +31,23 @@ const activityIcon: Record<string, React.ReactNode> = {
 };
 
 export default function DashboardPage() {
+	const router = useRouter();
 	const { data: session } = authClient.useSession();
+
 	const user = session?.user;
 	const isSales = user?.role === "sales";
+
+	useEffect(() => {
+        if (isSales) {
+            router.push('/dashboard/products');
+        }
+    }, [isSales, router]);
+
+    // Optional: Return a loading state while checking or redirecting
+    if (isSales) {
+        return null; 
+    }
+
 
 	const dashboardStats = mockDashboardStats; // todo : fetch real stats from backend
 	const recentActivity = mockRecentActivity;
