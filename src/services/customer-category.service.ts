@@ -7,7 +7,7 @@ import {
 } from "@/db/schema";
 import { HTTP_STATUS } from "@/constants/http-status.constant";
 import { HttpError } from "@/lib/api/http-error";
-import { eq, ilike, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import z from "zod";
 
 interface AuditContext {
@@ -18,6 +18,7 @@ interface AuditContext {
 
 export const addCustomerCategorySchema = z.object({
 	name: z.string().trim().min(1, "Nama kategori wajib diisi").max(255),
+	isVisibleForDealer: z.boolean().optional().default(false),
 });
 export type AddCustomerCategoryPayload = z.infer<
 	typeof addCustomerCategorySchema
@@ -25,6 +26,7 @@ export type AddCustomerCategoryPayload = z.infer<
 
 export const updateCustomerCategorySchema = z.object({
 	name: z.string().trim().min(1, "Nama kategori wajib diisi").max(255),
+	isVisibleForDealer: z.boolean().optional(),
 });
 export type UpdateCustomerCategoryPayload = z.infer<
 	typeof updateCustomerCategorySchema
@@ -36,13 +38,10 @@ export const customerCategoryService = {
 		return customerCategorySchema.array().parse(result);
 	},
 
-	// Only categories relevant to dealers (e.g. "Reseller", "Dealer"); hides internal MKO categories.
+	// Only categories flagged visible for dealers; hides internal MKO categories.
 	getForDealer: async (): Promise<CustomerCategorySchema[]> => {
 		const result = await db.query.customerCategory.findMany({
-			where: or(
-				ilike(customerCategory.name, "%reseller%"),
-				ilike(customerCategory.name, "%dealer%"),
-			),
+			where: eq(customerCategory.isVisibleForDealer, true),
 		});
 		return customerCategorySchema.array().parse(result);
 	},
@@ -63,7 +62,11 @@ export const customerCategoryService = {
 
 		const [result] = await db
 			.insert(customerCategory)
-			.values({ id: crypto.randomUUID(), name: data.name })
+			.values({
+				id: crypto.randomUUID(),
+				name: data.name,
+				isVisibleForDealer: data.isVisibleForDealer,
+			})
 			.returning();
 
 		if (!result) {
@@ -117,7 +120,13 @@ export const customerCategoryService = {
 
 		const [result] = await db
 			.update(customerCategory)
-			.set({ name: data.name, updatedAt: new Date() })
+			.set({
+				name: data.name,
+				...(data.isVisibleForDealer !== undefined && {
+					isVisibleForDealer: data.isVisibleForDealer,
+				}),
+				updatedAt: new Date(),
+			})
 			.where(eq(customerCategory.id, id))
 			.returning();
 

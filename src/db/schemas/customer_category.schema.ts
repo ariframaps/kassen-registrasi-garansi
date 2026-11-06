@@ -1,4 +1,4 @@
-import { pgTable, varchar, text } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, boolean } from "drizzle-orm/pg-core";
 
 import { relations } from "drizzle-orm";
 import { timestamps } from "../utils/column.helper";
@@ -15,6 +15,8 @@ export const customerCategory = pgTable("customer_category", {
 	id: text("id").default(crypto.randomUUID()).primaryKey(),
 
 	name: varchar("name", { length: 255 }).notNull().unique(),
+
+	isVisibleForDealer: boolean("is_visible_for_dealer").notNull().default(false),
 
 	...timestamps,
 });

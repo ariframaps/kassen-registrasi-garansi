@@ -556,14 +556,17 @@ export const customerCategoryApi = {
 		});
 	},
 
-	add: async (data: { name: string }) => {
+	add: async (data: { name: string; isVisibleForDealer?: boolean }) => {
 		return apiFetch<CustomerCategorySchema>("/customer-categories", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
 	},
 
-	update: async (id: string, data: { name: string }) => {
+	update: async (
+		id: string,
+		data: { name: string; isVisibleForDealer?: boolean },
+	) => {
 		return apiFetch<CustomerCategorySchema>(`/customer-categories/${id}`, {
 			method: "PUT",
 			body: JSON.stringify(data),

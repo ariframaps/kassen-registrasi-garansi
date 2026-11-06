@@ -53,10 +53,13 @@ function CategoryModal({
 }: {
 	open: boolean;
 	onClose: () => void;
-	onSave: (name: string) => Promise<void>;
+	onSave: (name: string, isVisibleForDealer: boolean) => Promise<void>;
 	initial?: CustomerCategorySchema;
 }) {
 	const [name, setName] = useState(initial?.name ?? "");
+	const [visibleForDealer, setVisibleForDealer] = useState(
+		initial?.isVisibleForDealer ?? false,
+	);
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
 
@@ -64,6 +67,7 @@ function CategoryModal({
 	useLayoutEffect(() => {
 		if (!open) return;
 		setName(initial?.name ?? "");
+		setVisibleForDealer(initial?.isVisibleForDealer ?? false);
 		setError("");
 	}, [open, initial]);
 
@@ -73,7 +77,7 @@ function CategoryModal({
 			return;
 		}
 		setLoading(true);
-		await onSave(name.trim());
+		await onSave(name.trim(), visibleForDealer);
 		setLoading(false);
 		onClose();
 	};
@@ -96,6 +100,15 @@ function CategoryModal({
 					error={error}
 					required
 				/>
+				<label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+					<input
+						type="checkbox"
+						className="h-4 w-4 rounded border-gray-300"
+						checked={visibleForDealer}
+						onChange={(e) => setVisibleForDealer(e.target.checked)}
+					/>
+					Tampilkan untuk Dealer
+				</label>
 				<div className="flex justify-end gap-2 pt-2">
 					<Button
 						variant="outline"
@@ -562,9 +575,15 @@ export default function CustomersPage() {
 		}
 	};
 
-	const handleSaveCategory = async (name: string) => {
+	const handleSaveCategory = async (
+		name: string,
+		isVisibleForDealer: boolean,
+	) => {
 		if (editingCategory) {
-			const res = await customerCategoryApi.update(editingCategory.id, { name });
+			const res = await customerCategoryApi.update(editingCategory.id, {
+				name,
+				isVisibleForDealer,
+			});
 			if (res.success && res.data) {
 				setCategories((prev) =>
 					prev.map((c) => (c.id === editingCategory.id ? res.data! : c)),
@@ -574,7 +593,7 @@ export default function CustomersPage() {
 				toastError("Gagal memperbarui kategori", res.message);
 			}
 		} else {
-			const res = await customerCategoryApi.add({ name });
+			const res = await customerCategoryApi.add({ name, isVisibleForDealer });
 			if (res.success && res.data) {
 				setCategories((prev) => [...prev, res.data!]);
 				success("Kategori ditambahkan", name);
